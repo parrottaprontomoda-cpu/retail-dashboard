@@ -100,18 +100,18 @@
             </div>
         </div>
 
-        <!-- Sezione Grafici & Report Operatore -->
+        <!-- Sezione Grafici & Report Store -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-2">
-                <h3 class="text-sm md:text-base font-semibold mb-4 text-gray-700">Analisi Fatturato per Operatore (Store Selezionato)</h3>
+                <h3 class="text-sm md:text-base font-semibold mb-4 text-gray-700">Analisi Fatturato per Punto Vendita / Store</h3>
                 <div class="relative w-full h-72">
-                    <canvas id="operatorChart"></canvas>
+                    <canvas id="storeChart"></canvas>
                 </div>
             </div>
             <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
-                <h3 class="text-sm md:text-base font-semibold mb-3 text-gray-700"><i class="fa-solid fa-medal mr-2 text-amber-500"></i> Report Operatori Store</h3>
-                <div class="overflow-y-auto flex-grow max-h-72 pr-1" id="operator-report-container">
-                    <p class="text-xs text-gray-400 text-center py-8">Seleziona uno store per visualizzare le performance dettagliate.</p>
+                <h3 class="text-sm md:text-base font-semibold mb-3 text-gray-700"><i class="fa-solid fa-store mr-2 text-blue-500"></i> Report Punti Vendita</h3>
+                <div class="overflow-y-auto flex-grow max-h-72 pr-1" id="store-report-container">
+                    <p class="text-xs text-gray-400 text-center py-8">Nessun dato disponibile.</p>
                 </div>
             </div>
         </div>
@@ -146,17 +146,17 @@
         </div>
     </main>
 
-    <!-- Script di Logica BI Definitivo -->
+    <!-- Script di Logica BI Aggiornato per Store -->
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         let rawData = [];
-        let operatorChart;
+        let storeChart;
 
         function initCharts() {
-            const ctxOp = document.getElementById('operatorChart').getContext('2d');
-            operatorChart = new Chart(ctxOp, {
+            const ctxStore = document.getElementById('storeChart').getContext('2d');
+            storeChart = new Chart(ctxStore, {
                 type: 'bar',
-                data: { labels: [], datasets: [{ label: 'Fatturato (€)', data: [], backgroundColor: '#3b82f6', borderRadius: 6 }] },
+                data: { labels: [], datasets: [{ label: 'Fatturato Store (€)', data: [], backgroundColor: '#10b981', borderRadius: 6 }] },
                 options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
             });
         }
@@ -342,44 +342,45 @@
                 });
             }
 
-            let opMap = {};
+            // Aggregazione per Store / Punto Vendita (anziché per operatore)
+            let storeMap = {};
             data.forEach(d => {
-                if (!opMap[d.operatore]) {
-                    opMap[d.operatore] = { fatturato: 0, transazioni: 0 };
+                if (!storeMap[d.store]) {
+                    storeMap[d.store] = { fatturato: 0, transazioni: 0 };
                 }
-                opMap[d.operatore].fatturato += d.totale;
-                opMap[d.operatore].transazioni += 1;
+                storeMap[d.store].fatturato += d.totale;
+                storeMap[d.store].transazioni += 1;
             });
 
-            let labels = Object.keys(opMap);
-            let values = labels.map(op => opMap[op].fatturato);
-            operatorChart.data.labels = labels;
-            operatorChart.data.datasets[0].data = values;
-            operatorChart.update();
+            let labels = Object.keys(storeMap);
+            let values = labels.map(s => storeMap[s].fatturato);
+            storeChart.data.labels = labels;
+            storeChart.data.datasets[0].data = values;
+            storeChart.update();
 
-            const reportContainer = document.getElementById('operator-report-container');
+            const reportContainer = document.getElementById('store-report-container');
             reportContainer.innerHTML = '';
 
             if (labels.length === 0) {
-                reportContainer.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Nessun operatore disponibile.</p>';
+                reportContainer.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Nessun punto vendita disponibile.</p>';
                 return;
             }
 
-            let sortedOps = labels.sort((a, b) => opMap[b].fatturato - opMap[a].fatturato);
+            let sortedStores = labels.sort((a, b) => storeMap[b].fatturato - storeMap[a].fatturato);
 
-            sortedOps.forEach(op => {
-                let stats = opMap[op];
+            sortedStores.forEach(store => {
+                let stats = storeMap[store];
                 let quota = totalFatturato > 0 ? ((stats.fatturato / totalFatturato) * 100).toFixed(1) : 0;
                 let card = document.createElement('div');
                 card.className = "bg-gray-50 border border-gray-100 p-3 rounded-lg mb-2 text-xs";
                 card.innerHTML = `
                     <div class="flex justify-between font-bold text-gray-800 mb-1">
-                        <span><i class="fa-solid fa-user-circle mr-1 text-blue-500"></i> ${op}</span>
-                        <span class="text-blue-600">€ ${stats.fatturato.toLocaleString('it-IT', {minimumFractionDigits: 2})}</span>
+                        <span><i class="fa-solid fa-store mr-1 text-emerald-500"></i> ${store}</span>
+                        <span class="text-emerald-600">€ ${stats.fatturato.toLocaleString('it-IT', {minimumFractionDigits: 2})}</span>
                     </div>
                     <div class="flex justify-between text-gray-500 text-[11px]">
                         <span>Transazioni: <b>${stats.transazioni}</b></span>
-                        <span>Quota Store: <b>${quota}%</b></span>
+                        <span>Incidenza: <b>${quota}%</b></span>
                     </div>
                 `;
                 reportContainer.appendChild(card);
