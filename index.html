@@ -127,15 +127,15 @@
                 <table class="w-full text-left border-collapse min-w-[900px]">
                     <thead>
                         <tr class="border-b text-xs font-semibold text-gray-500 uppercase bg-gray-50 select-none">
-                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('dataReg')">Data Reg. (B) <i class="fa-solid fa-sort ml-1"></i></th>
-                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('store')">Store (Q) <i class="fa-solid fa-sort ml-1"></i></th>
-                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('operatore')">Operatore (R) <i class="fa-solid fa-sort ml-1"></i></th>
-                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('ean')">EAN (C) <i class="fa-solid fa-sort ml-1"></i></th>
-                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('codiceInterno')">Cod. Interno (D) <i class="fa-solid fa-sort ml-1"></i></th>
-                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('descrizione')">Descrizione Prodotto (E) <i class="fa-solid fa-sort ml-1"></i></th>
-                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('colore')">Colore (G) <i class="fa-solid fa-sort ml-1"></i></th>
-                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('misura')">Misura (H) <i class="fa-solid fa-sort ml-1"></i></th>
-                            <th class="py-3 px-3 text-right cursor-pointer hover:text-blue-600 transition" onclick="sortData('totale')">Totale (K) (€) <i class="fa-solid fa-sort ml-1"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="dataReg">Data Reg. (B) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="store">Store (Q) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="operatore">Operatore (R) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="ean">EAN (C) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="codiceInterno">Cod. Interno (D) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="descrizione">Descrizione Prodotto (E) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="colore">Colore (G) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="misura">Misura (H) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 text-right cursor-pointer hover:text-blue-600 transition sort-header" data-column="totale">Totale (K) (€) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                         </tr>
                     </thead>
                     <tbody id="table-vendite-body" class="text-sm divide-y divide-gray-100">
@@ -146,7 +146,7 @@
         </div>
     </main>
 
-    <!-- Script di Logica BI con Ordinamento -->
+    <!-- Script di Logica BI con Ordinamento Corretto -->
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         let rawData = [];
@@ -286,6 +286,14 @@
         document.getElementById('searchCodice').addEventListener('input', applyFilters);
         document.getElementById('filterMese').addEventListener('change', applyFilters);
 
+        // Configurazione degli eventi di ordinamento sulle intestazioni della tabella
+        document.querySelectorAll('.sort-header').forEach(th => {
+            th.addEventListener('click', function() {
+                let column = this.getAttribute('data-column');
+                sortData(column);
+            });
+        });
+
         function applyFilters() {
             let selectedStore = document.getElementById('filterStore').value;
             let selectedOp = document.getElementById('filterOperatore').value;
@@ -306,7 +314,6 @@
                 return matchStore && matchOp && matchQuery && matchMese;
             });
 
-            // Se c'è un ordinamento attivo, riapplicalo sui dati filtrati
             if (currentSortColumn) {
                 sortDataArray(currentFilteredData, currentSortColumn, sortDirection);
             }
@@ -314,7 +321,6 @@
             updateDashboard(currentFilteredData, selectedStore);
         }
 
-        // Funzione per ordinare i dati cliccando sulle intestazioni
         function sortData(column) {
             if (currentSortColumn === column) {
                 sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
@@ -382,7 +388,6 @@
                 });
             }
 
-            // Aggregazione per Store / Punto Vendita nel Grafico
             let storeMap = {};
             data.forEach(d => {
                 if (!storeMap[d.store]) {
