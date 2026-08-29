@@ -51,10 +51,10 @@
                 </div>
             </div>
             <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
-                <div class="p-3 md:p-4 bg-purple-50 text-purple-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-basket-shopping"></i></div>
+                <div class="p-3 md:p-4 bg-purple-50 text-purple-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-boxes-stacked"></i></div>
                 <div>
-                    <p class="text-xs md:text-sm text-gray-500 font-medium">Scontrino Medio</p>
-                    <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-scontrino">€ 0,00</h3>
+                    <p class="text-xs md:text-sm text-gray-500 font-medium">Giacenza Totale Magazzino</p>
+                    <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-giacenza">0</h3>
                 </div>
             </div>
         </div>
@@ -63,7 +63,7 @@
         <div class="bg-gradient-to-r from-slate-900 to-indigo-950 text-white p-4 md:p-6 rounded-xl shadow-md mb-6 border border-indigo-900">
             <div class="flex items-center justify-between mb-2">
                 <h2 class="text-sm font-bold uppercase tracking-wider text-indigo-300 flex items-center">
-                    <i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-400"></i> Assistente BI - Analisi Redditività & Sconti
+                    <i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-400"></i> Assistente BI - Analisi Redditività, Sconti & Magazzino
                 </h2>
                 <span class="text-[10px] bg-indigo-800 text-indigo-200 px-2.5 py-0.5 rounded-full font-medium">Pro Insights</span>
             </div>
@@ -132,12 +132,12 @@
         <!-- Tabella Dettaglio Dati -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div class="border-b border-gray-200 bg-gray-50 px-4 md:px-6 pt-4 flex justify-between items-center">
-                <span class="pb-3 px-2 inline-block font-semibold text-sm text-blue-600 border-b-2 border-blue-600">Righe Dettaglio Vendite (Clicca sulle intestazioni per ordinare)</span>
+                <span class="pb-3 px-2 inline-block font-semibold text-sm text-blue-600 border-b-2 border-blue-600">Righe Dettaglio Vendite & Disponibilità Magazzino</span>
                 <span id="counter-righe" class="text-xs text-gray-500 font-medium pb-2">0 righe trovate</span>
             </div>
 
             <div class="p-4 md:p-6 overflow-x-auto">
-                <table class="w-full text-left border-collapse min-w-[900px]">
+                <table class="w-full text-left border-collapse min-w-[1000px]">
                     <thead>
                         <tr class="border-b text-xs font-semibold text-gray-500 uppercase bg-gray-50 select-none">
                             <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="dataReg">Data Reg. (B) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
@@ -146,25 +146,29 @@
                             <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="ean">EAN (C) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                             <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="codiceInterno">Cod. Interno (D) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                             <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="descrizione">Descrizione Prodotto (E) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
-                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="quantita">Q.tà (H) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="quantita">Q.tà Venduta (H) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="giacenza">Disponibilità Mag. <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                             <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="listino">Listino (I) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                             <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="netto">Netto (J) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                             <th class="py-3 px-3 text-right cursor-pointer hover:text-blue-600 transition sort-header" data-column="totale">Totale (K) (€) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                         </tr>
                     </thead>
                     <tbody id="table-vendite-body" class="text-sm divide-y divide-gray-100">
-                        <tr><td colspan="10" class="text-center py-6 text-gray-400">Caricamento in corso...</td></tr>
+                        <tr><td colspan="11" class="text-center py-6 text-gray-400">Caricamento e sincronizzazione archivi in corso...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
     </main>
 
-    <!-- Script di Logica BI con Fetch Anti-CORS -->
+    <!-- Script di Logica BI con Incrocio Magazzino -->
     <script>
-        const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
+        const CSV_URL_VENDITE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
+        const CSV_URL_MAGAZZINO = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=684692288&single=true&output=csv";
+
         let rawData = [];
         let currentFilteredData = [];
+        let magazzinoMap = {}; // Mappa EAN/CodiceInterno -> Quantità disponibile
         let storeChart;
         let currentSortColumn = '';
         let sortDirection = 'asc';
@@ -182,54 +186,65 @@
         function caricaDatiCSV() {
             const badge = document.getElementById('status-badge');
             badge.className = "text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-            badge.innerText = "Sincronizzazione...";
+            badge.innerText = "Sincronizzazione archivi...";
 
-            // Utilizziamo fetch con proxy di fallback per evitare blocchi CORS di Google Sheets
-            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(CSV_URL);
-
-            fetch(proxyUrl)
-                .then(res => res.text())
-                .then(text => {
-                    elaboraTestoCSV(text, badge);
+            // 1. Scarica prima il magazzino, poi le vendite
+            fetchCSV(CSV_URL_MAGAZZINO)
+                .then(textMag => {
+                    parseMagazzino(textMag);
+                    return fetchCSV(CSV_URL_VENDITE);
                 })
-                .catch(() => {
-                    // Fallback a fetch diretto
-                    fetch(CSV_URL)
-                        .then(res => res.text())
-                        .then(text => {
-                            elaboraTestoCSV(text, badge);
-                        })
-                        .catch(err => {
-                            console.error("Errore di connessione CSV:", err);
-                            badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-                            badge.innerText = "Errore Connessione";
-                        });
+                .then(textVend => {
+                    parseVendite(textVend);
+                    badge.className = "text-[10px] md:text-xs bg-emerald-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+                    badge.innerText = "Aggiornato";
+                })
+                .catch(err => {
+                    console.error("Errore di sincronizzazione:", err);
+                    badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+                    badge.innerText = "Errore Connessione";
                 });
         }
 
-        function elaboraTestoCSV(text, badge) {
-            Papa.parse(text, {
-                header: false,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    parseData(results.data);
-                    badge.className = "text-[10px] md:text-xs bg-emerald-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-                    badge.innerText = "Aggiornato";
-                },
-                error: function(err) {
-                    console.error("Errore PapaParse:", err);
-                    badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-                    badge.innerText = "Errore Parsing";
-                }
-            });
+        function fetchCSV(url) {
+            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+            return fetch(proxyUrl)
+                .then(res => {
+                    if (!res.ok) throw new Error('Network response was not ok');
+                    return res.text();
+                })
+                .catch(() => {
+                    return fetch(url).then(res => res.text());
+                });
         }
 
         caricaDatiCSV();
 
+        function parseMagazzino(text) {
+            magazzinoMap = {};
+            Papa.parse(text, {
+                header: false,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    let rows = results.data;
+                    for (let i = 1; i < rows.length; i++) {
+                        let r = rows[i];
+                        if (!r || r.length === 0) continue;
+                        
+                        let codInterno = String(r[2] || '').trim(); // Colonna C (indice 2)
+                        let ean = String(r[10] || '').trim();         // Colonna K (indice 10)
+                        let qtaMag = parseNum(r[3]);                  // Colonna D (indice 3)
+
+                        if (ean) magazzinoMap[ean] = qtaMag;
+                        if (codInterno) magazzinoMap[codInterno] = qtaMag;
+                    }
+                }
+            });
+        }
+
         function estraiMese(valoreData) {
             if (!valoreData) return '';
             let v = String(valoreData).toLowerCase().trim();
-
             const mesi = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
             
             for (let m of mesi) {
@@ -243,7 +258,6 @@
                     return mesi[mNum - 1];
                 }
             }
-
             return v;
         }
 
@@ -252,46 +266,64 @@
             return parseFloat(String(val).replace('€', '').replace(/\./g, '').replace(',', '.')) || 0;
         }
 
-        function parseData(rows) {
+        function parseVendite(text) {
             rawData = [];
-            if (rows.length < 2) return;
+            Papa.parse(text, {
+                header: false,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    let rows = results.data;
+                    if (rows.length < 2) return;
 
-            for (let i = 1; i < rows.length; i++) {
-                let row = rows[i];
-                if (!row || row.length === 0) continue;
+                    for (let i = 1; i < rows.length; i++) {
+                        let row = rows[i];
+                        if (!row || row.length === 0) continue;
 
-                let quantitaNum = parseNum(row[7]);    // Colonna H
-                let listinoNum = parseNum(row[8]);     // Colonna I
-                let nettoNum = parseNum(row[9]);       // Colonna J
-                let totaleNum = parseNum(row[10]);     // Colonna K
+                        let ean = String(row[2] || '').trim();
+                        let codInterno = String(row[3] || '').trim();
+                        let quantitaNum = parseNum(row[7]);
+                        let listinoNum = parseNum(row[8]);
+                        let nettoNum = parseNum(row[9]);
+                        let totaleNum = parseNum(row[10]);
 
-                let scontoPerc = 0;
-                if (listinoNum > 0 && nettoNum > 0 && listinoNum >= nettoNum) {
-                    scontoPerc = ((listinoNum - nettoNum) / listinoNum) * 100;
+                        // Cerca giacenza incrociando EAN o Codice Interno nel secondo file
+                        let giacenzaDisponibile = 0;
+                        if (ean && magazzinoMap[ean] !== undefined) {
+                            giacenzaDisponibile = magazzinoMap[ean];
+                        } else if (codInterno && magazzinoMap[codInterno] !== undefined) {
+                            giacenzaDisponibile = magazzinoMap[codInterno];
+                        }
+
+                        let scontoPerc = 0;
+                        if (listinoNum > 0 && nettoNum > 0 && listinoNum >= nettoNum) {
+                            scontoPerc = ((listinoNum - nettoNum) / listinoNum) * 100;
+                        }
+
+                        let dataReg = row[1] || '';
+                        let meseNormalizzato = estraiMese(dataReg);
+
+                        rawData.push({
+                            dataReg: dataReg,
+                            mese: meseNormalizzato,
+                            store: row[16] || 'Store Principale',
+                            operatore: row[17] || 'Sconosciuto',
+                            ean: ean,
+                            codiceInterno: codInterno,
+                            descrizione: row[4] || '',
+                            quantita: quantitaNum,
+                            giacenza: giacenzaDisponibile,
+                            listino: listinoNum,
+                            netto: nettoNum,
+                            sconto: scontoPerc,
+                            totale: totaleNum
+                        });
+                    }
+
+                    populateStoreFilter(rawData);
+                    updateOperatorCascade(rawData);
+                    applyFilters();
                 }
-
-                let dataReg = row[1] || '';
-                let meseNormalizzato = estraiMese(dataReg);
-
-                rawData.push({
-                    dataReg: dataReg,
-                    mese: meseNormalizzato,
-                    store: row[16] || 'Store Principale',
-                    operatore: row[17] || 'Sconosciuto',
-                    ean: row[2] || '',
-                    codiceInterno: row[3] || '',
-                    descrizione: row[4] || '',
-                    quantita: quantitaNum,
-                    listino: listinoNum,
-                    netto: nettoNum,
-                    sconto: scontoPerc,
-                    totale: totaleNum
-                });
-            }
-
-            populateStoreFilter(rawData);
-            updateOperatorCascade(rawData);
-            applyFilters();
+            });
         }
 
         function populateStoreFilter(data) {
@@ -388,7 +420,7 @@
                 let valA = a[column];
                 let valB = b[column];
 
-                if (['totale', 'quantita', 'listino', 'netto', 'sconto'].includes(column)) {
+                if (['totale', 'quantita', 'giacenza', 'listino', 'netto', 'sconto'].includes(column)) {
                     valA = parseFloat(valA);
                     valB = parseFloat(valB);
                 } else {
@@ -416,10 +448,12 @@
             let maxScontoItem = null;
             let minScontoItem = null;
             let prodottoMap = {};
+            let totaleGiacenzaFiltered = 0;
 
             data.forEach(d => {
                 storeMap[d.store] = (storeMap[d.store] || 0) + d.totale;
                 opMap[d.operatore] = (opMap[d.operatore] || 0) + d.totale;
+                totaleGiacenzaFiltered += d.giacenza;
 
                 let descKey = d.descrizione || 'Articolo sconosciuto';
                 if (!prodottoMap[descKey]) {
@@ -435,6 +469,8 @@
                     minScontoItem = d;
                 }
             });
+
+            document.getElementById('kpi-giacenza').innerText = totaleGiacenzaFiltered.toLocaleString('it-IT');
 
             let prodottiArray = Object.keys(prodottoMap).map(k => ({
                 nome: k,
@@ -454,20 +490,13 @@
             if (storeFiltro) testoFiltri += ` per lo store <b>${storeFiltro}</b>`;
             if (meseFiltro) testoFiltri += ` nel mese di <b>${meseFiltro}</b>`;
 
-            let frase = `${testoFiltri}. Il fatturato complessivo è di <b class="text-emerald-400">€ ${totalFatturato.toLocaleString('it-IT', {minimumFractionDigits: 2})}</b> con uno scontrino medio di <b>€ ${scontrinoMedio}</b>. `;
+            let frase = `${testoFiltri}. Il fatturato complessivo è di <b class="text-emerald-400">€ ${totalFatturato.toLocaleString('it-IT', {minimumFractionDigits: 2})}</b> con una giacenza magazzino collegata di <b>${totaleGiacenzaFiltered.toLocaleString('it-IT')} unità</b>. `;
             
             if (topRedditizio) {
-                frase += `<br>💎 <b>Prodotto con maggiore redditività:</b> <b>"${topRedditizio.nome}"</b> (Fatturato: € ${topRedditizio.fatturatoTotale.toFixed(2)}, Q.tà: ${topRedditizio.quantitaTotale}). `;
+                frase += `<br>💎 <b>Prodotto con maggiore redditività:</b> <b>"${topRedditizio.nome}"</b> (Fatturato: € ${topRedditizio.fatturatoTotale.toFixed(2)}, Q.tà venduta: ${topRedditizio.quantitaTotale}). `;
             }
-            if (minRedditizio && minRedditizio.nome !== topRedditizio?.nome) {
-                frase += `<br>📉 <b>Prodotto con minore redditività:</b> <b>"${minRedditizio.nome}"</b> (Fatturato: € ${minRedditizio.fatturatoTotale.toFixed(2)}, Q.tà: ${minRedditizio.quantitaTotale}). `;
-            }
-
             if (maxScontoItem) {
-                frase += `<br>🔥 <b>Maggiore sconto:</b> <b>"${maxScontoItem.descrizione || 'Articolo'}"</b> (<b class="text-amber-400">${maxScontoItem.sconto.toFixed(1)}%</b>, Q.tà: ${maxScontoItem.quantita}). `;
-            }
-            if (minScontoItem) {
-                frase += `<br>🛡️ <b>Minore sconto:</b> <b>"${minScontoItem.descrizione || 'Articolo'}"</b> (<b class="text-cyan-400">${minScontoItem.sconto.toFixed(1)}%</b>, Q.tà: ${minScontoItem.quantita}). `;
+                frase += `<br>🔥 <b>Maggiore sconto:</b> <b>"${maxScontoItem.descrizione || 'Articolo'}"</b> (<b class="text-amber-400">${maxScontoItem.sconto.toFixed(1)}%</b>). `;
             }
 
             frase += `<br>Lo store di riferimento è <b>${topStore}</b> e l'operatore leader è <b>${topOp}</b>.`;
@@ -492,7 +521,7 @@
             tbody.innerHTML = '';
             
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="10" class="text-center py-6 text-gray-400">Nessun dato trovato con i filtri correnti.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" class="text-center py-6 text-gray-400">Nessun dato trovato con i filtri correnti.</td></tr>';
             } else {
                 data.forEach(row => {
                     let tr = document.createElement('tr');
@@ -506,6 +535,7 @@
                         <td class="py-3 px-3 font-mono text-xs text-gray-600">${row.codiceInterno}</td>
                         <td class="py-3 px-3 font-medium text-gray-900">${row.descrizione}</td>
                         <td class="py-3 px-3 text-center font-semibold text-gray-700">${row.quantita}</td>
+                        <td class="py-3 px-3 text-center font-bold ${row.giacenza > 0 ? 'text-emerald-600' : 'text-red-500'}">${row.giacenza}</td>
                         <td class="py-3 px-3 text-gray-500">€ ${row.listino.toFixed(2)}</td>
                         <td class="py-3 px-3 text-gray-700 font-medium">€ ${row.netto.toFixed(2)}</td>
                         <td class="py-3 px-3 text-right font-semibold">€ ${row.totale.toFixed(2)}</td>
