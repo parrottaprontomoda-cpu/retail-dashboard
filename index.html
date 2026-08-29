@@ -146,7 +146,7 @@
         </div>
     </main>
 
-    <!-- Script di Logica BI Aggiornato -->
+    <!-- Script di Logica BI con Debug -->
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         let rawData = [];
@@ -172,6 +172,7 @@
                 header: false,
                 skipEmptyLines: true,
                 complete: function(results) {
+                    console.log("Prima riga grezza CSV:", results.data[1]); // Debug in console
                     parseData(results.data);
                     badge.className = "text-[10px] md:text-xs bg-emerald-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
                     badge.innerText = "Aggiornato";
@@ -186,30 +187,36 @@
 
         caricaDatiCSV();
 
-        // Funzione per estrarre il mese in modo robusto dalla Colonna B (data)
         function estraiMese(valoreData) {
             if (!valoreData) return '';
-            let v = valoreData.toLowerCase().trim();
+            let v = String(valoreData).toLowerCase().trim();
 
-            // Cerca direttamente se è scritto il mese in chiaro
             const mesi = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
             for (let m of mesi) {
                 if (v.includes(m)) return m;
             }
 
-            // Se è una data numerica (es. DD/MM/YYYY o YYYY-MM-DD)
-            if (v.includes('/01/') || v.includes('-01-') || v.startsWith('01/')) return 'gennaio';
-            if (v.includes('/02/') || v.includes('-02-') || v.startsWith('02/')) return 'febbraio';
-            if (v.includes('/03/') || v.includes('-03-') || v.startsWith('03/')) return 'marzo';
-            if (v.includes('/04/') || v.includes('-04-') || v.startsWith('04/')) return 'aprile';
-            if (v.includes('/05/') || v.includes('-05-') || v.startsWith('05/')) return 'maggio';
-            if (v.includes('/06/') || v.includes('-06-') || v.startsWith('06/')) return 'giugno';
-            if (v.includes('/07/') || v.includes('-07-') || v.startsWith('07/')) return 'luglio';
-            if (v.includes('/08/') || v.includes('-08-') || v.startsWith('08/')) return 'agosto';
-            if (v.includes('/09/') || v.includes('-09-') || v.startsWith('09/')) return 'settembre';
-            if (v.includes('/10/') || v.includes('-10-') || v.startsWith('10/')) return 'ottobre';
-            if (v.includes('/11/') || v.includes('-11-') || v.startsWith('11/')) return 'novembre';
-            if (v.includes('/12/') || v.includes('-12-') || v.startsWith('12/')) return 'dicembre';
+            // Estrazione numerica basata su slash o trattini (es. YYYY-MM-DD o DD/MM/YYYY)
+            let parti = v.split(/[\/\-]/);
+            if (parti.length >= 2) {
+                // Controlla se la seconda parte è il mese (es. DD/MM/YYYY) o la prima (es. YYYY-MM-DD)
+                let mNum = parseInt(parti[1], 10);
+                if (parti[0].length === 4) { // Formato YYYY-MM-DD
+                    mNum = parseInt(parti[1], 10);
+                } else { // Formato DD/MM/YYYY o MM/DD/YYYY, proviamo a capire
+                    // Se il primo numero è > 12, allora è il giorno, quindi il secondo è il mese
+                    if (parseInt(parti[0], 10) > 12) {
+                        mNum = parseInt(parti[1], 10);
+                    } else {
+                        // Se entrambi <= 12, di solito in IT è DD/MM, quindi indice 1 è il mese
+                        mNum = parseInt(parti[1], 10);
+                    }
+                }
+
+                if (mNum >= 1 && mNum <= 12) {
+                    return mesi[mNum - 1];
+                }
+            }
 
             return v;
         }
@@ -222,22 +229,26 @@
                 let row = rows[i];
                 if (!row || row.length === 0) continue;
 
-                let totaleStr = row[10] || '0'; // Colonna K (indice 10)
+                let totaleStr = row[10] || '0';
                 let totaleNum = parseFloat(totaleStr.replace('€', '').replace(/\./g, '').replace(',', '.')) || 0;
 
-                let dataReg = row[1] || ''; // Colonna B (indice 1) - Data della registrazione
+                let dataReg = row[1] || ''; // Colonna B
                 let meseNormalizzato = estraiMese(dataReg);
+
+                if (i === 1) {
+                    console.log("DEBUG Mese estratto dalla colonna B ('" + dataReg + "') -> Result:", meseNormalizzato);
+                }
 
                 rawData.push({
                     dataReg: dataReg,
                     mese: meseNormalizzato,
-                    store: row[16] || 'Store Principale',       // Colonna Q (indice 16)
-                    operatore: row[17] || 'Sconosciuto',             // Colonna R (indice 17)
-                    ean: row[2] || '',                               // Colonna C (indice 2)
-                    codiceInterno: row[3] || '',                     // Colonna D (indice 3)
-                    descrizione: row[4] || '',                       // Colonna E (indice 4)
-                    colore: row[6] || '',                            // Colonna G (indice 6)
-                    misura: row[7] || '',                            // Colonna H (indice 7)
+                    store: row[16] || 'Store Principale',
+                    operatore: row[17] || 'Sconosciuto',
+                    ean: row[2] || '',
+                    codiceInterno: row[3] || '',
+                    descrizione: row[4] || '',
+                    colore: row[6] || '',
+                    misura: row[7] || '',
                     totale: totaleNum
                 });
             }
