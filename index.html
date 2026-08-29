@@ -119,23 +119,23 @@
         <!-- Tabella Dettaglio Dati -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div class="border-b border-gray-200 bg-gray-50 px-4 md:px-6 pt-4 flex justify-between items-center">
-                <span class="pb-3 px-2 inline-block font-semibold text-sm text-blue-600 border-b-2 border-blue-600">Righe Dettaglio Vendite</span>
+                <span class="pb-3 px-2 inline-block font-semibold text-sm text-blue-600 border-b-2 border-blue-600">Righe Dettaglio Vendite (Clicca sulle intestazioni per ordinare)</span>
                 <span id="counter-righe" class="text-xs text-gray-500 font-medium pb-2">0 righe trovate</span>
             </div>
 
             <div class="p-4 md:p-6 overflow-x-auto">
                 <table class="w-full text-left border-collapse min-w-[900px]">
                     <thead>
-                        <tr class="border-b text-xs font-semibold text-gray-500 uppercase bg-gray-50">
-                            <th class="py-3 px-3">Data Reg. (B)</th>
-                            <th class="py-3 px-3">Store (Q)</th>
-                            <th class="py-3 px-3">Operatore (R)</th>
-                            <th class="py-3 px-3">EAN (C)</th>
-                            <th class="py-3 px-3">Cod. Interno (D)</th>
-                            <th class="py-3 px-3">Descrizione Prodotto (E)</th>
-                            <th class="py-3 px-3">Colore (G)</th>
-                            <th class="py-3 px-3">Misura (H)</th>
-                            <th class="py-3 px-3 text-right">Totale (K) (€)</th>
+                        <tr class="border-b text-xs font-semibold text-gray-500 uppercase bg-gray-50 select-none">
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('dataReg')">Data Reg. (B) <i class="fa-solid fa-sort ml-1"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('store')">Store (Q) <i class="fa-solid fa-sort ml-1"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('operatore')">Operatore (R) <i class="fa-solid fa-sort ml-1"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('ean')">EAN (C) <i class="fa-solid fa-sort ml-1"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('codiceInterno')">Cod. Interno (D) <i class="fa-solid fa-sort ml-1"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('descrizione')">Descrizione Prodotto (E) <i class="fa-solid fa-sort ml-1"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('colore')">Colore (G) <i class="fa-solid fa-sort ml-1"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition" onclick="sortData('misura')">Misura (H) <i class="fa-solid fa-sort ml-1"></i></th>
+                            <th class="py-3 px-3 text-right cursor-pointer hover:text-blue-600 transition" onclick="sortData('totale')">Totale (K) (€) <i class="fa-solid fa-sort ml-1"></i></th>
                         </tr>
                     </thead>
                     <tbody id="table-vendite-body" class="text-sm divide-y divide-gray-100">
@@ -146,11 +146,14 @@
         </div>
     </main>
 
-    <!-- Script di Logica BI Aggiornato per Store -->
+    <!-- Script di Logica BI con Ordinamento -->
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         let rawData = [];
+        let currentFilteredData = [];
         let storeChart;
+        let currentSortColumn = '';
+        let sortDirection = 'asc'; // 'asc' o 'desc'
 
         function initCharts() {
             const ctxStore = document.getElementById('storeChart').getContext('2d');
@@ -289,7 +292,7 @@
             let query = document.getElementById('searchCodice').value.toLowerCase().trim();
             let selectedMese = document.getElementById('filterMese').value.toLowerCase().trim();
 
-            let filtered = rawData.filter(d => {
+            currentFilteredData = rawData.filter(d => {
                 let matchStore = !selectedStore || d.store === selectedStore;
                 let matchOp = !selectedOp || d.operatore === selectedOp;
                 
@@ -303,7 +306,44 @@
                 return matchStore && matchOp && matchQuery && matchMese;
             });
 
-            updateDashboard(filtered, selectedStore);
+            // Se c'è un ordinamento attivo, riapplicalo sui dati filtrati
+            if (currentSortColumn) {
+                sortDataArray(currentFilteredData, currentSortColumn, sortDirection);
+            }
+
+            updateDashboard(currentFilteredData, selectedStore);
+        }
+
+        // Funzione per ordinare i dati cliccando sulle intestazioni
+        function sortData(column) {
+            if (currentSortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortColumn = column;
+                sortDirection = 'asc';
+            }
+
+            sortDataArray(currentFilteredData, currentSortColumn, sortDirection);
+            updateDashboard(currentFilteredData, document.getElementById('filterStore').value);
+        }
+
+        function sortDataArray(array, column, direction) {
+            array.sort((a, b) => {
+                let valA = a[column];
+                let valB = b[column];
+
+                if (column === 'totale') {
+                    valA = parseFloat(valA);
+                    valB = parseFloat(valB);
+                } else {
+                    valA = String(valA).toLowerCase();
+                    valB = String(valB).toLowerCase();
+                }
+
+                if (valA < valB) return direction === 'asc' ? -1 : 1;
+                if (valA > valB) return direction === 'asc' ? 1 : -1;
+                return 0;
+            });
         }
 
         function updateDashboard(data, storeName) {
@@ -342,7 +382,7 @@
                 });
             }
 
-            // Aggregazione per Store / Punto Vendita (anziché per operatore)
+            // Aggregazione per Store / Punto Vendita nel Grafico
             let storeMap = {};
             data.forEach(d => {
                 if (!storeMap[d.store]) {
