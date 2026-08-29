@@ -59,13 +59,13 @@
             </div>
         </div>
 
-        <!-- Box di Analisi Intelligente / Riepilogo Dati -->
+        <!-- Box di Analisi Intelligente / Riepilogo Dati & Sconti -->
         <div class="bg-gradient-to-r from-slate-900 to-indigo-950 text-white p-4 md:p-6 rounded-xl shadow-md mb-6 border border-indigo-900">
             <div class="flex items-center justify-between mb-2">
                 <h2 class="text-sm font-bold uppercase tracking-wider text-indigo-300 flex items-center">
-                    <i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-400"></i> Assistente BI - Analisi Intelligente Dati Filtrati
+                    <i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-400"></i> Assistente BI - Analisi Sconti & Performance
                 </h2>
-                <span class="text-[10px] bg-indigo-800 text-indigo-200 px-2.5 py-0.5 rounded-full font-medium">Live Insights</span>
+                <span class="text-[10px] bg-indigo-800 text-indigo-200 px-2.5 py-0.5 rounded-full font-medium">Advanced Insights</span>
             </div>
             <p id="ai-summary-text" class="text-xs md:text-sm text-slate-200 leading-relaxed">
                 In attesa di elaborazione dati...
@@ -146,20 +146,21 @@
                             <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="ean">EAN (C) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                             <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="codiceInterno">Cod. Interno (D) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                             <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="descrizione">Descrizione Prodotto (E) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
-                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="colore">Colore (G) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
-                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="misura">Misura (F) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="quantita">Q.tà (H) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="listino">Listino (I) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="netto">Netto (J) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                             <th class="py-3 px-3 text-right cursor-pointer hover:text-blue-600 transition sort-header" data-column="totale">Totale (K) (€) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                         </tr>
                     </thead>
                     <tbody id="table-vendite-body" class="text-sm divide-y divide-gray-100">
-                        <tr><td colspan="9" class="text-center py-6 text-gray-400">Caricamento in corso...</td></tr>
+                        <tr><td colspan="10" class="text-center py-6 text-gray-400">Caricamento in corso...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
     </main>
 
-    <!-- Script di Logica BI Aggiornato con Misura alla Colonna F -->
+    <!-- Script di Logica BI con Analisi Sconti Avanzata -->
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         let rawData = [];
@@ -223,6 +224,11 @@
             return v;
         }
 
+        function parseNum(val) {
+            if (!val) return 0;
+            return parseFloat(String(val).replace('€', '').replace(/\./g, '').replace(',', '.')) || 0;
+        }
+
         function parseData(rows) {
             rawData = [];
             if (rows.length < 2) return;
@@ -231,8 +237,16 @@
                 let row = rows[i];
                 if (!row || row.length === 0) continue;
 
-                let totaleStr = row[10] || '0'; // Colonna K
-                let totaleNum = parseFloat(totaleStr.replace('€', '').replace(/\./g, '').replace(',', '.')) || 0;
+                let quantitaNum = parseNum(row[7]);    // Colonna H (indice 7)
+                let listinoNum = parseNum(row[8]);     // Colonna I (indice 8)
+                let nettoNum = parseNum(row[9]);       // Colonna J (indice 9)
+                let totaleNum = parseNum(row[10]);     // Colonna K (indice 10)
+
+                // Calcolo percentuale sconto
+                let scontoPerc = 0;
+                if (listinoNum > 0 && nettoNum > 0 && listinoNum >= nettoNum) {
+                    scontoPerc = ((listinoNum - nettoNum) / listinoNum) * 100;
+                }
 
                 let dataReg = row[1] || ''; // Colonna B
                 let meseNormalizzato = estraiMese(dataReg);
@@ -245,8 +259,10 @@
                     ean: row[2] || '',
                     codiceInterno: row[3] || '',
                     descrizione: row[4] || '',
-                    misura: row[5] || '',                            // Colonna F (indice 5)
-                    colore: row[6] || '',                            // Colonna G (indice 6)
+                    quantita: quantitaNum,
+                    listino: listinoNum,
+                    netto: nettoNum,
+                    sconto: scontoPerc,
                     totale: totaleNum
                 });
             }
@@ -350,7 +366,7 @@
                 let valA = a[column];
                 let valB = b[column];
 
-                if (column === 'totale') {
+                if (['totale', 'quantita', 'listino', 'netto', 'sconto'].includes(column)) {
                     valA = parseFloat(valA);
                     valB = parseFloat(valB);
                 } else {
@@ -364,6 +380,7 @@
             });
         }
 
+        // Analisi IA avanzata per sconti e volumi
         function generaAnalisiIA(data, totalFatturato, totalTransazioni, scontrinoMedio) {
             const aiBox = document.getElementById('ai-summary-text');
             if (!aiBox) return;
@@ -374,19 +391,28 @@
             }
 
             let storeMap = {};
-            let descMap = {};
             let opMap = {};
+            let maxScontoItem = null;
+            let minScontoItem = null;
 
+            // Ponderazione sconto in base al numero di capi venduti (quantità)
             data.forEach(d => {
                 storeMap[d.store] = (storeMap[d.store] || 0) + d.totale;
-                if (d.descrizione) {
-                    descMap[d.descrizione] = (descMap[d.descrizione] || 0) + d.totale;
-                }
                 opMap[d.operatore] = (opMap[d.operatore] || 0) + d.totale;
+
+                // Calcolo indice di impatto: Sconto % * Quantità venduta
+                let impattoSconto = d.sconto * (d.quantita > 0 ? d.quantita : 1);
+                d.impattoSconto = impattoSconto;
+
+                if (!maxScontoItem || d.sconto > maxScontoItem.sconto) {
+                    maxScontoItem = d;
+                }
+                if (!minScontoItem || d.sconto < minScontoItem.sconto) {
+                    minScontoItem = d;
+                }
             });
 
             let topStore = Object.keys(storeMap).reduce((a, b) => storeMap[a] > storeMap[b] ? a : b, '');
-            let topDesc = Object.keys(descMap).length > 0 ? Object.keys(descMap).reduce((a, b) => descMap[a] > descMap[b] ? a : b, '') : 'N/D';
             let topOp = Object.keys(opMap).reduce((a, b) => opMap[a] > opMap[b] ? a : b, '');
 
             let storeFiltro = document.getElementById('filterStore').value;
@@ -395,28 +421,30 @@
             if (storeFiltro) testoFiltri += ` per lo store <b>${storeFiltro}</b>`;
             if (meseFiltro) testoFiltri += ` nel mese di <b>${meseFiltro}</b>`;
 
-            let frase = `${testoFiltri}. Il fatturato complessivo generato è pari a <b class="text-emerald-400">€ ${totalFatturato.toLocaleString('it-IT', {minimumFractionDigits: 2})}</b> con uno scontrino medio di <b>€ ${scontrinoMedio}</b>. `;
-            if (!storeFiltro && Object.keys(storeMap).length > 1) {
-                frase += `Il punto vendita con le performance più elevate risulta essere <b>${topStore}</b>. `;
+            let frase = `${testoFiltri}. Il fatturato complessivo è di <b class="text-emerald-400">€ ${totalFatturato.toLocaleString('it-IT', {minimumFractionDigits: 2})}</b> con uno scontrino medio di <b>€ ${scontrinoMedio}</b>. `;
+            
+            if (maxScontoItem) {
+                frase += `<br>🔥 <b>Maggiore sconto applicato:</b> <b>"${maxScontoItem.descrizione || 'Articolo'}"</b> con uno sconto del <b class="text-amber-400">${maxScontoItem.sconto.toFixed(1)}%</b> (Listino € ${maxScontoItem.listino.toFixed(2)} -> Netto € ${maxScontoItem.netto.toFixed(2)}, Q.tà: ${maxScontoItem.quantita}). `;
             }
-            if (topDesc !== 'N/D') {
-                frase += `L'articolo che ha registrato il maggiore volume di vendite in valore è <b>"${topDesc}"</b>. `;
+            if (minScontoItem) {
+                frase += `<br>🛡️ <b>Minore sconto applicato:</b> <b>"${minScontoItem.descrizione || 'Articolo'}"</b> con uno sconto del <b class="text-cyan-400">${minScontoItem.sconto.toFixed(1)}%</b> (Listino € ${minScontoItem.listino.toFixed(2)} -> Netto € ${minScontoItem.netto.toFixed(2)}, Q.tà: ${minScontoItem.quantita}). `;
             }
-            frase += `L'operatore più attivo nel periodo selezionato è <b>${topOp}</b>.`;
+
+            frase += `<br>Lo store di punta è <b>${topStore}</b> e l'operatore più attivo è <b>${topOp}</b>.`;
 
             aiBox.innerHTML = frase;
         }
 
         function updateDashboard(data, storeName) {
             let totalFatturato = data.reduce((acc, curr) => acc + curr.totale, 0);
-            let totalTransazioni = data.length;
-            let scontrinoMedio = totalTransazioni > 0 ? (totalFatturato / totalTransazioni).toFixed(2) : 0;
+            let totalTransazioni = data.reduce((acc, curr) => acc + (curr.quantita > 0 ? curr.quantita : 1), 0); // Somma quantità totali o transazioni
+            let scontrinoMedio = data.length > 0 ? (totalFatturato / data.length).toFixed(2) : 0;
 
             document.getElementById('kpi-fatturato').innerText = '€ ' + totalFatturato.toLocaleString('it-IT', {minimumFractionDigits: 2});
             document.getElementById('kpi-vendite').innerText = totalTransazioni.toLocaleString('it-IT');
             document.getElementById('kpi-store').innerText = storeName || 'Tutti';
             document.getElementById('kpi-scontrino').innerText = '€ ' + scontrinoMedio.toLocaleString('it-IT', {minimumFractionDigits: 2});
-            document.getElementById('counter-righe').innerText = totalTransazioni + ' righe trovate';
+            document.getElementById('counter-righe').innerText = data.length + ' righe trovate';
 
             generaAnalisiIA(data, totalFatturato, totalTransazioni, scontrinoMedio);
 
@@ -424,7 +452,7 @@
             tbody.innerHTML = '';
             
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-gray-400">Nessun dato trovato con i filtri correnti.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center py-6 text-gray-400">Nessun dato trovato con i filtri correnti.</td></tr>';
             } else {
                 data.forEach(row => {
                     let tr = document.createElement('tr');
@@ -437,8 +465,9 @@
                         <td class="py-3 px-3 font-mono text-xs text-gray-700">${row.ean}</td>
                         <td class="py-3 px-3 font-mono text-xs text-gray-600">${row.codiceInterno}</td>
                         <td class="py-3 px-3 font-medium text-gray-900">${row.descrizione}</td>
-                        <td class="py-3 px-3 text-gray-500">${row.colore}</td>
-                        <td class="py-3 px-3 text-gray-500">${row.misura}</td>
+                        <td class="py-3 px-3 text-center font-semibold text-gray-700">${row.quantita}</td>
+                        <td class="py-3 px-3 text-gray-500">€ ${row.listino.toFixed(2)}</td>
+                        <td class="py-3 px-3 text-gray-700 font-medium">€ ${row.netto.toFixed(2)}</td>
                         <td class="py-3 px-3 text-right font-semibold">€ ${row.totale.toFixed(2)}</td>
                     `;
                     tbody.appendChild(tr);
