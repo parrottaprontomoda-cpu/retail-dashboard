@@ -146,7 +146,7 @@
         </div>
     </main>
 
-    <!-- Script di Logica BI con Debug -->
+    <!-- Script di Logica BI Aggiornato -->
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         let rawData = [];
@@ -172,7 +172,6 @@
                 header: false,
                 skipEmptyLines: true,
                 complete: function(results) {
-                    console.log("Prima riga grezza CSV:", results.data[1]); // Debug in console
                     parseData(results.data);
                     badge.className = "text-[10px] md:text-xs bg-emerald-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
                     badge.innerText = "Aggiornato";
@@ -192,29 +191,21 @@
             let v = String(valoreData).toLowerCase().trim();
 
             const mesi = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+            
+            // Cerca se nel testo è presente direttamente il nome del mese
             for (let m of mesi) {
                 if (v.includes(m)) return m;
             }
 
-            // Estrazione numerica basata su slash o trattini (es. YYYY-MM-DD o DD/MM/YYYY)
-            let parti = v.split(/[\/\-]/);
+            // Estrazione numerica da date standard (es. DD/MM/YYYY, YYYY-MM-DD, ecc.)
+            let parti = v.split(/[\/\-\.\s]/);
             if (parti.length >= 2) {
-                // Controlla se la seconda parte è il mese (es. DD/MM/YYYY) o la prima (es. YYYY-MM-DD)
-                let mNum = parseInt(parti[1], 10);
-                if (parti[0].length === 4) { // Formato YYYY-MM-DD
-                    mNum = parseInt(parti[1], 10);
-                } else { // Formato DD/MM/YYYY o MM/DD/YYYY, proviamo a capire
-                    // Se il primo numero è > 12, allora è il giorno, quindi il secondo è il mese
-                    if (parseInt(parti[0], 10) > 12) {
-                        mNum = parseInt(parti[1], 10);
-                    } else {
-                        // Se entrambi <= 12, di solito in IT è DD/MM, quindi indice 1 è il mese
-                        mNum = parseInt(parti[1], 10);
+                for (let p of parti) {
+                    let num = parseInt(p, 10);
+                    // Se trova un numero tra 1 e 12 che non è l'anno
+                    if (num >= 1 && num <= 12 && p.length <= 2) {
+                        return mesi[num - 1];
                     }
-                }
-
-                if (mNum >= 1 && mNum <= 12) {
-                    return mesi[mNum - 1];
                 }
             }
 
@@ -225,19 +216,18 @@
             rawData = [];
             if (rows.length < 2) return;
 
+            let mesiTrovatiSet = new Set();
+
             for (let i = 1; i < rows.length; i++) {
                 let row = rows[i];
                 if (!row || row.length === 0) continue;
 
-                let totaleStr = row[10] || '0';
+                let totaleStr = row[10] || '0'; // Colonna K
                 let totaleNum = parseFloat(totaleStr.replace('€', '').replace(/\./g, '').replace(',', '.')) || 0;
 
                 let dataReg = row[1] || ''; // Colonna B
                 let meseNormalizzato = estraiMese(dataReg);
-
-                if (i === 1) {
-                    console.log("DEBUG Mese estratto dalla colonna B ('" + dataReg + "') -> Result:", meseNormalizzato);
-                }
+                mesiTrovatiSet.add(meseNormalizzato);
 
                 rawData.push({
                     dataReg: dataReg,
@@ -252,6 +242,8 @@
                     totale: totaleNum
                 });
             }
+
+            console.log("Mesi unici rilevati nella Colonna B:", Array.from(mesiTrovatiSet));
 
             populateStoreFilter(rawData);
             updateOperatorCascade(rawData);
