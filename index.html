@@ -59,6 +59,19 @@
             </div>
         </div>
 
+        <!-- Box di Analisi Intelligente / Riepilogo Dati -->
+        <div class="bg-gradient-to-r from-slate-900 to-indigo-950 text-white p-4 md:p-6 rounded-xl shadow-md mb-6 border border-indigo-900">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-indigo-300 flex items-center">
+                    <i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-400"></i> Assistente BI - Analisi Intelligente Dati Filtrati
+                </h2>
+                <span class="text-[10px] bg-indigo-800 text-indigo-200 px-2.5 py-0.5 rounded-full font-medium">Live Insights</span>
+            </div>
+            <p id="ai-summary-text" class="text-xs md:text-sm text-slate-200 leading-relaxed">
+                In attesa di elaborazione dati...
+            </p>
+        </div>
+
         <!-- Sezione Filtri Avanzati & Cascata -->
         <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
             <h2 class="text-sm font-bold uppercase text-gray-500 mb-4 tracking-wider"><i class="fa-solid fa-filter mr-2"></i> Filtri e Analisi Store</h2>
@@ -146,14 +159,14 @@
         </div>
     </main>
 
-    <!-- Script di Logica BI con Ordinamento Corretto -->
+    <!-- Script di Logica BI con Assistente IA integrato -->
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         let rawData = [];
         let currentFilteredData = [];
         let storeChart;
         let currentSortColumn = '';
-        let sortDirection = 'asc'; // 'asc' o 'desc'
+        let sortDirection = 'asc';
 
         function initCharts() {
             const ctxStore = document.getElementById('storeChart').getContext('2d');
@@ -268,7 +281,7 @@
             opSelect.innerHTML = '<option value="">Tutti gli operatori</option>';
             opSet.forEach(op => {
                 let opt = document.createElement('option');
-                opt.value = op;
+                opt.value = opt.value = op;
                 opt.innerText = op;
                 opSelect.appendChild(opt);
             });
@@ -286,7 +299,6 @@
         document.getElementById('searchCodice').addEventListener('input', applyFilters);
         document.getElementById('filterMese').addEventListener('change', applyFilters);
 
-        // Configurazione degli eventi di ordinamento sulle intestazioni della tabella
         document.querySelectorAll('.sort-header').forEach(th => {
             th.addEventListener('click', function() {
                 let column = this.getAttribute('data-column');
@@ -352,6 +364,49 @@
             });
         }
 
+        // Funzione di generazione del Riepilogo Intelligente (IA locale)
+        function generaAnalisiIA(data, totalFatturato, totalTransazioni, scontrinoMedio) {
+            const aiBox = document.getElementById('ai-summary-text');
+            if (data.length === 0) {
+                aiBox.innerHTML = "Nessun dato disponibile per i filtri selezionati. Non è possibile generare un'analisi.";
+                return;
+            }
+
+            // Calcola lo store migliore
+            let storeMap = {};
+            let descMap = {};
+            let opMap = {};
+
+            data.forEach(d => {
+                storeMap[d.store] = (storeMap[d.store] || 0) + d.totale;
+                if (d.descrizione) {
+                    descMap[d.descrizione] = (descMap[d.descrizione] || 0) + d.totale;
+                }
+                opMap[d.operatore] = (opMap[d.operatore] || 0) + d.totale;
+            });
+
+            let topStore = Object.keys(storeMap).reduce((a, b) => storeMap[a] > storeMap[b] ? a : b, '');
+            let topDesc = Object.keys(descMap).length > 0 ? Object.keys(descMap).reduce((a, b) => descMap[a] > descMap[b] ? a : b, '') : 'N/D';
+            let topOp = Object.keys(opMap).reduce((a, b) => opMap[a] > opMap[b] ? a : b, '');
+
+            let storeFiltro = document.getElementById('filterStore').value;
+            let meseFiltro = document.getElementById('filterMese').value;
+            let testoFiltri = `Analisi basata su <b>${totalTransazioni.toLocaleString('it-IT')} transazioni</b>`;
+            if (storeFiltro) testoFiltri += ` per lo store <b>${storeFiltro}</b>`;
+            if (meseFiltro) testoFiltri += ` nel mese di <b>${meseFiltro}</b>`;
+
+            let frase = `${testoFiltri}. Il fatturato complessivo generato è pari a <b class="text-emerald-400">€ ${totalFatturato.toLocaleString('it-IT', {minimumFractionDigits: 2})}</b> con uno scontrino medio di <b>€ ${scontrinoMedio}</b>. `;
+            if (!storeFiltro && Object.keys(storeMap).length > 1) {
+                frase += `Il punto vendita con le performance più elevate risulta essere <b>${topStore}</b>. `;
+            }
+            if (topDesc !== 'N/D') {
+                frase += `L'articolo che ha registrato il maggiore volume di vendite in valore è <b>"${topDesc}"</b>. `;
+            }
+            frase += `L'operatore più attivo nel periodo selezionato è <b>${topOp}</b>.`;
+
+            aiBox.innerHTML = frase;
+        }
+
         function updateDashboard(data, storeName) {
             let totalFatturato = data.reduce((acc, curr) => acc + curr.totale, 0);
             let totalTransazioni = data.length;
@@ -362,6 +417,9 @@
             document.getElementById('kpi-store').innerText = storeName || 'Tutti';
             document.getElementById('kpi-scontrino').innerText = '€ ' + scontrinoMedio.toLocaleString('it-IT', {minimumFractionDigits: 2});
             document.getElementById('counter-righe').innerText = totalTransazioni + ' righe trovate';
+
+            // Generazione automatica dell'Insight testuale
+            generaAnalisiIA(data, totalFatturato, totalTransazioni, scontrinoMedio);
 
             const tbody = document.getElementById('table-vendite-body');
             tbody.innerHTML = '';
