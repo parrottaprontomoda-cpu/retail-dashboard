@@ -160,7 +160,7 @@
         </div>
     </main>
 
-    <!-- Script di Logica BI con Analisi Redditività -->
+    <!-- Script di Logica BI con Fetch Anti-CORS -->
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         let rawData = [];
@@ -184,8 +184,31 @@
             badge.className = "text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
             badge.innerText = "Sincronizzazione...";
 
-            Papa.parse(CSV_URL, {
-                download: true,
+            // Utilizziamo fetch con proxy di fallback per evitare blocchi CORS di Google Sheets
+            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(CSV_URL);
+
+            fetch(proxyUrl)
+                .then(res => res.text())
+                .then(text => {
+                    elaboraTestoCSV(text, badge);
+                })
+                .catch(() => {
+                    // Fallback a fetch diretto
+                    fetch(CSV_URL)
+                        .then(res => res.text())
+                        .then(text => {
+                            elaboraTestoCSV(text, badge);
+                        })
+                        .catch(err => {
+                            console.error("Errore di connessione CSV:", err);
+                            badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+                            badge.innerText = "Errore Connessione";
+                        });
+                });
+        }
+
+        function elaboraTestoCSV(text, badge) {
+            Papa.parse(text, {
                 header: false,
                 skipEmptyLines: true,
                 complete: function(results) {
@@ -196,7 +219,7 @@
                 error: function(err) {
                     console.error("Errore PapaParse:", err);
                     badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-                    badge.innerText = "Errore Connessione";
+                    badge.innerText = "Errore Parsing";
                 }
             });
         }
@@ -379,7 +402,6 @@
             });
         }
 
-        // Analisi IA avanzata comprensiva di Redditività e Sconti per volumi
         function generaAnalisiIA(data, totalFatturato, totalTransazioni, scontrinoMedio) {
             const aiBox = document.getElementById('ai-summary-text');
             if (!aiBox) return;
@@ -393,8 +415,6 @@
             let opMap = {};
             let maxScontoItem = null;
             let minScontoItem = null;
-
-            // Aggregazione per prodotto per calcolare la redditività totale (fatturato generato per articolo)
             let prodottoMap = {};
 
             data.forEach(d => {
@@ -403,12 +423,10 @@
 
                 let descKey = d.descrizione || 'Articolo sconosciuto';
                 if (!prodottoMap[descKey]) {
-                    prodottoMap[descKey] = { fatturatoTotale: 0, quantitaTotale: 0, margineTotale: 0 };
+                    prodottoMap[descKey] = { fatturatoTotale: 0, quantitaTotale: 0 };
                 }
                 prodottoMap[descKey].fatturatoTotale += d.totale;
                 prodottoMap[descKey].quantitaTotale += (d.quantita > 0 ? d.quantita : 1);
-                // Margine stimato come Totale Netto (o ricavo totale) ponderato
-                prodottoMap[descKey].margineTotale += d.totale;
 
                 if (!maxScontoItem || d.sconto > maxScontoItem.sconto) {
                     maxScontoItem = d;
@@ -418,7 +436,6 @@
                 }
             });
 
-            // Trova prodotto con maggiore e minore redditività in funzione della quantità e fatturato
             let prodottiArray = Object.keys(prodottoMap).map(k => ({
                 nome: k,
                 ...prodottoMap[k]
@@ -440,17 +457,17 @@
             let frase = `${testoFiltri}. Il fatturato complessivo è di <b class="text-emerald-400">€ ${totalFatturato.toLocaleString('it-IT', {minimumFractionDigits: 2})}</b> con uno scontrino medio di <b>€ ${scontrinoMedio}</b>. `;
             
             if (topRedditizio) {
-                frase += `<br>💎 <b>Prodotto con maggiore redditività:</b> <b>"${topRedditizio.nome}"</b> con un fatturato totale di <b class="text-emerald-300">€ ${topRedditizio.fatturatoTotale.toFixed(2)}</b> e <b>${topRedditizio.quantitaTotale}</b> capi venduti. `;
+                frase += `<br>💎 <b>Prodotto con maggiore redditività:</b> <b>"${topRedditizio.nome}"</b> (Fatturato: € ${topRedditizio.fatturatoTotale.toFixed(2)}, Q.tà: ${topRedditizio.quantitaTotale}). `;
             }
             if (minRedditizio && minRedditizio.nome !== topRedditizio?.nome) {
                 frase += `<br>📉 <b>Prodotto con minore redditività:</b> <b>"${minRedditizio.nome}"</b> (Fatturato: € ${minRedditizio.fatturatoTotale.toFixed(2)}, Q.tà: ${minRedditizio.quantitaTotale}). `;
             }
 
             if (maxScontoItem) {
-                frase += `<br>🔥 <b>Maggiore sconto:</b> <b>"${maxScontoItem.descrizione || 'Articolo'}"</b> (<b class="text-amber-400">${maxScontoItem.sconto.toFixed(1)}%</b> di sconto, Q.tà: ${maxScontoItem.quantita}). `;
+                frase += `<br>🔥 <b>Maggiore sconto:</b> <b>"${maxScontoItem.descrizione || 'Articolo'}"</b> (<b class="text-amber-400">${maxScontoItem.sconto.toFixed(1)}%</b>, Q.tà: ${maxScontoItem.quantita}). `;
             }
             if (minScontoItem) {
-                frase += `<br>🛡️ <b>Minore sconto:</b> <b>"${minScontoItem.descrizione || 'Articolo'}"</b> (<b class="text-cyan-400">${minScontoItem.sconto.toFixed(1)}%</b> di sconto, Q.tà: ${minScontoItem.quantita}). `;
+                frase += `<br>🛡️ <b>Minore sconto:</b> <b>"${minScontoItem.descrizione || 'Articolo'}"</b> (<b class="text-cyan-400">${minScontoItem.sconto.toFixed(1)}%</b>, Q.tà: ${minScontoItem.quantita}). `;
             }
 
             frase += `<br>Lo store di riferimento è <b>${topStore}</b> e l'operatore leader è <b>${topOp}</b>.`;
@@ -513,7 +530,6 @@
             storeChart.update();
 
             const reportContainer = document.getElementById('store-report-container');
-            reportContainer.innerHTML =--;
             reportContainer.innerHTML = '';
 
             if (labels.length === 0) {
