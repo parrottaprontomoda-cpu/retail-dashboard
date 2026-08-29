@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retail BI & Store Analytics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans">
+
+    <!-- Navbar -->
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-base md:text-xl font-bold tracking-wide truncate"><i class="fa-solid fa-chart-pie mr-2 text-blue-400"></i> Retail BI Dashboard</h1>
+            <div class="flex items-center space-x-2">
+                <span id="status-badge" class="text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap">Sincronizzazione...</span>
+                <button onclick="caricaDatiCSV()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-sm">
+                    <i class="fa-solid fa-sync"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Container Principale -->
+    <main class="container mx-auto px-4 py-6 max-w-7xl">
+
+        <!-- KPI Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
+                <div class="p-3 md:p-4 bg-blue-50 text-blue-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-euro-sign"></i></div>
+                <div>
+                    <p class="text-xs md:text-sm text-gray-500 font-medium">Fatturato Filtrato</p>
+                    <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-fatturato">€ 0,00</h3>
+                </div>
+            </div>
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
+                <div class="p-3 md:p-4 bg-emerald-50 text-emerald-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-receipt"></i></div>
+                <div>
+                    <p class="text-xs md:text-sm text-gray-500 font-medium">Transazioni</p>
+                    <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-vendite">0</h3>
+                </div>
+            </div>
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
+                <div class="p-3 md:p-4 bg-amber-50 text-amber-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-store"></i></div>
+                <div>
+                    <p class="text-xs md:text-sm text-gray-500 font-medium">Store Selezionato</p>
+                    <h3 class="text-sm md:text-lg font-bold text-gray-900 truncate max-w-[140px]" id="kpi-store">Tutti</h3>
+                </div>
+            </div>
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
+                <div class="p-3 md:p-4 bg-purple-50 text-purple-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-basket-shopping"></i></div>
+                <div>
+                    <p class="text-xs md:text-sm text-gray-500 font-medium">Scontrino Medio</p>
+                    <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-scontrino">€ 0,00</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sezione Filtri Avanzati & Cascata -->
+        <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
+            <h2 class="text-sm font-bold uppercase text-gray-500 mb-4 tracking-wider"><i class="fa-solid fa-filter mr-2"></i> Filtri e Analisi Store</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">1. Seleziona Store (Col. Q)</label>
+                    <select id="filterStore" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 font-medium">
+                        <option value="">Tutti gli Store</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">2. Operatore (Col. R - a cascata)</label>
+                    <select id="filterOperatore" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50">
+                        <option value="">Tutti gli operatori</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">3. Cerca (EAN / Cod. Interno / Descrizione)</label>
+                    <input type="text" id="searchCodice" placeholder="EAN, codice, descrizione..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">4. Mese</label>
+                    <select id="filterMese" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50">
+                        <option value="">Tutti i mesi</option>
+                        <option value="gennaio">Gennaio</option>
+                        <option value="febbraio">Febbraio</option>
+                        <option value="marzo">Marzo</option>
+                        <option value="aprile">Aprile</option>
+                        <option value="maggio">Maggio</option>
+                        <option value="giugno">Giugno</option>
+                        <option value="luglio">Luglio</option>
+                        <option value="agosto">Agosto</option>
+                        <option value="settembre">Settembre</option>
+                        <option value="ottobre">Ottobre</option>
+                        <option value="novembre">Novembre</option>
+                        <option value="dicembre">Dicembre</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sezione Grafici & Report Operatore -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-2">
+                <h3 class="text-sm md:text-base font-semibold mb-4 text-gray-700">Analisi Fatturato per Operatore (Store Selezionato)</h3>
+                <div class="relative w-full h-72">
+                    <canvas id="operatorChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
+                <h3 class="text-sm md:text-base font-semibold mb-3 text-gray-700"><i class="fa-solid fa-medal mr-2 text-amber-500"></i> Report Operatori Store</h3>
+                <div class="overflow-y-auto flex-grow max-h-72 pr-1" id="operator-report-container">
+                    <p class="text-xs text-gray-400 text-center py-8">Seleziona uno store per visualizzare le performance dettagliate.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabella Dettaglio Dati -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="border-b border-gray-200 bg-gray-50 px-4 md:px-6 pt-4 flex justify-between items-center">
+                <span class="pb-3 px-2 inline-block font-semibold text-sm text-blue-600 border-b-2 border-blue-600">Righe Dettaglio Vendite</span>
+                <span id="counter-righe" class="text-xs text-gray-500 font-medium pb-2">0 righe trovate</span>
+            </div>
+
+            <div class="p-4 md:p-6 overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[900px]">
+                    <thead>
+                        <tr class="border-b text-xs font-semibold text-gray-500 uppercase bg-gray-50">
+                            <th class="py-3 px-3">Mese</th>
+                            <th class="py-3 px-3">Store (Q)</th>
+                            <th class="py-3 px-3">Operatore (R)</th>
+                            <th class="py-3 px-3">EAN (C)</th>
+                            <th class="py-3 px-3">Cod. Interno (D)</th>
+                            <th class="py-3 px-3">Descrizione Prodotto (E)</th>
+                            <th class="py-3 px-3">Colore (G)</th>
+                            <th class="py-3 px-3">Misura (H)</th>
+                            <th class="py-3 px-3 text-right">Totale (K) (€)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-vendite-body" class="text-sm divide-y divide-gray-100">
+                        <tr><td colspan="9" class="text-center py-6 text-gray-400">Caricamento in corso...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Script di Logica BI Aggiornato -->
+    <script>
+        const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
+        let rawData = [];
+        let operatorChart;
+
+        function initCharts() {
+            const ctxOp = document.getElementById('operatorChart').getContext('2d');
+            operatorChart = new Chart(ctxOp, {
+                type: 'bar',
+                data: { labels: [], datasets: [{ label: 'Fatturato (€)', data: [], backgroundColor: '#3b82f6', borderRadius: 6 }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        }
+        initCharts();
+
+        function caricaDatiCSV() {
+            const badge = document.getElementById('status-badge');
+            badge.className = "text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+            badge.innerText = "Sincronizzazione...";
+
+            Papa.parse(CSV_URL, {
+                download: true,
+                header: false,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    parseData(results.data);
+                    badge.className = "text-[10px] md:text-xs bg-emerald-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+                    badge.innerText = "Aggiornato";
+                },
+                error: function(err) {
+                    console.error("Errore PapaParse:", err);
+                    badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+                    badge.innerText = "Errore Connessione";
+                }
+            });
+        }
+
+        caricaDatiCSV();
+
+        function parseData(rows) {
+            rawData = [];
+            if (rows.length < 2) return;
+
+            for (let i = 1; i < rows.length; i++) {
+                let row = rows[i];
+                if (!row || row.length === 0) continue;
+
+                let totaleStr = row[10] || '0'; // Colonna K (indice 10)
+                let totaleNum = parseFloat(totaleStr.replace('€', '').replace(/\./g, '').replace(',', '.')) || 0;
+
+                rawData.push({
+                    mese: (row[0] || '').toLowerCase(),
+                    store: row[16] || 'Store Principale',       // Colonna Q (indice 16)
+                    operatore: row[17] || 'Sconosciuto',             // Colonna R (indice 17)
+                    ean: row[2] || '',                               // Colonna C (indice 2)
+                    codiceInterno: row[3] || '',                     // Colonna D (indice 3)
+                    descrizione: row[4] || '',                       // Colonna E (indice 4)
+                    colore: row[6] || '',                            // Colonna G (indice 6)
+                    misura: row[7] || '',                            // Colonna H (indice 7)
+                    totale: totaleNum
+                });
+            }
+
+            populateStoreFilter(rawData);
+            updateOperatorCascade(rawData);
+            applyFilters();
+        }
+
+        function populateStoreFilter(data) {
+            let storeSet = new Set();
+            data.forEach(d => { if (d.store) storeSet.add(d.store); });
+
+            const storeSelect = document.getElementById('filterStore');
+            let currentVal = storeSelect.value;
+            storeSelect.innerHTML = '<option value="">Tutti gli Store</option>';
+            storeSet.forEach(store => {
+                let opt = document.createElement('option');
+                opt.value = store;
+                opt.innerText = store;
+                storeSelect.appendChild(opt);
+            });
+            storeSelect.value = currentVal;
+        }
+
+        function updateOperatorCascade(filteredDataForStore) {
+            let opSet = new Set();
+            filteredDataForStore.forEach(d => { if (d.operatore) opSet.add(d.operatore); });
+
+            const opSelect = document.getElementById('filterOperatore');
+            let currentOp = opSelect.value;
+            opSelect.innerHTML = '<option value="">Tutti gli operatori</option>';
+            opSet.forEach(op => {
+                let opt = document.createElement('option');
+                opt.value = op;
+                opt.innerText = op;
+                opSelect.appendChild(opt);
+            });
+            opSelect.value = currentOp;
+        }
+
+        document.getElementById('filterStore').addEventListener('change', function() {
+            let selectedStore = this.value;
+            let storeData = selectedStore ? rawData.filter(d => d.store === selectedStore) : rawData;
+            updateOperatorCascade(storeData);
+            applyFilters();
+        });
+
+        document.getElementById('filterOperatore').addEventListener('change', applyFilters);
+        document.getElementById('searchCodice').addEventListener('input', applyFilters);
+        document.getElementById('filterMese').addEventListener('change', applyFilters);
+
+        function applyFilters() {
+            let selectedStore = document.getElementById('filterStore').value;
+            let selectedOp = document.getElementById('filterOperatore').value;
+            let query = document.getElementById('searchCodice').value.toLowerCase().trim();
+            let selectedMese = document.getElementById('filterMese').value;
+
+            let filtered = rawData.filter(d => {
+                let matchStore = !selectedStore || d.store === selectedStore;
+                let matchOp = !selectedOp || d.operatore === selectedOp;
+                
+                // Ricerca testuale reattiva combinata su EAN, Codice Interno e Descrizione
+                let matchQuery = !query || 
+                                 d.ean.toLowerCase().includes(query) || 
+                                 d.codiceInterno.toLowerCase().includes(query) || 
+                                 d.descrizione.toLowerCase().includes(query);
+
+                let matchMese = !selectedMese || d.mese === selectedMese;
+                return matchStore && matchOp && matchQuery && matchMese;
+            });
+
+            updateDashboard(filtered, selectedStore);
+        }
+
+        function updateDashboard(data, storeName) {
+            let totalFatturato = data.reduce((acc, curr) => acc + curr.totale, 0);
+            let totalTransazioni = data.length;
+            let scontrinoMedio = totalTransazioni > 0 ? (totalFatturato / totalTransazioni).toFixed(2) : 0;
+
+            document.getElementById('kpi-fatturato').innerText = '€ ' + totalFatturato.toLocaleString('it-IT', {minimumFractionDigits: 2});
+            document.getElementById('kpi-vendite').innerText = totalTransazioni.toLocaleString('it-IT');
+            document.getElementById('kpi-store').innerText = storeName || 'Tutti';
+            document.getElementById('kpi-scontrino').innerText = '€ ' + scontrinoMedio.toLocaleString('it-IT', {minimumFractionDigits: 2});
+            document.getElementById('counter-righe').innerText = totalTransazioni + ' righe trovate';
+
+            const tbody = document.getElementById('table-vendite-body');
+            tbody.innerHTML = '';
+            
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-gray-400">Nessun dato trovato con i filtri correnti.</td></tr>';
+            } else {
+                data.forEach(row => {
+                    let tr = document.createElement('tr');
+                    tr.className = "hover:bg-gray-50 border-b border-gray-100";
+                    let isOnline = row.store.toUpperCase().includes('ONLINE') || row.operatore.toUpperCase().includes('ONLINE');
+                    tr.innerHTML = `
+                        <td class="py-3 px-3 font-medium capitalize">${row.mese}</td>
+                        <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-800">${row.store}</span></td>
+                        <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold ${isOnline ? 'bg-amber-100 text-amber-800' : 'bg-blue-50 text-blue-800'}">${row.operatore}</span></td>
+                        <td class="py-3 px-3 font-mono text-xs text-gray-700">${row.ean}</td>
+                        <td class="py-3 px-3 font-mono text-xs text-gray-600">${row.codiceInterno}</td>
+                        <td class="py-3 px-3 font-medium text-gray-900">${row.descrizione}</td>
+                        <td class="py-3 px-3 text-gray-500">${row.colore}</td>
+                        <td class="py-3 px-3 text-gray-500">${row.misura}</td>
+                        <td class="py-3 px-3 text-right font-semibold">€ ${row.totale.toFixed(2)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            let opMap = {};
+            data.forEach(d => {
+                if (!opMap[d.operatore]) {
+                    opMap[d.operatore] = { fatturato: 0, transazioni: 0 };
+                }
+                opMap[d.operatore].fatturato += d.totale;
+                opMap[d.operatore].transazioni += 1;
+            });
+
+            let labels = Object.keys(opMap);
+            let values = labels.map(op => opMap[op].fatturato);
+            operatorChart.data.labels = labels;
+            operatorChart.data.datasets[0].data = values;
+            operatorChart.update();
+
+            const reportContainer = document.getElementById('operator-report-container');
+            reportContainer.innerHTML = '';
+
+            if (labels.length === 0) {
+                reportContainer.innerHTML = '<p class="text-xs text-gray-400 text-center py-8">Nessun operatore disponibile.</p>';
+                return;
+            }
+
+            let sortedOps = labels.sort((a, b) => opMap[b].fatturato - opMap[a].fatturato);
+
+            sortedOps.forEach(op => {
+                let stats = opMap[op];
+                let quota = totalFatturato > 0 ? ((stats.fatturato / totalFatturato) * 100).toFixed(1) : 0;
+                let card = document.createElement('div');
+                card.className = "bg-gray-50 border border-gray-100 p-3 rounded-lg mb-2 text-xs";
+                card.innerHTML = `
+                    <div class="flex justify-between font-bold text-gray-800 mb-1">
+                        <span><i class="fa-solid fa-user-circle mr-1 text-blue-500"></i> ${op}</span>
+                        <span class="text-blue-600">€ ${stats.fatturato.toLocaleString('it-IT', {minimumFractionDigits: 2})}</span>
+                    </div>
+                    <div class="flex justify-between text-gray-500 text-[11px]">
+                        <span>Transazioni: <b>${stats.transazioni}</b></span>
+                        <span>Quota Store: <b>${quota}%</b></span>
+                    </div>
+                `;
+                reportContainer.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>
