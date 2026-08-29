@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retail Magazzino & Ciclo Articoli</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans">
+
+    <!-- Navbar -->
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-base md:text-xl font-bold tracking-wide truncate"><i class="fa-solid fa-boxes-stacked mr-2 text-emerald-400"></i> Controllo Magazzino & Ciclo Articoli</h1>
+            <div class="flex items-center space-x-2">
+                <span id="status-badge" class="text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap">Sincronizzazione...</span>
+                <button onclick="caricaDatiMagazzino()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-sm">
+                    <i class="fa-solid fa-sync"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Container Principale -->
+    <main class="container mx-auto px-4 py-6 max-w-7xl">
+
+        <!-- KPI Cards Magazzino -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
+                <div class="p-3 md:p-4 bg-blue-50 text-blue-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-box-archive"></i></div>
+                <div>
+                    <p class="text-xs md:text-sm text-gray-500 font-medium">Totale Articoli a Catalogo</p>
+                    <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-articoli">0</h3>
+                </div>
+            </div>
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
+                <div class="p-3 md:p-4 bg-emerald-50 text-emerald-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-arrow-trend-up"></i></div>
+                <div>
+                    <p class="text-xs md:text-sm text-gray-500 font-medium">Q.tà Totale in Entrata</p>
+                    <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-entrata">0</h3>
+                </div>
+            </div>
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
+                <div class="p-3 md:p-4 bg-amber-50 text-amber-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-bag-shopping"></i></div>
+                <div>
+                    <p class="text-xs md:text-sm text-gray-500 font-medium">Q.tà Totale Venduta</p>
+                    <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-venduta">0</h3>
+                </div>
+            </div>
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
+                <div class="p-3 md:p-4 bg-purple-50 text-purple-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-warehouse"></i></div>
+                <div>
+                    <p class="text-xs md:text-sm text-gray-500 font-medium">Giacenza Residua Magazzino</p>
+                    <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-giacenza">0</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- Box Assistente Ciclo Articolo -->
+        <div class="bg-gradient-to-r from-slate-900 to-emerald-950 text-white p-4 md:p-6 rounded-xl shadow-md mb-6 border border-emerald-900">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-emerald-300 flex items-center">
+                    <i class="fa-solid fa-lightbulb mr-2 text-emerald-400"></i> Analisi Ciclo di Vita Articoli & Stock
+                </h2>
+                <span class="text-[10px] bg-emerald-800 text-emerald-200 px-2.5 py-0.5 rounded-full font-medium">Live Inventory</span>
+            </div>
+            <p id="ai-magazzino-text" class="text-xs md:text-sm text-slate-200 leading-relaxed">
+                Elaborazione flussi di magazzino in corso...
+            </p>
+        </div>
+
+        <!-- Sezione Filtri Magazzino -->
+        <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
+            <h2 class="text-sm font-bold uppercase text-gray-500 mb-4 tracking-wider"><i class="fa-solid fa-filter mr-2"></i> Filtri Analisi Magazzino</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">1. Filtra per Stato Articolo</label>
+                    <select id="filterStato" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-gray-50 font-medium">
+                        <option value="">Tutti gli articoli</option>
+                        <option value="disponibile">In Stock / Disponibili</option>
+                        <option value="esaurito">Esauriti (Giacenza 0)</option>
+                        <option value="mai_venduti">Mai Venduti (Stock fermo)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">2. Cerca (EAN / Cod. Interno / Descrizione)</label>
+                    <input type="text" id="searchMagazzino" placeholder="Cerca codice o descrizione..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
+                </div>
+                <div class="flex items-end">
+                    <button onclick="resetFiltri()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium py-2 px-4 rounded-lg transition">
+                        <i class="fa-solid fa-rotate-right mr-1"></i> Reset Filtri
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabella Analisi Ciclo Articolo -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="border-b border-gray-200 bg-gray-50 px-4 md:px-6 pt-4 flex justify-between items-center">
+                <span class="pb-3 px-2 inline-block font-semibold text-sm text-emerald-600 border-b-2 border-emerald-600">Tracciamento Articoli (Arrivo -> Vendita -> Giacenza)</span>
+                <span id="counter-articoli" class="text-xs text-gray-500 font-medium pb-2">0 articoli trovati</span>
+            </div>
+
+            <div class="p-4 md:p-6 overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[950px]">
+                    <thead>
+                        <tr class="border-b text-xs font-semibold text-gray-500 uppercase bg-gray-50 select-none">
+                            <th class="py-3 px-3">EAN (C)</th>
+                            <th class="py-3 px-3">Cod. Interno (D)</th>
+                            <th class="py-3 px-3">Descrizione Prodotto (E)</th>
+                            <th class="py-3 px-3 text-center">Q.tà in Entrata</th>
+                            <th class="py-3 px-3 text-center">Q.tà Venduta</th>
+                            <th class="py-3 px-3 text-center">Giacenza Residua</th>
+                            <th class="py-3 px-3 text-center">Stato Ciclo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-magazzino-body" class="text-sm divide-y divide-gray-100">
+                        <tr><td colspan="7" class="text-center py-6 text-gray-400">Caricamento dati magazzino in corso...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Script Logica Magazzino -->
+    <script>
+        // Link CSV del foglio principale delle registrazioni in entrata
+        const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
+        
+        let inventoryData = [];
+        let filteredInventory = [];
+
+        function caricaDatiMagazzino() {
+            const badge = document.getElementById('status-badge');
+            badge.className = "text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+            badge.innerText = "Sincronizzazione...";
+
+            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(CSV_URL);
+
+            fetch(proxyUrl)
+                .then(res => res.text())
+                .then(text => elaboraCSV(text, badge))
+                .catch(() => {
+                    fetch(CSV_URL)
+                        .then(res => res.text())
+                        .then(text => elaboraCSV(text, badge))
+                        .catch(err => {
+                            console.error("Errore connessione:", err);
+                            badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+                            badge.innerText = "Errore Connessione";
+                        });
+                });
+        }
+
+        function elaboraCSV(text, badge) {
+            Papa.parse(text, {
+                header: false,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    costruisciInventario(results.data);
+                    badge.className = "text-[10px] md:text-xs bg-emerald-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+                    badge.innerText = "Aggiornato";
+                },
+                error: function(err) {
+                    badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+                    badge.innerText = "Errore Parsing";
+                }
+            });
+        }
+
+        caricaDatiMagazzino();
+
+        function parseNum(val) {
+            if (!val) return 0;
+            return parseFloat(String(val).replace('€', '').replace(/\./g, '').replace(',', '.')) || 0;
+        }
+
+        function costruisciInventario(rows) {
+            let mapArticoli = {};
+
+            if (rows.length < 2) return;
+
+            // Raggruppiamo i movimenti per Codice EAN o Codice Interno
+            for (let i = 1; i < rows.length; i++) {
+                let row = rows[i];
+                if (!row || row.length === 0) continue;
+
+                let ean = String(row[2] || '').trim();
+                let codiceInterno = String(row[3] || '').trim();
+                let descrizione = String(row[4] || 'Articolo senza descrizione').trim();
+                let quantitaMovimento = parseNum(row[7]); // Q.tà mossa (può essere carico o scarico a seconda del flusso)
+
+                let chiaveUnica = ean || codiceInterno || descrizione;
+                if (!chiaveUnica) continue;
+
+                if (!mapArticoli[chiaveUnica]) {
+                    mapArticoli[chiaveUnica] = {
+                        ean: ean,
+                        codiceInterno: codiceInterno,
+                        descrizione: descrizione,
+                        entrata: 0,
+                        venduta: 0
+                    };
+                }
+
+                // Distinguiamo se consideriamo il movimento come entrata o vendita in base alla struttura del foglio
+                // Qui sommiamo i volumi totali movimentati come base di carico/arrivo iniziale
+                mapArticoli[chiaveUnica].entrata += Math.abs(quantitaMovimento);
+                
+                // Se nel foglio i dati includono anche le vendite dirette, puoi mappare la logica specifica.
+                // Per simulare il ciclo completo: Q.tà Venduta stimata o estratta da colonne dedicate.
+            }
+
+            inventoryData = Object.values(mapArticoli);
+            filteredInventory = [...inventoryData];
+            aggiornaInterfaccia();
+        }
+
+        document.getElementById('filterStato').addEventListener('change', applicaFiltriMagazzino);
+        document.getElementById('searchMagazzino').addEventListener('input', applicaFiltriMagazzino);
+
+        function resetFiltri() {
+            document.getElementById('filterStato').value = '';
+            document.getElementById('searchMagazzino').value = '';
+            filteredInventory = [...inventoryData];
+            aggiornaInterfaccia();
+        }
+
+        function applicaFiltriMagazzino() {
+            let stato = document.getElementById('filterStato').value;
+            let query = document.getElementById('searchMagazzino').value.toLowerCase().trim();
+
+            filteredInventory = inventoryData.filter(item => {
+                let matchQuery = !query || 
+                                 item.ean.toLowerCase().includes(query) || 
+                                 item.codiceInterno.toLowerCase().includes(query) || 
+                                 item.descrizione.toLowerCase().includes(query);
+
+                let giacenza = item.entrata - item.venduta;
+                let matchStato = true;
+
+                if (stato === 'disponibile') matchStato = giacenza > 0;
+                if (stato === 'esaurito') matchStato = giacenza <= 0;
+                if (stato === 'mai_venduti') matchStato = item.venduta === 0;
+
+                return matchQuery && matchStato;
+            });
+
+            aggiornaInterfaccia();
+        }
+
+        function aggiornaInterfaccia() {
+            let totalArticoli = inventoryData.length;
+            let totaleEntrata = inventoryData.reduce((acc, curr) => acc + curr.entrata, 0);
+            let totaleVenduta = inventoryData.reduce((acc, curr) => acc + curr.venduta, 0);
+            let totaleGiacenza = totaleEntrata - totaleVenduta;
+
+            document.getElementById('kpi-articoli').innerText = totalArticoli.toLocaleString('it-IT');
+            document.getElementById('kpi-entrata').innerText = totaleEntrata.toLocaleString('it-IT');
+            document.getElementById('kpi-venduta').innerText = totaleVenduta.toLocaleString('it-IT');
+            document.getElementById('kpi-giacenza').innerText = totaleGiacenza.toLocaleString('it-IT');
+            document.getElementById('counter-articoli').innerText = filteredInventory.length + ' articoli trovati';
+
+            const tbody = document.getElementById('table-magazzino-body');
+            tbody.innerHTML = '';
+
+            if (filteredInventory.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-6 text-gray-400">Nessun articolo trovato con i filtri correnti.</td></tr>';
+                return;
+            }
+
+            filteredInventory.slice(0, 150).forEach(item => {
+                let giacenza = item.entrata - item.venduta;
+                let badgeStato = '';
+
+                if (giacenza > 0 && item.venduta > 0) {
+                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800">In Movimento</span>';
+                } else if (giacenza > 0 && item.venduta === 0) {
+                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800">Mai Venduto (In Stock)</span>';
+                } else {
+                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-800">Esaurito</span>';
+                }
+
+                let tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 border-b border-gray-100";
+                tr.innerHTML = `
+                    <td class="py-3 px-3 font-mono text-xs text-gray-700">${item.ean || '-'}</td>
+                    <td class="py-3 px-3 font-mono text-xs text-gray-600">${item.codiceInterno || '-'}</td>
+                    <td class="py-3 px-3 font-medium text-gray-900">${item.descrizione}</td>
+                    <td class="py-3 px-3 text-center font-semibold text-emerald-600">${item.entrata}</td>
+                    <td class="py-3 px-3 text-center font-semibold text-blue-600">${item.venduta}</td>
+                    <td class="py-3 px-3 text-center font-bold ${giacenza > 0 ? 'text-gray-800' : 'text-red-500'}">${giacenza}</td>
+                    <td class="py-3 px-3 text-center">${badgeStato}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('ai-magazzino-text').innerHTML = `Analisi completata su <b>${totalArticoli} articoli unici</b> gestiti nel sistema. Giacenza complessiva attiva: <b>${totaleGiacenza.toLocaleString('it-IT')} unità</b> pronte o in transito nei punti vendita.`;
+        }
+    </script>
+</body>
+</html>
