@@ -146,7 +146,7 @@
         </div>
     </main>
 
-    <!-- Script di Logica BI Aggiornato -->
+    <!-- Script di Logica BI Corretto -->
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         let rawData = [];
@@ -197,8 +197,11 @@
                 let totaleStr = row[10] || '0'; // Colonna K (indice 10)
                 let totaleNum = parseFloat(totaleStr.replace('€', '').replace(/\./g, '').replace(',', '.')) || 0;
 
+                // Pulizia della stringa del mese (rimuove spazi e converte in minuscolo per evitare mismatch)
+                let mesePulito = (row[0] || '').toLowerCase().trim();
+
                 rawData.push({
-                    mese: (row[0] || '').toLowerCase(),
+                    mese: mesePulito,
                     store: row[16] || 'Store Principale',       // Colonna Q (indice 16)
                     operatore: row[17] || 'Sconosciuto',             // Colonna R (indice 17)
                     ean: row[2] || '',                               // Colonna C (indice 2)
@@ -262,19 +265,20 @@
             let selectedStore = document.getElementById('filterStore').value;
             let selectedOp = document.getElementById('filterOperatore').value;
             let query = document.getElementById('searchCodice').value.toLowerCase().trim();
-            let selectedMese = document.getElementById('filterMese').value;
+            let selectedMese = document.getElementById('filterMese').value.toLowerCase().trim();
 
             let filtered = rawData.filter(d => {
                 let matchStore = !selectedStore || d.store === selectedStore;
                 let matchOp = !selectedOp || d.operatore === selectedOp;
                 
-                // Ricerca testuale reattiva combinata su EAN, Codice Interno e Descrizione
                 let matchQuery = !query || 
                                  d.ean.toLowerCase().includes(query) || 
                                  d.codiceInterno.toLowerCase().includes(query) || 
                                  d.descrizione.toLowerCase().includes(query);
 
+                // Confronto normalizzato per il mese
                 let matchMese = !selectedMese || d.mese === selectedMese;
+
                 return matchStore && matchOp && matchQuery && matchMese;
             });
 
