@@ -147,7 +147,7 @@
                             <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="codiceInterno">Cod. Interno (D) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                             <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="descrizione">Descrizione Prodotto (E) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                             <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="colore">Colore (G) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
-                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="misura">Misura (H) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
+                            <th class="py-3 px-3 cursor-pointer hover:text-blue-600 transition sort-header" data-column="misura">Misura (F) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                             <th class="py-3 px-3 text-right cursor-pointer hover:text-blue-600 transition sort-header" data-column="totale">Totale (K) (€) <i class="fa-solid fa-sort ml-1 pointer-events-none"></i></th>
                         </tr>
                     </thead>
@@ -159,7 +159,7 @@
         </div>
     </main>
 
-    <!-- Script di Logica BI con Assistente IA integrato -->
+    <!-- Script di Logica BI Aggiornato con Misura alla Colonna F -->
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         let rawData = [];
@@ -245,8 +245,8 @@
                     ean: row[2] || '',
                     codiceInterno: row[3] || '',
                     descrizione: row[4] || '',
-                    colore: row[6] || '',
-                    misura: row[7] || '',
+                    misura: row[5] || '',                            // Colonna F (indice 5)
+                    colore: row[6] || '',                            // Colonna G (indice 6)
                     totale: totaleNum
                 });
             }
