@@ -146,7 +146,7 @@
         </div>
     </main>
 
-    <!-- Script di Logica BI Aggiornato -->
+    <!-- Script di Logica BI Definitivo -->
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         let rawData = [];
@@ -192,20 +192,15 @@
 
             const mesi = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
             
-            // Cerca se nel testo è presente direttamente il nome del mese
             for (let m of mesi) {
                 if (v.includes(m)) return m;
             }
 
-            // Estrazione numerica da date standard (es. DD/MM/YYYY, YYYY-MM-DD, ecc.)
             let parti = v.split(/[\/\-\.\s]/);
             if (parti.length >= 2) {
-                for (let p of parti) {
-                    let num = parseInt(p, 10);
-                    // Se trova un numero tra 1 e 12 che non è l'anno
-                    if (num >= 1 && num <= 12 && p.length <= 2) {
-                        return mesi[num - 1];
-                    }
+                let mNum = parseInt(parti[1], 10);
+                if (mNum >= 1 && mNum <= 12) {
+                    return mesi[mNum - 1];
                 }
             }
 
@@ -216,8 +211,6 @@
             rawData = [];
             if (rows.length < 2) return;
 
-            let mesiTrovatiSet = new Set();
-
             for (let i = 1; i < rows.length; i++) {
                 let row = rows[i];
                 if (!row || row.length === 0) continue;
@@ -227,7 +220,6 @@
 
                 let dataReg = row[1] || ''; // Colonna B
                 let meseNormalizzato = estraiMese(dataReg);
-                mesiTrovatiSet.add(meseNormalizzato);
 
                 rawData.push({
                     dataReg: dataReg,
@@ -242,8 +234,6 @@
                     totale: totaleNum
                 });
             }
-
-            console.log("Mesi unici rilevati nella Colonna B:", Array.from(mesiTrovatiSet));
 
             populateStoreFilter(rawData);
             updateOperatorCascade(rawData);
