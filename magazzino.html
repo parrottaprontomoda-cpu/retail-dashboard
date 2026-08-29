@@ -11,7 +11,6 @@
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans">
 
-    <!-- Navbar -->
     <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-base md:text-xl font-bold tracking-wide truncate"><i class="fa-solid fa-boxes-stacked mr-2 text-emerald-400"></i> Controllo Magazzino & Ciclo Articoli</h1>
@@ -24,10 +23,8 @@
         </div>
     </header>
 
-    <!-- Container Principale -->
     <main class="container mx-auto px-4 py-6 max-w-7xl">
 
-        <!-- KPI Cards Magazzino -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
                 <div class="p-3 md:p-4 bg-blue-50 text-blue-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-box-archive"></i></div>
@@ -59,7 +56,6 @@
             </div>
         </div>
 
-        <!-- Box Assistente Ciclo Articolo -->
         <div class="bg-gradient-to-r from-slate-900 to-emerald-950 text-white p-4 md:p-6 rounded-xl shadow-md mb-6 border border-emerald-900">
             <div class="flex items-center justify-between mb-2">
                 <h2 class="text-sm font-bold uppercase tracking-wider text-emerald-300 flex items-center">
@@ -72,7 +68,6 @@
             </p>
         </div>
 
-        <!-- Sezione Filtri Magazzino -->
         <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
             <h2 class="text-sm font-bold uppercase text-gray-500 mb-4 tracking-wider"><i class="fa-solid fa-filter mr-2"></i> Filtri Analisi Magazzino</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -82,7 +77,6 @@
                         <option value="">Tutti gli articoli</option>
                         <option value="disponibile">In Stock / Disponibili</option>
                         <option value="esaurito">Esauriti (Giacenza 0)</option>
-                        <option value="mai_venduti">Mai Venduti (Stock fermo)</option>
                     </select>
                 </div>
                 <div>
@@ -97,7 +91,6 @@
             </div>
         </div>
 
-        <!-- Tabella Analisi Ciclo Articolo -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div class="border-b border-gray-200 bg-gray-50 px-4 md:px-6 pt-4 flex justify-between items-center">
                 <span class="pb-3 px-2 inline-block font-semibold text-sm text-emerald-600 border-b-2 border-emerald-600">Tracciamento Articoli (Arrivo -> Vendita -> Giacenza)</span>
@@ -125,9 +118,7 @@
         </div>
     </main>
 
-    <!-- Script Logica Magazzino -->
     <script>
-        // Link CSV del foglio principale delle registrazioni in entrata
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         
         let inventoryData = [];
@@ -183,7 +174,6 @@
 
             if (rows.length < 2) return;
 
-            // Raggruppiamo i movimenti per Codice EAN o Codice Interno
             for (let i = 1; i < rows.length; i++) {
                 let row = rows[i];
                 if (!row || row.length === 0) continue;
@@ -191,7 +181,7 @@
                 let ean = String(row[2] || '').trim();
                 let codiceInterno = String(row[3] || '').trim();
                 let descrizione = String(row[4] || 'Articolo senza descrizione').trim();
-                let quantitaMovimento = parseNum(row[7]); // Q.tà mossa (può essere carico o scarico a seconda del flusso)
+                let quantitaMovimento = parseNum(row[7]); // Colonna H: Quantità
 
                 let chiaveUnica = ean || codiceInterno || descrizione;
                 if (!chiaveUnica) continue;
@@ -206,12 +196,9 @@
                     };
                 }
 
-                // Distinguiamo se consideriamo il movimento come entrata o vendita in base alla struttura del foglio
-                // Qui sommiamo i volumi totali movimentati come base di carico/arrivo iniziale
+                // Sommiamo le quantità rilevate come volumi movimentati/venduti registrati
                 mapArticoli[chiaveUnica].entrata += Math.abs(quantitaMovimento);
-                
-                // Se nel foglio i dati includono anche le vendite dirette, puoi mappare la logica specifica.
-                // Per simulare il ciclo completo: Q.tà Venduta stimata o estratta da colonne dedicate.
+                mapArticoli[chiaveUnica].venduta += Math.abs(quantitaMovimento);
             }
 
             inventoryData = Object.values(mapArticoli);
@@ -244,7 +231,6 @@
 
                 if (stato === 'disponibile') matchStato = giacenza > 0;
                 if (stato === 'esaurito') matchStato = giacenza <= 0;
-                if (stato === 'mai_venduti') matchStato = item.venduta === 0;
 
                 return matchQuery && matchStato;
             });
@@ -274,15 +260,7 @@
 
             filteredInventory.slice(0, 150).forEach(item => {
                 let giacenza = item.entrata - item.venduta;
-                let badgeStato = '';
-
-                if (giacenza > 0 && item.venduta > 0) {
-                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800">In Movimento</span>';
-                } else if (giacenza > 0 && item.venduta === 0) {
-                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800">Mai Venduto (In Stock)</span>';
-                } else {
-                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-800">Esaurito</span>';
-                }
+                let badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800">Registrato</span>';
 
                 let tr = document.createElement('tr');
                 tr.className = "hover:bg-gray-50 border-b border-gray-100";
@@ -292,13 +270,13 @@
                     <td class="py-3 px-3 font-medium text-gray-900">${item.descrizione}</td>
                     <td class="py-3 px-3 text-center font-semibold text-emerald-600">${item.entrata}</td>
                     <td class="py-3 px-3 text-center font-semibold text-blue-600">${item.venduta}</td>
-                    <td class="py-3 px-3 text-center font-bold ${giacenza > 0 ? 'text-gray-800' : 'text-red-500'}">${giacenza}</td>
+                    <td class="py-3 px-3 text-center font-bold text-gray-800">${giacenza}</td>
                     <td class="py-3 px-3 text-center">${badgeStato}</td>
                 `;
                 tbody.appendChild(tr);
             });
 
-            document.getElementById('ai-magazzino-text').innerHTML = `Analisi completata su <b>${totalArticoli} articoli unici</b> gestiti nel sistema. Giacenza complessiva attiva: <b>${totaleGiacenza.toLocaleString('it-IT')} unità</b> pronte o in transito nei punti vendita.`;
+            document.getElementById('ai-magazzino-text').innerHTML = `Analisi completata su <b>${totalArticoli} articoli unici</b>. Volumi totali elaborati dal flusso: <b>${totaleEntrata.toLocaleString('it-IT')} unità</b>.`;
         }
     </script>
 </body>
