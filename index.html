@@ -281,7 +281,7 @@
             opSelect.innerHTML = '<option value="">Tutti gli operatori</option>';
             opSet.forEach(op => {
                 let opt = document.createElement('option');
-                opt.value = opt.value = op;
+                opt.value = op;
                 opt.innerText = op;
                 opSelect.appendChild(opt);
             });
@@ -364,15 +364,15 @@
             });
         }
 
-        // Funzione di generazione del Riepilogo Intelligente (IA locale)
         function generaAnalisiIA(data, totalFatturato, totalTransazioni, scontrinoMedio) {
             const aiBox = document.getElementById('ai-summary-text');
+            if (!aiBox) return;
+
             if (data.length === 0) {
                 aiBox.innerHTML = "Nessun dato disponibile per i filtri selezionati. Non è possibile generare un'analisi.";
                 return;
             }
 
-            // Calcola lo store migliore
             let storeMap = {};
             let descMap = {};
             let opMap = {};
@@ -418,7 +418,6 @@
             document.getElementById('kpi-scontrino').innerText = '€ ' + scontrinoMedio.toLocaleString('it-IT', {minimumFractionDigits: 2});
             document.getElementById('counter-righe').innerText = totalTransazioni + ' righe trovate';
 
-            // Generazione automatica dell'Insight testuale
             generaAnalisiIA(data, totalFatturato, totalTransazioni, scontrinoMedio);
 
             const tbody = document.getElementById('table-vendite-body');
