@@ -59,13 +59,13 @@
             </div>
         </div>
 
-        <!-- Box di Analisi Intelligente / Riepilogo Dati & Sconti -->
+        <!-- Box di Analisi Intelligente / Riepilogo Dati, Sconti & Redditività -->
         <div class="bg-gradient-to-r from-slate-900 to-indigo-950 text-white p-4 md:p-6 rounded-xl shadow-md mb-6 border border-indigo-900">
             <div class="flex items-center justify-between mb-2">
                 <h2 class="text-sm font-bold uppercase tracking-wider text-indigo-300 flex items-center">
-                    <i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-400"></i> Assistente BI - Analisi Sconti & Performance
+                    <i class="fa-solid fa-wand-magic-sparkles mr-2 text-indigo-400"></i> Assistente BI - Analisi Redditività & Sconti
                 </h2>
-                <span class="text-[10px] bg-indigo-800 text-indigo-200 px-2.5 py-0.5 rounded-full font-medium">Advanced Insights</span>
+                <span class="text-[10px] bg-indigo-800 text-indigo-200 px-2.5 py-0.5 rounded-full font-medium">Pro Insights</span>
             </div>
             <p id="ai-summary-text" class="text-xs md:text-sm text-slate-200 leading-relaxed">
                 In attesa di elaborazione dati...
@@ -160,7 +160,7 @@
         </div>
     </main>
 
-    <!-- Script di Logica BI con Analisi Sconti Avanzata -->
+    <!-- Script di Logica BI con Analisi Redditività -->
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         let rawData = [];
@@ -237,18 +237,17 @@
                 let row = rows[i];
                 if (!row || row.length === 0) continue;
 
-                let quantitaNum = parseNum(row[7]);    // Colonna H (indice 7)
-                let listinoNum = parseNum(row[8]);     // Colonna I (indice 8)
-                let nettoNum = parseNum(row[9]);       // Colonna J (indice 9)
-                let totaleNum = parseNum(row[10]);     // Colonna K (indice 10)
+                let quantitaNum = parseNum(row[7]);    // Colonna H
+                let listinoNum = parseNum(row[8]);     // Colonna I
+                let nettoNum = parseNum(row[9]);       // Colonna J
+                let totaleNum = parseNum(row[10]);     // Colonna K
 
-                // Calcolo percentuale sconto
                 let scontoPerc = 0;
                 if (listinoNum > 0 && nettoNum > 0 && listinoNum >= nettoNum) {
                     scontoPerc = ((listinoNum - nettoNum) / listinoNum) * 100;
                 }
 
-                let dataReg = row[1] || ''; // Colonna B
+                let dataReg = row[1] || '';
                 let meseNormalizzato = estraiMese(dataReg);
 
                 rawData.push({
@@ -380,7 +379,7 @@
             });
         }
 
-        // Analisi IA avanzata per sconti e volumi
+        // Analisi IA avanzata comprensiva di Redditività e Sconti per volumi
         function generaAnalisiIA(data, totalFatturato, totalTransazioni, scontrinoMedio) {
             const aiBox = document.getElementById('ai-summary-text');
             if (!aiBox) return;
@@ -395,14 +394,21 @@
             let maxScontoItem = null;
             let minScontoItem = null;
 
-            // Ponderazione sconto in base al numero di capi venduti (quantità)
+            // Aggregazione per prodotto per calcolare la redditività totale (fatturato generato per articolo)
+            let prodottoMap = {};
+
             data.forEach(d => {
                 storeMap[d.store] = (storeMap[d.store] || 0) + d.totale;
                 opMap[d.operatore] = (opMap[d.operatore] || 0) + d.totale;
 
-                // Calcolo indice di impatto: Sconto % * Quantità venduta
-                let impattoSconto = d.sconto * (d.quantita > 0 ? d.quantita : 1);
-                d.impattoSconto = impattoSconto;
+                let descKey = d.descrizione || 'Articolo sconosciuto';
+                if (!prodottoMap[descKey]) {
+                    prodottoMap[descKey] = { fatturatoTotale: 0, quantitaTotale: 0, margineTotale: 0 };
+                }
+                prodottoMap[descKey].fatturatoTotale += d.totale;
+                prodottoMap[descKey].quantitaTotale += (d.quantita > 0 ? d.quantita : 1);
+                // Margine stimato come Totale Netto (o ricavo totale) ponderato
+                prodottoMap[descKey].margineTotale += d.totale;
 
                 if (!maxScontoItem || d.sconto > maxScontoItem.sconto) {
                     maxScontoItem = d;
@@ -411,6 +417,16 @@
                     minScontoItem = d;
                 }
             });
+
+            // Trova prodotto con maggiore e minore redditività in funzione della quantità e fatturato
+            let prodottiArray = Object.keys(prodottoMap).map(k => ({
+                nome: k,
+                ...prodottoMap[k]
+            }));
+
+            prodottiArray.sort((a, b) => b.fatturatoTotale - a.fatturatoTotale);
+            let topRedditizio = prodottiArray.length > 0 ? prodottiArray[0] : null;
+            let minRedditizio = prodottiArray.length > 0 ? prodottiArray[prodottiArray.length - 1] : null;
 
             let topStore = Object.keys(storeMap).reduce((a, b) => storeMap[a] > storeMap[b] ? a : b, '');
             let topOp = Object.keys(opMap).reduce((a, b) => opMap[a] > opMap[b] ? a : b, '');
@@ -423,21 +439,28 @@
 
             let frase = `${testoFiltri}. Il fatturato complessivo è di <b class="text-emerald-400">€ ${totalFatturato.toLocaleString('it-IT', {minimumFractionDigits: 2})}</b> con uno scontrino medio di <b>€ ${scontrinoMedio}</b>. `;
             
-            if (maxScontoItem) {
-                frase += `<br>🔥 <b>Maggiore sconto applicato:</b> <b>"${maxScontoItem.descrizione || 'Articolo'}"</b> con uno sconto del <b class="text-amber-400">${maxScontoItem.sconto.toFixed(1)}%</b> (Listino € ${maxScontoItem.listino.toFixed(2)} -> Netto € ${maxScontoItem.netto.toFixed(2)}, Q.tà: ${maxScontoItem.quantita}). `;
+            if (topRedditizio) {
+                frase += `<br>💎 <b>Prodotto con maggiore redditività:</b> <b>"${topRedditizio.nome}"</b> con un fatturato totale di <b class="text-emerald-300">€ ${topRedditizio.fatturatoTotale.toFixed(2)}</b> e <b>${topRedditizio.quantitaTotale}</b> capi venduti. `;
             }
-            if (minScontoItem) {
-                frase += `<br>🛡️ <b>Minore sconto applicato:</b> <b>"${minScontoItem.descrizione || 'Articolo'}"</b> con uno sconto del <b class="text-cyan-400">${minScontoItem.sconto.toFixed(1)}%</b> (Listino € ${minScontoItem.listino.toFixed(2)} -> Netto € ${minScontoItem.netto.toFixed(2)}, Q.tà: ${minScontoItem.quantita}). `;
+            if (minRedditizio && minRedditizio.nome !== topRedditizio?.nome) {
+                frase += `<br>📉 <b>Prodotto con minore redditività:</b> <b>"${minRedditizio.nome}"</b> (Fatturato: € ${minRedditizio.fatturatoTotale.toFixed(2)}, Q.tà: ${minRedditizio.quantitaTotale}). `;
             }
 
-            frase += `<br>Lo store di punta è <b>${topStore}</b> e l'operatore più attivo è <b>${topOp}</b>.`;
+            if (maxScontoItem) {
+                frase += `<br>🔥 <b>Maggiore sconto:</b> <b>"${maxScontoItem.descrizione || 'Articolo'}"</b> (<b class="text-amber-400">${maxScontoItem.sconto.toFixed(1)}%</b> di sconto, Q.tà: ${maxScontoItem.quantita}). `;
+            }
+            if (minScontoItem) {
+                frase += `<br>🛡️ <b>Minore sconto:</b> <b>"${minScontoItem.descrizione || 'Articolo'}"</b> (<b class="text-cyan-400">${minScontoItem.sconto.toFixed(1)}%</b> di sconto, Q.tà: ${minScontoItem.quantita}). `;
+            }
+
+            frase += `<br>Lo store di riferimento è <b>${topStore}</b> e l'operatore leader è <b>${topOp}</b>.`;
 
             aiBox.innerHTML = frase;
         }
 
         function updateDashboard(data, storeName) {
             let totalFatturato = data.reduce((acc, curr) => acc + curr.totale, 0);
-            let totalTransazioni = data.reduce((acc, curr) => acc + (curr.quantita > 0 ? curr.quantita : 1), 0); // Somma quantità totali o transazioni
+            let totalTransazioni = data.reduce((acc, curr) => acc + (curr.quantita > 0 ? curr.quantita : 1), 0);
             let scontrinoMedio = data.length > 0 ? (totalFatturato / data.length).toFixed(2) : 0;
 
             document.getElementById('kpi-fatturato').innerText = '€ ' + totalFatturato.toLocaleString('it-IT', {minimumFractionDigits: 2});
@@ -490,6 +513,7 @@
             storeChart.update();
 
             const reportContainer = document.getElementById('store-report-container');
+            reportContainer.innerHTML =--;
             reportContainer.innerHTML = '';
 
             if (labels.length === 0) {
