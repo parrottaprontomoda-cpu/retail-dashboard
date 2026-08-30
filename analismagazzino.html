@@ -77,11 +77,11 @@
             </div>
         </div>
 
-        <!-- Statistiche Dinamiche Top Misure e Colori (Visibili in base ai filtri) -->
+        <!-- Statistiche Dinamiche Top Misure e Colori -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <!-- Box Top Misure Vendute -->
             <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-                <h3 class="text-xs font-bold uppercase text-gray-500 mb-3 tracking-wider"><i class="fa-solid fa-ruler mr-2 text-indigo-500"></i> Top Misure più Vendite</h3>
+                <h3 class="text-xs font-bold uppercase text-gray-500 mb-3 tracking-wider"><i class="fa-solid fa-ruler mr-2 text-indigo-500"></i> Top Misure più Vendute</h3>
                 <div id="top-misure-container" class="space-y-2">
                     <span class="text-xs text-gray-400">Nessun dato disponibile</span>
                 </div>
@@ -107,13 +107,13 @@
                     <thead>
                         <tr class="border-b text-xs font-semibold text-gray-500 uppercase bg-gray-50 select-none">
                             <th class="py-3 px-3">Store</th>
-                            <th class="py-3 px-3">EAN13</th>
-                            <th class="py-3 px-3">Codice Interno</th>
+                            <th class="py-3 px-3">EAN</th>
+                            <th class="py-3 px-3">Codice</th>
                             <th class="py-3 px-3">Descrizione</th>
                             <th class="py-3 px-3 text-center">Misura</th>
                             <th class="py-3 px-3 text-center">Colore</th>
-                            <th class="py-3 px-3 text-center">Carico</th>
-                            <th class="py-3 px-3 text-center">Venduto</th>
+                            <th class="py-3 px-3 text-center">Pezzi Caricati</th>
+                            <th class="py-3 px-3 text-center">Pezzi Venduti</th>
                             <th class="py-3 px-3 text-center">Giacenza</th>
                             <th class="py-3 px-3 text-center">Tasso Vendita</th>
                             <th class="py-3 px-3 text-center">Stato</th>
@@ -182,15 +182,15 @@
             rawData = [];
             if (rows.length < 2) return;
 
-            // Mappatura aggiornata da QUERY con Misura (S) e Colore (T):
-            // [0]=Store, [1]=EAN, [2]=Codice, [3]=Descrizione, [4]=Misura, [5]=Colore, [6]=Carico, [7]=Venduto, [8]=Giacenza, [9]=Tasso %
+            // Mappatura esatta basata sulla tua intestazione:
+            // [0]=Store, [1]=EAN, [2]=Codice, [3]=Descrizione, [4]=Misura, [5]=Colore, [6]=Pezzi Caricati, [7]=Pezzi Venduti
             for (let i = 1; i < rows.length; i++) {
                 let row = rows[i];
                 if (!row || row.length === 0) continue;
 
                 let carico = parseNum(row[6]);
                 let venduto = parseNum(row[7]);
-                let giacenza = parseNum(row[8]) || (carico - venduto);
+                let giacenza = carico - venduto; // Calcolo automatico giacenza
                 let tasso = carico > 0 ? (venduto / carico) * 100 : 0;
 
                 rawData.push({
