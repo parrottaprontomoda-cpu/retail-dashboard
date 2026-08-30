@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retail BI - Ciclo Completo per Punto Vendita</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans">
+
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-base md:text-xl font-bold tracking-wide truncate">
+                <i class="fa-solid fa-store mr-2 text-emerald-400"></i> Controllo Ciclo Merce per Store
+            </h1>
+            <div class="flex items-center space-x-2">
+                <span id="status-badge" class="text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap">Sincronizzazione...</span>
+                <button onclick="caricaDati()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-sm" title="Aggiorna Dati">
+                    <i class="fa-solid fa-sync"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-6 max-w-7xl">
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
+                <div class="p-3 md:p-4 bg-blue-50 text-blue-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-arrow-down-long"></i></div>
+                <div>
+                    <p class="text-xs md:text-sm text-gray-500 font-medium">Totale Caricato</p>
+                    <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-caricato">0</h3>
+                </div>
+            </div>
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
+                <div class="p-3 md:p-4 bg-emerald-50 text-emerald-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-bag-shopping"></i></div>
+                <div>
+                    <p class="text-xs md:text-sm text-gray-500 font-medium">Totale Venduto</p>
+                    <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-venduto">0</h3>
+                </div>
+            </div>
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
+                <div class="p-3 md:p-4 bg-purple-50 text-purple-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-warehouse"></i></div>
+                <div>
+                    <p class="text-xs md:text-sm text-gray-500 font-medium">Giacenza Residua</p>
+                    <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-giacenza">0</h3>
+                </div>
+            </div>
+            <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
+                <div class="p-3 md:p-4 bg-amber-50 text-amber-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-chart-pie"></i></div>
+                <div>
+                    <p class="text-xs md:text-sm text-gray-500 font-medium">Tasso Vendita Medio</p>
+                    <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-tasso">0%</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
+            <h2 class="text-sm font-bold uppercase text-gray-500 mb-4 tracking-wider"><i class="fa-solid fa-filter mr-2"></i> Filtri di Ricerca</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Punto Vendita (Store)</label>
+                    <select id="filterStore" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-gray-50 font-medium">
+                        <option value="">Tutti gli Store</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Cerca Articolo / EAN / Codice</label>
+                    <input type="text" id="searchQuery" placeholder="Digita codice, EAN o descrizione..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="border-b border-gray-200 bg-gray-50 px-4 md:px-6 pt-4 flex justify-between items-center">
+                <span class="pb-3 px-2 inline-block font-semibold text-sm text-emerald-600 border-b-2 border-emerald-600">Dettaglio Articoli per Negozio</span>
+                <span id="counter-righe" class="text-xs text-gray-500 font-medium pb-2">0 righe trovate</span>
+            </div>
+
+            <div class="p-4 md:p-6 overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[1000px]">
+                    <thead>
+                        <tr class="border-b text-xs font-semibold text-gray-500 uppercase bg-gray-50 select-none">
+                            <th class="py-3 px-3">Store</th>
+                            <th class="py-3 px-3">EAN13</th>
+                            <th class="py-3 px-3">Codice Interno</th>
+                            <th class="py-3 px-3">Descrizione</th>
+                            <th class="py-3 px-3 text-center">Carico</th>
+                            <th class="py-3 px-3 text-center">Venduto</th>
+                            <th class="py-3 px-3 text-center">Giacenza</th>
+                            <th class="py-3 px-3 text-center">Tasso Vendita</th>
+                            <th class="py-3 px-3 text-center">Stato</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body" class="text-sm divide-y divide-gray-100">
+                        <tr><td colspan="9" class="text-center py-6 text-gray-400">Caricamento dati in corso...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // IL TUO LINK CSV UFFICIALE DI GOOGLE SHEETS
+        const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1717092575&single=true&output=csv";
+        
+        let rawData = [];
+        let filteredData = [];
+
+        function caricaDati() {
+            const badge = document.getElementById('status-badge');
+            badge.className = "text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+            badge.innerText = "Sincronizzazione...";
+
+            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(CSV_URL);
+
+            fetch(proxyUrl)
+                .then(res => res.text())
+                .then(text => elaboraCSV(text, badge))
+                .catch(() => {
+                    fetch(CSV_URL)
+                        .then(res => res.text())
+                        .then(text => elaboraCSV(text, badge))
+                        .catch(() => {
+                            badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+                            badge.innerText = "Errore Connessione";
+                        });
+                });
+        }
+
+        function elaboraCSV(text, badge) {
+            Papa.parse(text, {
+                header: false,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    pulisciDati(results.data);
+                    badge.className = "text-[10px] md:text-xs bg-emerald-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+                    badge.innerText = "Aggiornato";
+                },
+                error: function() {
+                    badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+                    badge.innerText = "Errore Parsing";
+                }
+            });
+        }
+
+        caricaDati();
+
+        function parseNum(val) {
+            if (!val) return 0;
+            return parseFloat(String(val).replace('€', '').replace(/\./g, '').replace(',', '.')) || 0;
+        }
+
+        function pulisciDati(rows) {
+            rawData = [];
+            if (rows.length < 2) return;
+
+            // Assumiamo l'ordine delle colonne nel foglio CicloStoreCompleto:
+            // [0]=Store, [1]=EAN, [2]=Codice, [3]=Descrizione, [4]=Carico, [5]=Venduto, [6]=Giacenza, [7]=Tasso %
+            for (let i = 1; i < rows.length; i++) {
+                let row = rows[i];
+                if (!row || row.length === 0) continue;
+
+                let carico = parseNum(row[4]);
+                let venduto = parseNum(row[5]);
+                let giacenza = parseNum(row[6]) || (carico - venduto);
+                let tasso = carico > 0 ? (venduto / carico) * 100 : 0;
+
+                rawData.push({
+                    store: String(row[0] || 'Altro').trim(),
+                    ean: String(row[1] || '').trim(),
+                    codiceInterno: String(row[2] || '').trim(),
+                    descrizione: String(row[3] || '').trim(),
+                    carico: carico,
+                    venduto: venduto,
+                    giacenza: giacenza,
+                    tasso: tasso
+                });
+            }
+
+            popolaFiltroStore(rawData);
+            applicaFiltri();
+        }
+
+        function popolaFiltroStore(data) {
+            let storeSet = new Set();
+            data.forEach(d => { if (d.store) storeSet.add(d.store); });
+
+            const select = document.getElementById('filterStore');
+            let valCorrente = select.value;
+            select.innerHTML = '<option value="">Tutti gli Store</option>';
+            storeSet.forEach(store => {
+                let opt = document.createElement('option');
+                opt.value = store;
+                opt.innerText = store;
+                select.appendChild(opt);
+            });
+            select.value = valCorrente;
+        }
+
+        document.getElementById('filterStore').addEventListener('change', applicaFiltri);
+        document.getElementById('searchQuery').addEventListener('input', applicaFiltri);
+
+        function applicaFiltri() {
+            let storeSelezionato = document.getElementById('filterStore').value;
+            let query = document.getElementById('searchQuery').value.toLowerCase().trim();
+
+            filteredData = rawData.filter(item => {
+                let matchStore = !storeSelezionato || item.store === storeSelezionato;
+                let matchQuery = !query || 
+                                 item.ean.toLowerCase().includes(query) || 
+                                 item.codiceInterno.toLowerCase().includes(query) || 
+                                 item.descrizione.toLowerCase().includes(query);
+                return matchStore && matchQuery;
+            });
+
+            aggiornaInterfaccia();
+        }
+
+        function aggiornaInterfaccia() {
+            let totCarico = filteredData.reduce((acc, curr) => acc + curr.carico, 0);
+            let totVenduto = filteredData.reduce((acc, curr) => acc + curr.venduto, 0);
+            let totGiacenza = filteredData.reduce((acc, curr) => acc + curr.giacenza, 0);
+            let tassoMedio = totCarico > 0 ? ((totVenduto / totCarico) * 100).toFixed(1) : 0;
+
+            document.getElementById('kpi-caricato').innerText = totCarico.toLocaleString('it-IT');
+            document.getElementById('kpi-venduto').innerText = totVenduto.toLocaleString('it-IT');
+            document.getElementById('kpi-giacenza').innerText = totGiacenza.toLocaleString('it-IT');
+            document.getElementById('kpi-tasso').innerText = tassoMedio + '%';
+            document.getElementById('counter-righe').innerText = filteredData.length + ' righe trovate';
+
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+
+            if (filteredData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-gray-400">Nessun articolo trovato con i filtri correnti.</td></tr>';
+                return;
+            }
+
+            filteredData.sort((a, b) => b.carico - a.carico).slice(0, 300).forEach(item => {
+                let badgeStato = '';
+                if (item.giacenza <= 0) {
+                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-800">Esaurito 🔴</span>';
+                } else if (item.venduto === 0) {
+                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800">Fermo ⏳</span>';
+                } else if (item.tasso >= 70) {
+                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">Top Rotazione 🚀</span>';
+                } else {
+                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800">In Stock 📦</span>';
+                }
+
+                let tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 border-b border-gray-100";
+                tr.innerHTML = `
+                    <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-800">${item.store}</span></td>
+                    <td class="py-3 px-3 font-mono text-xs text-gray-600">${item.ean}</td>
+                    <td class="py-3 px-3 font-mono text-xs font-bold text-indigo-700">${item.codiceInterno}</td>
+                    <td class="py-3 px-3 font-medium text-gray-900">${item.descrizione}</td>
+                    <td class="py-3 px-3 text-center font-semibold text-blue-600">${item.carico}</td>
+                    <td class="py-3 px-3 text-center font-semibold text-emerald-600">${item.venduto}</td>
+                    <td class="py-3 px-3 text-center font-bold ${item.giacenza > 0 ? 'text-gray-800' : 'text-red-500'}">${item.giacenza}</td>
+                    <td class="py-3 px-3 text-center font-semibold text-indigo-600">${item.tasso.toFixed(1)}%</td>
+                    <td class="py-3 px-3 text-center">${badgeStato}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    </script>
+</body>
+</html>
