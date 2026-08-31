@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retail BI - Matrice Taglie e Colori per Store</title>
+    <title>Retail BI - Ciclo Completo e Matrice Taglie</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -126,8 +126,8 @@
                             <th class="py-3 px-3">Descrizione</th>
                             <th class="py-3 px-3 text-center">Misura</th>
                             <th class="py-3 px-3 text-center">Colore</th>
-                            <th class="py-3 px-3 text-center">Carico</th>
-                            <th class="py-3 px-3 text-center">Venduto</th>
+                            <th class="py-3 px-3 text-center">Pezzi Caricati</th>
+                            <th class="py-3 px-3 text-center">Pezzi Venduti</th>
                             <th class="py-3 px-3 text-center">Giacenza</th>
                             <th class="py-3 px-3 text-center">Tasso Vendita</th>
                             <th class="py-3 px-3 text-center">Stato</th>
@@ -196,9 +196,15 @@
             rawData = [];
             if (rows.length < 2) return;
 
-            for (let i = 1; i < rows.length; i++) {
+            let startIndex = 1;
+            let primaRiga = rows[1];
+            if (primaRiga && String(primaRiga[0]).toLowerCase().includes('store')) {
+                startIndex = 2;
+            }
+
+            for (let i = startIndex; i < rows.length; i++) {
                 let row = rows[i];
-                if (!row || row.length === 0) continue;
+                if (!row || row.length < 8) continue;
 
                 let carico = parseNum(row[6]);
                 let venduto = parseNum(row[7]);
@@ -230,7 +236,7 @@
             const select = document.getElementById('filterStore');
             let valCorrente = select.value;
             select.innerHTML = '<option value="">Tutti gli Store</option>';
-            storeSet.forEach(store => {
+            Array.from(storeSet).sort().forEach(store => {
                 let opt = document.createElement('option');
                 opt.value = store;
                 opt.innerText = store;
@@ -262,8 +268,10 @@
             generaMatrice();
         }
 
-        function filtraPerCodice(codice) {
-            document.getElementById('searchQuery').value = codice;
+        window.filtraPerCodice = function(codice) {
+            if (!codice) return;
+            const inputSearch = document.getElementById('searchQuery');
+            inputSearch.value = codice;
             applicaFiltri();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -278,14 +286,13 @@
             const container = document.getElementById('matrice-container');
             
             if (filteredData.length === 0) {
-                container.innerHTML = '<span class="text-xs text-gray-400">Nessun dato per generare la matrice.</span>';
+                container.innerHTML = '<span class="text-xs text-gray-400">Nessun dato disponibile per generare la matrice con i filtri attivi.</span>';
                 return;
             }
 
-            // Raccogli misure e colori unici presenti nei dati filtrati
             let setMisure = new Set();
             let setColori = new Set();
-            let matriceGiacenza = {}; // { colore: { misura: giacenza } }
+            let matriceGiacenza = {}; 
 
             filteredData.forEach(item => {
                 let m = item.misura && item.misura !== '' ? item.misura : 'Unica';
@@ -298,12 +305,10 @@
                 matriceGiacenza[c][m] = (matriceGiacenza[c][m] || 0) + item.giacenza;
             });
 
-            // Ordina taglie e colori
             let arrMisure = Array.from(setMisure).sort();
             let arrColori = Array.from(setColori).sort();
 
-            // Costruisci la tabella HTML della matrice
-            let html = `<table class="w-true text-center border-collapse text-xs">
+            let html = `<table class="w-full text-center border-collapse text-xs">
                 <thead>
                     <tr class="bg-gray-100 border-b">
                         <th class="p-2 text-left border-r font-bold text-gray-600">Colore \\ Misura</th>`;
@@ -315,7 +320,7 @@
 
             arrColori.forEach(c => {
                 html += `<tr class="border-b hover:bg-gray-50"><td class="p-2 text-left font-bold border-r text-slate-700 bg-gray-50">${c}</td>`;
-                let totRiga = 3;
+                let totRiga = 0;
                 arrMisure.forEach(m => {
                     let val = matriceGiacenza[c][m] || 0;
                     let colorClass = val > 0 ? "text-emerald-600 font-bold" : (val < 0 ? "text-red-500 font-bold" : "text-gray-300");
@@ -325,7 +330,6 @@
                 html += `<td class="p-2 font-bold text-slate-900 bg-gray-100">${totRiga}</td></tr>`;
             });
 
-            // Riga totali colonne in basso
             html += `<tr class="bg-gray-100 font-bold"><td class="p-2 text-left border-r text-gray-700">Tot Taglia</td>`;
             arrMisure.forEach(m => {
                 let totCol = arrColori.reduce((acc, c) => acc + (matriceGiacenza[c][m] || 0), 0);
@@ -420,8 +424,8 @@
                 tr.className = "hover:bg-gray-50 border-b border-gray-100";
                 tr.innerHTML = `
                     <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-800">${item.store}</span></td>
-                    <td class="py-3 px-3 font-mono text-xs text-indigo-600 font-semibold cursor-pointer hover:underline" onclick="filtraPerCodice('${item.ean}')" title="Tocca per filtrare">${item.ean}</td>
-                    <td class="py-3 px-3 font-mono text-xs font-bold text-indigo-800 cursor-pointer hover:underline" onclick="filtraPerCodice('${item.codiceInterno}')" title="Tocca per filtrare">${item.codiceInterno}</td>
+                    <td class="py-3 px-3 font-mono text-xs text-indigo-600 font-semibold cursor-pointer hover:underline" onclick="filtraPerCodice('${item.ean}')" title="Clicca per filtrare">${item.ean}</td>
+                    <td class="py-3 px-3 font-mono text-xs font-bold text-indigo-800 cursor-pointer hover:underline" onclick="filtraPerCodice('${item.codiceInterno}')" title="Clicca per filtrare">${item.codiceInterno}</td>
                     <td class="py-3 px-3 font-medium text-gray-900">${item.descrizione}</td>
                     <td class="py-3 px-3 text-center text-xs font-bold text-slate-700">${item.misura}</td>
                     <td class="py-3 px-3 text-center text-xs font-bold text-slate-700">${item.colore}</td>
