@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retail BI - Ciclo Completo e Matrice Taglie</title>
+    <title>Retail BI - Ciclo Completo e Matrice Taglie Ordinata</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -14,7 +14,7 @@
     <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-base md:text-xl font-bold tracking-wide truncate">
-                <i class="fa-solid fa-store mr-2 text-emerald-400"></i> Controllo Ciclo Merce & Matrice
+                <i class="fa-solid fa-store mr-2 text-emerald-400"></i> Controllo Ciclo Merce & Matrice Ordinata
             </h1>
             <div class="flex items-center space-x-2">
                 <span id="status-badge" class="text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap">Sincronizzazione in corso...</span>
@@ -82,7 +82,7 @@
             </div>
         </div>
 
-        <!-- Matrice Taglie x Colori (Si attiva solo se c'è un unico articolo/codice filtrato) -->
+        <!-- Matrice Taglie x Colori (Ordinata per priorità taglie) -->
         <div id="matrice-card" class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 mb-6 hidden">
             <div class="flex justify-between items-center mb-3">
                 <h3 class="text-xs font-bold uppercase text-indigo-600 tracking-wider"><i class="fa-solid fa-table-cells mr-2"></i> Matrice Dettaglio Articolo (Taglie x Colori)</h3>
@@ -110,7 +110,7 @@
         <!-- Tabella Dati -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div class="border-b border-gray-200 bg-gray-50 px-4 md:px-6 pt-4 flex justify-between items-center">
-                <span class="pb-3 px-2 inline-block font-semibold text-sm text-emerald-600 border-b-2 border-emerald-600">Dettaglio Articoli per Negozio (Tocca un codice per aprire la matrice)</span>
+                <span class="pb-3 px-2 inline-block font-semibold text-sm text-emerald-600 border-b-2 border-emerald-600">Dettaglio Articoli per Negozio (Ordinati per Misura e Colore)</span>
                 <span id="counter-righe" class="text-xs text-gray-500 font-medium pb-2">0 righe trovate</span>
             </div>
 
@@ -145,6 +145,30 @@
         
         let rawData = [];
         let filteredData = [];
+
+        // Mappa di priorità fissa per le taglie (XS -> S -> M -> L -> XL -> XXL)
+        const sizePriorityMap = {
+            'xs': 1, 'extra small': 1,
+            's': 2, 'small': 2,
+            'm': 3, 'medium': 3,
+            'l': 4, 'large': 4,
+            'xl': 5, 'extra large': 5,
+            'xxl': 6, '2xl': 6, '3xl': 7, '4xl': 8
+        };
+
+        function getMisuraWeight(misura) {
+            if (!misura) return 999;
+            let mClean = String(misura).trim().toLowerCase();
+            if (sizePriorityMap[mClean] !== undefined) {
+                return sizePriorityMap[mClean];
+            }
+            // Se è una misura numerica (es. 38, 40, 42), prova a convertirla in numero per ordinarla correttamente
+            let num = parseFloat(mClean);
+            if (!isNaN(num)) {
+                return 100 + num; // Le taglie numeriche partono dopo le lettere standard
+            }
+            return 500; // Altre taglie generiche o "Unica" vanno in fondo
+        }
 
         function caricaDati() {
             const badge = document.getElementById('status-badge');
@@ -263,6 +287,14 @@
                 return matchStore && matchQuery;
             });
 
+            // Ordinamento unificato di tutti i dati filtrati per Misura (secondo la priorità) e poi per Colore
+            filteredData.sort((a, b) => {
+                let wA = getMisuraWeight(a.misura);
+                let wB = getMisuraWeight(b.misura);
+                if (wA !== wB) return wA - wB;
+                return a.colore.localeCompare(b.colore);
+            });
+
             aggiornaInterfaccia();
             calcolaTopStatistiche();
             gestisciMatriceDinamica();
@@ -309,8 +341,10 @@
                     matriceGiacenza[c][m] = (matriceGiacenza[c][m] || 0) + item.giacenza;
                 });
 
-                let arrMisure = Array.from(setMisure).sort();
-                let arrColori = Array.from(setColori).sort();
+                // Ordina le misure seguendo la priorità XS -> S -> M -> L -> XL -> XXL
+                let arrMisure = Array.from(setMisure).sort((a, b) => getMisuraWeight(a) - getMisuraWeight(b));
+                // Ordina i colori in ordine alfabetico crescente
+                let arrColori = Array.from(setColori).sort((a, b) => a.localeCompare(b));
 
                 let html = `<table class="w-full text-center border-collapse text-xs">
                     <thead>
@@ -366,7 +400,13 @@
                 }
             });
 
-            let topMisure = Object.entries(mapMisure).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            let topMisure = Object.entries(mapMisure).sort((a, b) => {
+                let wA = getMisuraWeight(a[0]);
+                let wB = getMisuraWeight(b[0]);
+                if (wA !== wB) return wA - wB;
+                return b[1] - a[1];
+            }).slice(0, 5);
+
             let topColori = Object.entries(mapColori).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
             renderTopList('top-misure-container', topMisure, 'bg-indigo-50 text-indigo-700');
@@ -416,7 +456,7 @@
                 return;
             }
 
-            filteredData.sort((a, b) => b.carico - a.carico).slice(0, 300).forEach(item => {
+            filteredData.slice(0, 300).forEach(item => {
                 let badgeStato = '';
                 if (item.giacenza <= 0) {
                     badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-800">Esaurito 🔴</span>';
