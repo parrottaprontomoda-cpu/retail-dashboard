@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retail BI - Ciclo Completo per Punto Vendita</title>
+    <title>Retail BI - Matrice Taglie e Colori per Store</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -14,7 +14,7 @@
     <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-base md:text-xl font-bold tracking-wide truncate">
-                <i class="fa-solid fa-store mr-2 text-emerald-400"></i> Controllo Ciclo Merce per Store
+                <i class="fa-solid fa-store mr-2 text-emerald-400"></i> Controllo Ciclo Merce & Matrice
             </h1>
             <div class="flex items-center space-x-2">
                 <span id="status-badge" class="text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap">Sincronizzazione...</span>
@@ -62,7 +62,12 @@
 
         <!-- Filtri (Store e Ricerca) -->
         <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
-            <h2 class="text-sm font-bold uppercase text-gray-500 mb-4 tracking-wider"><i class="fa-solid fa-filter mr-2"></i> Filtri di Ricerca</h2>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-sm font-bold uppercase text-gray-500 tracking-wider"><i class="fa-solid fa-filter mr-2"></i> Filtri di Ricerca</h2>
+                <button onclick="resetFiltri()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-lg font-medium transition">
+                    <i class="fa-solid fa-rotate-left mr-1"></i> Reset Filtri
+                </button>
+            </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Punto Vendita (Store)</label>
@@ -72,21 +77,30 @@
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Cerca Articolo / EAN / Codice / Misura / Colore</label>
-                    <input type="text" id="searchQuery" placeholder="Digita codice, EAN, descrizione, taglia o colore..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
+                    <input type="text" id="searchQuery" placeholder="Digita o tocca un codice sotto..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
                 </div>
+            </div>
+        </div>
+
+        <!-- Matrice Taglie (In alto) x Colori (A sinistra) -->
+        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 mb-6">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-xs font-bold uppercase text-gray-500 tracking-wider"><i class="fa-solid fa-table-cells mr-2 text-indigo-500"></i> Matrice Giacenza (Misura x Colore)</h3>
+                <span class="text-[11px] text-gray-400">Valori di Giacenza Residua alle intersezioni</span>
+            </div>
+            <div id="matrice-container" class="overflow-x-auto">
+                <span class="text-xs text-gray-400">Seleziona o cerca un articolo per visualizzare la matrice.</span>
             </div>
         </div>
 
         <!-- Statistiche Dinamiche Top Misure e Colori -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <!-- Box Top Misure Vendute -->
             <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                 <h3 class="text-xs font-bold uppercase text-gray-500 mb-3 tracking-wider"><i class="fa-solid fa-ruler mr-2 text-indigo-500"></i> Top Misure più Vendute</h3>
                 <div id="top-misure-container" class="space-y-2">
                     <span class="text-xs text-gray-400">Nessun dato disponibile</span>
                 </div>
             </div>
-            <!-- Box Top Colori Venduti -->
             <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                 <h3 class="text-xs font-bold uppercase text-gray-500 mb-3 tracking-wider"><i class="fa-solid fa-palette mr-2 text-pink-500"></i> Top Colori più Venduti</h3>
                 <div id="top-colori-container" class="space-y-2">
@@ -98,7 +112,7 @@
         <!-- Tabella Dati -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div class="border-b border-gray-200 bg-gray-50 px-4 md:px-6 pt-4 flex justify-between items-center">
-                <span class="pb-3 px-2 inline-block font-semibold text-sm text-emerald-600 border-b-2 border-emerald-600">Dettaglio Articoli per Negozio</span>
+                <span class="pb-3 px-2 inline-block font-semibold text-sm text-emerald-600 border-b-2 border-emerald-600">Dettaglio Articoli per Negozio (Tocca un codice per filtrarlo)</span>
                 <span id="counter-righe" class="text-xs text-gray-500 font-medium pb-2">0 righe trovate</span>
             </div>
 
@@ -112,8 +126,8 @@
                             <th class="py-3 px-3">Descrizione</th>
                             <th class="py-3 px-3 text-center">Misura</th>
                             <th class="py-3 px-3 text-center">Colore</th>
-                            <th class="py-3 px-3 text-center">Pezzi Caricati</th>
-                            <th class="py-3 px-3 text-center">Pezzi Venduti</th>
+                            <th class="py-3 px-3 text-center">Carico</th>
+                            <th class="py-3 px-3 text-center">Venduto</th>
                             <th class="py-3 px-3 text-center">Giacenza</th>
                             <th class="py-3 px-3 text-center">Tasso Vendita</th>
                             <th class="py-3 px-3 text-center">Stato</th>
@@ -182,15 +196,13 @@
             rawData = [];
             if (rows.length < 2) return;
 
-            // Mappatura esatta basata sulla tua intestazione:
-            // [0]=Store, [1]=EAN, [2]=Codice, [3]=Descrizione, [4]=Misura, [5]=Colore, [6]=Pezzi Caricati, [7]=Pezzi Venduti
             for (let i = 1; i < rows.length; i++) {
                 let row = rows[i];
                 if (!row || row.length === 0) continue;
 
                 let carico = parseNum(row[6]);
                 let venduto = parseNum(row[7]);
-                let giacenza = carico - venduto; // Calcolo automatico giacenza
+                let giacenza = carico - venduto;
                 let tasso = carico > 0 ? (venduto / carico) * 100 : 0;
 
                 rawData.push({
@@ -247,6 +259,82 @@
 
             aggiornaInterfaccia();
             calcolaTopStatistiche();
+            generaMatrice();
+        }
+
+        function filtraPerCodice(codice) {
+            document.getElementById('searchQuery').value = codice;
+            applicaFiltri();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function resetFiltri() {
+            document.getElementById('filterStore').value = "";
+            document.getElementById('searchQuery').value = "";
+            applicaFiltri();
+        }
+
+        function generaMatrice() {
+            const container = document.getElementById('matrice-container');
+            
+            if (filteredData.length === 0) {
+                container.innerHTML = '<span class="text-xs text-gray-400">Nessun dato per generare la matrice.</span>';
+                return;
+            }
+
+            // Raccogli misure e colori unici presenti nei dati filtrati
+            let setMisure = new Set();
+            let setColori = new Set();
+            let matriceGiacenza = {}; // { colore: { misura: giacenza } }
+
+            filteredData.forEach(item => {
+                let m = item.misura && item.misura !== '' ? item.misura : 'Unica';
+                let c = item.colore && item.colore !== '' ? item.colore : 'Standard';
+                
+                setMisure.add(m);
+                setColori.add(c);
+
+                if (!matriceGiacenza[c]) matriceGiacenza[c] = {};
+                matriceGiacenza[c][m] = (matriceGiacenza[c][m] || 0) + item.giacenza;
+            });
+
+            // Ordina taglie e colori
+            let arrMisure = Array.from(setMisure).sort();
+            let arrColori = Array.from(setColori).sort();
+
+            // Costruisci la tabella HTML della matrice
+            let html = `<table class="w-true text-center border-collapse text-xs">
+                <thead>
+                    <tr class="bg-gray-100 border-b">
+                        <th class="p-2 text-left border-r font-bold text-gray-600">Colore \\ Misura</th>`;
+            
+            arrMisure.forEach(m => {
+                html += `<th class="p-2 border-r font-bold text-indigo-600 bg-indigo-50/50">${m}</th>`;
+            });
+            html += `<th class="p-2 font-bold text-gray-700 bg-gray-200">Tot Colore</th></tr></thead><tbody>`;
+
+            arrColori.forEach(c => {
+                html += `<tr class="border-b hover:bg-gray-50"><td class="p-2 text-left font-bold border-r text-slate-700 bg-gray-50">${c}</td>`;
+                let totRiga = 3;
+                arrMisure.forEach(m => {
+                    let val = matriceGiacenza[c][m] || 0;
+                    let colorClass = val > 0 ? "text-emerald-600 font-bold" : (val < 0 ? "text-red-500 font-bold" : "text-gray-300");
+                    html += `<td class="p-2 border-r ${colorClass}">${val}</td>`;
+                    totRiga += val;
+                });
+                html += `<td class="p-2 font-bold text-slate-900 bg-gray-100">${totRiga}</td></tr>`;
+            });
+
+            // Riga totali colonne in basso
+            html += `<tr class="bg-gray-100 font-bold"><td class="p-2 text-left border-r text-gray-700">Tot Taglia</td>`;
+            arrMisure.forEach(m => {
+                let totCol = arrColori.reduce((acc, c) => acc + (matriceGiacenza[c][m] || 0), 0);
+                html += `<td class="p-2 border-r text-indigo-700">${totCol}</td>`;
+            });
+            let totGenerale = Object.values(matriceGiacenza).reduce((acc, cObj) => acc + Object.values(cObj).reduce((a, b) => a + b, 0), 0);
+            html += `<td class="p-2 text-emerald-700 bg-emerald-50">${totGenerale}</td></tr></tbody></table>`;
+
+            container.innerHTML = html;
         }
 
         function calcolaTopStatistiche() {
@@ -332,8 +420,8 @@
                 tr.className = "hover:bg-gray-50 border-b border-gray-100";
                 tr.innerHTML = `
                     <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-800">${item.store}</span></td>
-                    <td class="py-3 px-3 font-mono text-xs text-gray-600">${item.ean}</td>
-                    <td class="py-3 px-3 font-mono text-xs font-bold text-indigo-700">${item.codiceInterno}</td>
+                    <td class="py-3 px-3 font-mono text-xs text-indigo-600 font-semibold cursor-pointer hover:underline" onclick="filtraPerCodice('${item.ean}')" title="Tocca per filtrare">${item.ean}</td>
+                    <td class="py-3 px-3 font-mono text-xs font-bold text-indigo-800 cursor-pointer hover:underline" onclick="filtraPerCodice('${item.codiceInterno}')" title="Tocca per filtrare">${item.codiceInterno}</td>
                     <td class="py-3 px-3 font-medium text-gray-900">${item.descrizione}</td>
                     <td class="py-3 px-3 text-center text-xs font-bold text-slate-700">${item.misura}</td>
                     <td class="py-3 px-3 text-center text-xs font-bold text-slate-700">${item.colore}</td>
