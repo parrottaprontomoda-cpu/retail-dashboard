@@ -77,20 +77,18 @@
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Cerca Articolo / EAN / Codice / Misura / Colore</label>
-                    <input type="text" id="searchQuery" placeholder="Digita o tocca un codice sotto..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
+                    <input type="text" id="searchQuery" placeholder="Tocca un codice sotto o digita per filtrare..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
                 </div>
             </div>
         </div>
 
-        <!-- Matrice Taglie (In alto) x Colori (A sinistra) -->
-        <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 mb-6">
+        <!-- Matrice Taglie x Colori (Si attiva solo se c'è un unico articolo/codice filtrato) -->
+        <div id="matrice-card" class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 mb-6 hidden">
             <div class="flex justify-between items-center mb-3">
-                <h3 class="text-xs font-bold uppercase text-gray-500 tracking-wider"><i class="fa-solid fa-table-cells mr-2 text-indigo-500"></i> Matrice Giacenza (Misura x Colore)</h3>
-                <span class="text-[11px] text-gray-400">Valori di Giacenza Residua alle intersezioni</span>
+                <h3 class="text-xs font-bold uppercase text-indigo-600 tracking-wider"><i class="fa-solid fa-table-cells mr-2"></i> Matrice Dettaglio Articolo (Taglie x Colori)</h3>
+                <span id="matrice-info-articolo" class="text-xs font-semibold text-gray-700 bg-indigo-50 px-2.5 py-1 rounded-md"></span>
             </div>
-            <div id="matrice-container" class="overflow-x-auto">
-                <span class="text-xs text-gray-400">Seleziona o cerca un articolo per visualizzare la matrice.</span>
-            </div>
+            <div id="matrice-container" class="overflow-x-auto"></div>
         </div>
 
         <!-- Statistiche Dinamiche Top Misure e Colori -->
@@ -112,7 +110,7 @@
         <!-- Tabella Dati -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div class="border-b border-gray-200 bg-gray-50 px-4 md:px-6 pt-4 flex justify-between items-center">
-                <span class="pb-3 px-2 inline-block font-semibold text-sm text-emerald-600 border-b-2 border-emerald-600">Dettaglio Articoli per Negozio (Tocca un codice per filtrarlo)</span>
+                <span class="pb-3 px-2 inline-block font-semibold text-sm text-emerald-600 border-b-2 border-emerald-600">Dettaglio Articoli per Negozio (Tocca un codice per aprire la matrice)</span>
                 <span id="counter-righe" class="text-xs text-gray-500 font-medium pb-2">0 righe trovate</span>
             </div>
 
@@ -265,7 +263,7 @@
 
             aggiornaInterfaccia();
             calcolaTopStatistiche();
-            generaMatrice();
+            gestisciMatriceDinamica();
         }
 
         window.filtraPerCodice = function(codice) {
@@ -282,63 +280,74 @@
             applicaFiltri();
         }
 
-        function generaMatrice() {
+        function gestisciMatriceDinamica() {
+            const cardMatrice = document.getElementById('matrice-card');
             const container = document.getElementById('matrice-container');
+            const infoArticolo = document.getElementById('matrice-info-articolo');
             
-            if (filteredData.length === 0) {
-                container.innerHTML = '<span class="text-xs text-gray-400">Nessun dato disponibile per generare la matrice con i filtri attivi.</span>';
-                return;
-            }
-
-            let setMisure = new Set();
-            let setColori = new Set();
-            let matriceGiacenza = {}; 
-
-            filteredData.forEach(item => {
-                let m = item.misura && item.misura !== '' ? item.misura : 'Unica';
-                let c = item.colore && item.colore !== '' ? item.colore : 'Standard';
-                
-                setMisure.add(m);
-                setColori.add(c);
-
-                if (!matriceGiacenza[c]) matriceGiacenza[c] = {};
-                matriceGiacenza[c][m] = (matriceGiacenza[c][m] || 0) + item.giacenza;
-            });
-
-            let arrMisure = Array.from(setMisure).sort();
-            let arrColori = Array.from(setColori).sort();
-
-            let html = `<table class="w-full text-center border-collapse text-xs">
-                <thead>
-                    <tr class="bg-gray-100 border-b">
-                        <th class="p-2 text-left border-r font-bold text-gray-600">Colore \\ Misura</th>`;
+            // Verifichiamo se il filtro attuale punta a UN UNICO ARTICOLO (basandoci sul codice interno o EAN univoco)
+            let codiciUnici = [...new Set(filteredData.map(item => item.codiceInterno))];
             
-            arrMisure.forEach(m => {
-                html += `<th class="p-2 border-r font-bold text-indigo-600 bg-indigo-50/50">${m}</th>`;
-            });
-            html += `<th class="p-2 font-bold text-gray-700 bg-gray-200">Tot Colore</th></tr></thead><tbody>`;
+            // La matrice si attiva SOLO se l'utente ha filtrato un singolo articolo specifico (codiciUnici.length === 1)
+            if (codiciUnici.length === 1 && filteredData.length > 0) {
+                cardMatrice.classList.remove('hidden');
+                let articoloCorrente = filteredData[0];
+                infoArticolo.innerText = `${articoloCorrente.codiceInterno} - ${articoloCorrente.descrizione}`;
 
-            arrColori.forEach(c => {
-                html += `<tr class="border-b hover:bg-gray-50"><td class="p-2 text-left font-bold border-r text-slate-700 bg-gray-50">${c}</td>`;
-                let totRiga = 0;
-                arrMisure.forEach(m => {
-                    let val = matriceGiacenza[c][m] || 0;
-                    let colorClass = val > 0 ? "text-emerald-600 font-bold" : (val < 0 ? "text-red-500 font-bold" : "text-gray-300");
-                    html += `<td class="p-2 border-r ${colorClass}">${val}</td>`;
-                    totRiga += val;
+                let setMisure = new Set();
+                let setColori = new Set();
+                let matriceGiacenza = {}; 
+
+                filteredData.forEach(item => {
+                    let m = item.misura && item.misura !== '' ? item.misura : 'Unica';
+                    let c = item.colore && item.colore !== '' ? item.colore : 'Standard';
+                    
+                    setMisure.add(m);
+                    setColori.add(c);
+
+                    if (!matriceGiacenza[c]) matriceGiacenza[c] = {};
+                    matriceGiacenza[c][m] = (matriceGiacenza[c][m] || 0) + item.giacenza;
                 });
-                html += `<td class="p-2 font-bold text-slate-900 bg-gray-100">${totRiga}</td></tr>`;
-            });
 
-            html += `<tr class="bg-gray-100 font-bold"><td class="p-2 text-left border-r text-gray-700">Tot Taglia</td>`;
-            arrMisure.forEach(m => {
-                let totCol = arrColori.reduce((acc, c) => acc + (matriceGiacenza[c][m] || 0), 0);
-                html += `<td class="p-2 border-r text-indigo-700">${totCol}</td>`;
-            });
-            let totGenerale = Object.values(matriceGiacenza).reduce((acc, cObj) => acc + Object.values(cObj).reduce((a, b) => a + b, 0), 0);
-            html += `<td class="p-2 text-emerald-700 bg-emerald-50">${totGenerale}</td></tr></tbody></table>`;
+                let arrMisure = Array.from(setMisure).sort();
+                let arrColori = Array.from(setColori).sort();
 
-            container.innerHTML = html;
+                let html = `<table class="w-full text-center border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-gray-100 border-b">
+                            <th class="p-2 text-left border-r font-bold text-gray-600">Colore \\ Misura</th>`;
+                
+                arrMisure.forEach(m => {
+                    html += `<th class="p-2 border-r font-bold text-indigo-600 bg-indigo-50/50">${m}</th>`;
+                });
+                html += `<th class="p-2 font-bold text-gray-700 bg-gray-200">Tot Colore</th></tr></thead><tbody>`;
+
+                arrColori.forEach(c => {
+                    html += `<tr class="border-b hover:bg-gray-50"><td class="p-2 text-left font-bold border-r text-slate-700 bg-gray-50">${c}</td>`;
+                    let totRiga = 0;
+                    arrMisure.forEach(m => {
+                        let val = matriceGiacenza[c][m] || 0;
+                        let colorClass = val > 0 ? "text-emerald-600 font-bold" : (val < 0 ? "text-red-500 font-bold" : "text-gray-300");
+                        html += `<td class="p-2 border-r ${colorClass}">${val}</td>`;
+                        totRiga += val;
+                    });
+                    html += `<td class="p-2 font-bold text-slate-900 bg-gray-100">${totRiga}</td></tr>`;
+                });
+
+                html += `<tr class="bg-gray-100 font-bold"><td class="p-2 text-left border-r text-gray-700">Tot Taglia</td>`;
+                arrMisure.forEach(m => {
+                    let totCol = arrColori.reduce((acc, c) => acc + (matriceGiacenza[c][m] || 0), 0);
+                    html += `<td class="p-2 border-r text-indigo-700">${totCol}</td>`;
+                });
+                let totGenerale = Object.values(matriceGiacenza).reduce((acc, cObj) => acc + Object.values(cObj).reduce((a, b) => a + b, 0), 0);
+                html += `<td class="p-2 text-emerald-700 bg-emerald-50">${totGenerale}</td></tr></tbody></table>`;
+
+                container.innerHTML = html;
+            } else {
+                // Se ci sono più articoli o nessun filtro specifico, nascondiamo la matrice per pulizia
+                cardMatrice.classList.add('hidden');
+                container.innerHTML = '';
+            }
         }
 
         function calcolaTopStatistiche() {
@@ -424,8 +433,8 @@
                 tr.className = "hover:bg-gray-50 border-b border-gray-100";
                 tr.innerHTML = `
                     <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-800">${item.store}</span></td>
-                    <td class="py-3 px-3 font-mono text-xs text-indigo-600 font-semibold cursor-pointer hover:underline" onclick="filtraPerCodice('${item.ean}')" title="Clicca per filtrare">${item.ean}</td>
-                    <td class="py-3 px-3 font-mono text-xs font-bold text-indigo-800 cursor-pointer hover:underline" onclick="filtraPerCodice('${item.codiceInterno}')" title="Clicca per filtrare">${item.codiceInterno}</td>
+                    <td class="py-3 px-3 font-mono text-xs text-indigo-600 font-semibold cursor-pointer hover:underline" onclick="filtraPerCodice('${item.ean}')" title="Clicca per aprire la matrice di questo articolo">${item.ean}</td>
+                    <td class="py-3 px-3 font-mono text-xs font-bold text-indigo-800 cursor-pointer hover:underline" onclick="filtraPerCodice('${item.codiceInterno}')" title="Clicca per aprire la matrice di questo articolo">${item.codiceInterno}</td>
                     <td class="py-3 px-3 font-medium text-gray-900">${item.descrizione}</td>
                     <td class="py-3 px-3 text-center text-xs font-bold text-slate-700">${item.misura}</td>
                     <td class="py-3 px-3 text-center text-xs font-bold text-slate-700">${item.colore}</td>
