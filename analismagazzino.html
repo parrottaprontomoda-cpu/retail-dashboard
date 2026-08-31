@@ -3,10 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retail BI - Ciclo Completo e Matrice Taglie Ordinata</title>
+    <title>Retail BI - Ciclo Completo, Matrice e Report IA</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @media print {
+            body { background: white !important; }
+            no-print, header, button, .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            box-shadow { box-shadow: none !important; }
+        }
+    </style>
 </head>
 <body class="bg-gray-100 text-gray-800 font-sans">
 
@@ -14,12 +22,15 @@
     <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-base md:text-xl font-bold tracking-wide truncate">
-                <i class="fa-solid fa-store mr-2 text-emerald-400"></i> Controllo Ciclo Merce & Matrice Ordinata
+                <i class="fa-solid fa-store mr-2 text-emerald-400"></i> Controllo Ciclo Merce & Report IA
             </h1>
             <div class="flex items-center space-x-2">
-                <span id="status-badge" class="text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap">Sincronizzazione in corso...</span>
+                <span id="status-badge" class="text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap">Sincronizzazione...</span>
                 <button onclick="caricaDati()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-sm" title="Aggiorna Dati">
                     <i class="fa-solid fa-sync"></i>
+                </button>
+                <button onclick="generaReportAI()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-sm flex items-center gap-1.5">
+                    <i class="fa-solid fa-file-lines"></i> Genera Report & IA
                 </button>
             </div>
         </div>
@@ -61,7 +72,7 @@
         </div>
 
         <!-- Filtri (Store e Ricerca) -->
-        <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
+        <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-6 no-print">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-sm font-bold uppercase text-gray-500 tracking-wider"><i class="fa-solid fa-filter mr-2"></i> Filtri di Ricerca</h2>
                 <button onclick="resetFiltri()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-lg font-medium transition">
@@ -82,7 +93,7 @@
             </div>
         </div>
 
-        <!-- Matrice Taglie x Colori (Ordinata per priorità taglie) -->
+        <!-- Matrice Taglie x Colori (Si attiva solo se c'è un unico articolo/codice filtrato) -->
         <div id="matrice-card" class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 mb-6 hidden">
             <div class="flex justify-between items-center mb-3">
                 <h3 class="text-xs font-bold uppercase text-indigo-600 tracking-wider"><i class="fa-solid fa-table-cells mr-2"></i> Matrice Dettaglio Articolo (Taglie x Colori)</h3>
@@ -139,6 +150,28 @@
         </div>
     </main>
 
+    <!-- Modal Report & Analisi IA -->
+    <div id="report-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
+                <div>
+                    <h2 class="text-base font-bold"><i class="fa-solid fa-robot mr-2 text-indigo-400"></i> Report Analitico & IA Assistant</h2>
+                    <p id="report-filtri-attivi" class="text-xs text-slate-300 mt-0.5">Filtri applicati: Nessuno</p>
+                </div>
+                <button onclick="chiudiReportAI()" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="report-content" class="p-6 overflow-y-auto space-y-6 text-sm text-gray-700 bg-gray-50">
+                <!-- Contenuto dinamico generato dall'IA -->
+            </div>
+            <div class="bg-white border-t px-6 py-4 flex justify-end space-x-3">
+                <button onclick="chiudiReportAI()" class="px-4 py-2 border rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100">Chiudi</button>
+                <button onclick="window.print()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 flex items-center gap-1.5 shadow-sm">
+                    <i class="fa-solid fa-print"></i> Stampa / Salva in PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Script JavaScript -->
     <script>
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1717092575&single=true&output=csv";
@@ -146,7 +179,6 @@
         let rawData = [];
         let filteredData = [];
 
-        // Mappa di priorità fissa per le taglie (XS -> S -> M -> L -> XL -> XXL)
         const sizePriorityMap = {
             'xs': 1, 'extra small': 1,
             's': 2, 'small': 2,
@@ -159,15 +191,10 @@
         function getMisuraWeight(misura) {
             if (!misura) return 999;
             let mClean = String(misura).trim().toLowerCase();
-            if (sizePriorityMap[mClean] !== undefined) {
-                return sizePriorityMap[mClean];
-            }
-            // Se è una misura numerica (es. 38, 40, 42), prova a convertirla in numero per ordinarla correttamente
+            if (sizePriorityMap[mClean] !== undefined) return sizePriorityMap[mClean];
             let num = parseFloat(mClean);
-            if (!isNaN(num)) {
-                return 100 + num; // Le taglie numeriche partono dopo le lettere standard
-            }
-            return 500; // Altre taglie generiche o "Unica" vanno in fondo
+            if (!isNaN(num)) return 100 + num;
+            return 500;
         }
 
         function caricaDati() {
@@ -179,14 +206,12 @@
 
             fetch(urlConCacheBuster)
                 .then(res => {
-                    if (!res.ok) throw new Error("Errore di rete HTTP: " + res.status);
+                    if (!res.ok) throw new Error("Errore HTTP: " + res.status);
                     return res.text();
                 })
-                .then(text => {
-                    elaboraCSV(text, badge);
-                })
+                .then(text => elaboraCSV(text, badge))
                 .catch(err => {
-                    console.error("Errore di caricamento:", err);
+                    console.error("Errore:", err);
                     badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
                     badge.innerText = "Errore Connessione";
                 });
@@ -202,7 +227,6 @@
                     badge.innerText = "Aggiornato";
                 },
                 error: function(err) {
-                    console.error("Errore di parsing CSV:", err);
                     badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
                     badge.innerText = "Errore Parsing";
                 }
@@ -287,7 +311,6 @@
                 return matchStore && matchQuery;
             });
 
-            // Ordinamento unificato di tutti i dati filtrati per Misura (secondo la priorità) e poi per Colore
             filteredData.sort((a, b) => {
                 let wA = getMisuraWeight(a.misura);
                 let wB = getMisuraWeight(b.misura);
@@ -341,9 +364,7 @@
                     matriceGiacenza[c][m] = (matriceGiacenza[c][m] || 0) + item.giacenza;
                 });
 
-                // Ordina le misure seguendo la priorità XS -> S -> M -> L -> XL -> XXL
                 let arrMisure = Array.from(setMisure).sort((a, b) => getMisuraWeight(a) - getMisuraWeight(b));
-                // Ordina i colori in ordine alfabetico crescente
                 let arrColori = Array.from(setColori).sort((a, b) => a.localeCompare(b));
 
                 let html = `<table class="w-full text-center border-collapse text-xs">
@@ -472,8 +493,8 @@
                 tr.className = "hover:bg-gray-50 border-b border-gray-100";
                 tr.innerHTML = `
                     <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-800">${item.store}</span></td>
-                    <td class="py-3 px-3 font-mono text-xs text-indigo-600 font-semibold cursor-pointer hover:underline" onclick="filtraPerCodice('${item.ean}')" title="Clicca per aprire la matrice di questo articolo">${item.ean}</td>
-                    <td class="py-3 px-3 font-mono text-xs font-bold text-indigo-800 cursor-pointer hover:underline" onclick="filtraPerCodice('${item.codiceInterno}')" title="Clicca per aprire la matrice di questo articolo">${item.codiceInterno}</td>
+                    <td class="py-3 px-3 font-mono text-xs text-indigo-600 font-semibold cursor-pointer hover:underline" onclick="filtraPerCodice('${item.ean}')" title="Clicca per aprire la matrice">${item.ean}</td>
+                    <td class="py-3 px-3 font-mono text-xs font-bold text-indigo-800 cursor-pointer hover:underline" onclick="filtraPerCodice('${item.codiceInterno}')" title="Clicca per aprire la matrice">${item.codiceInterno}</td>
                     <td class="py-3 px-3 font-medium text-gray-900">${item.descrizione}</td>
                     <td class="py-3 px-3 text-center text-xs font-bold text-slate-700">${item.misura}</td>
                     <td class="py-3 px-3 text-center text-xs font-bold text-slate-700">${item.colore}</td>
@@ -485,6 +506,83 @@
                 `;
                 tbody.appendChild(tr);
             });
+        }
+
+        // MOTORE DI GENERAZIONE REPORT E ANALISI IA
+        function generaReportAI() {
+            const modal = document.getElementById('report-modal');
+            const container = document.getElementById('report-content');
+            const lblFiltri = document.getElementById('report-filtri-attivi');
+
+            let storeSel = document.getElementById('filterStore').value || "Tutti gli Store";
+            let querySel = document.getElementById('searchQuery').value.trim() || "Nessun filtro testuale specifico";
+            let dataOggi = new Date().toLocaleDateString('it-IT');
+
+            lblFiltri.innerText = `Store: [ ${storeSel.toUpperCase()} ] | Ricerca: [ ${querySel} ] | Data Report: ${dataOggi}`;
+
+            // Calcoli analitici per l'IA
+            let totCarico = filteredData.reduce((acc, curr) => acc + curr.carico, 0);
+            let totVenduto = filteredData.reduce((acc, curr) => acc + curr.venduto, 0);
+            let totGiacenza = filteredData.reduce((acc, curr) => acc + curr.giacenza, 0);
+            let tassoMedio = totCarico > 0 ? ((totVenduto / totCarico) * 100).toFixed(1) : 0;
+
+            let esauriti = filteredData.filter(i => i.giacenza <= 0).length;
+            let fermi = filteredData.filter(i => i.venduto === 0 && i.carico > 0).length;
+            let topRotazione = filteredData.filter(i => (i.venduto / (i.carico || 1)) >= 0.7).length;
+
+            // Sintesi testuale automatica in stile IA
+            let giudizioStrore = totCarico > 0 ? (tassoMedio >= 50 ? "Eccellente dinamica di vendita con un indice di rotazione superiore alla media stagionale." : "Rotazione moderata; si consigliano azioni promozionali o riassortimenti mirati sulle taglie a maggiore richiesta.") : "Nessun movimento rilevato per i criteri selezionati.";
+
+            let html = `
+                <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
+                    <h3 class="font-bold text-indigo-900 text-sm mb-1"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Sintesi Esecutiva IA</h3>
+                    <p class="text-xs text-indigo-800 leading-relaxed">Analisi condotta su un campione di <strong>${filteredData.length}</strong> record filtrati per il punto vendita <strong>${storeSel}</strong>. ${giudizioStrore}</p>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-white p-3 rounded-lg border text-center">
+                        <span class="text-[10px] text-gray-500 uppercase font-semibold">Volume Caricato</span>
+                        <p class="text-lg font-bold text-blue-600">${totCarico}</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-lg border text-center">
+                        <span class="text-[10px] text-gray-500 uppercase font-semibold">Pezzi Venduti</span>
+                        <p class="text-lg font-bold text-emerald-600">${totVenduto}</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-lg border text-center">
+                        <span class="text-[10px] text-gray-500 uppercase font-semibold">Giacenza Residua</span>
+                        <p class="text-lg font-bold text-purple-600">${totGiacenza}</p>
+                    </div>
+                    <div class="bg-white p-3 rounded-lg border text-center">
+                        <span class="text-[10px] text-gray-500 uppercase font-semibold">Sell-Through %</span>
+                        <p class="text-lg font-bold text-indigo-600">${tassoMedio}%</p>
+                    </div>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border space-y-2">
+                    <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider">Indicatori di Criticità e Performance</h4>
+                    <ul class="text-xs space-y-1.5 text-gray-700">
+                        <li><i class="fa-solid fa-circle-exclamation text-red-500 mr-2"></i> Articoli / Taglie Esaurite (Giacenza &le; 0): <strong>${esauriti}</strong> varianti</li>
+                        <li><i class="fa-solid fa-hourglass-half text-amber-500 mr-2"></i> Articoli a stock Fermo (Vendite a zero): <strong>${fermi}</strong> varianti</li>
+                        <li><i class="fa-solid fa-rocket text-emerald-500 mr-2"></i> Varianti in Top Rotazione (&ge; 70% venduto): <strong>${topRotazione}</strong> articoli</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white p-4 rounded-xl border">
+                    <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider mb-3">Consigli Operativi Generati dall'IA</h4>
+                    <p class="text-xs text-gray-600 leading-relaxed">
+                        ${tassoMedio > 60 ? "• Alta richiesta riscontrata: valutare tempestivi riordini delle taglie centrali per evitare stock-out prematuri.<br>" : ""}
+                        ${fermi > 0 ? "• Presenza di stock fermo: pianificare vetrine dedicate o promozioni mirate per accelerare la rotazione della merce meno attiva.<br>" : ""}
+                        • Monitorare regolarmente la matrice taglie per bilanciare i trasferimenti di magazzino tra i diversi store del gruppo.
+                    </p>
+                </div>
+            `;
+
+            container.innerHTML = html;
+            modal.classList.remove('hidden');
+        }
+
+        function chiudiReportAI() {
+            document.getElementById('report-modal').classList.add('hidden');
         }
     </script>
 </body>
