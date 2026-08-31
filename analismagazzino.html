@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retail BI - Ciclo Completo, Matrice e Report IA</title>
+    <title>Retail BI - Ciclo Completo, Matrice e Report IA Avanzato</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -12,7 +12,7 @@
             body { background: white !important; }
             no-print, header, button, .no-print { display: none !important; }
             .print-only { display: block !important; }
-            box-shadow { box-shadow: none !important; }
+            .shadow-sm, .shadow-2xl { box-shadow: none !important; }
         }
     </style>
 </head>
@@ -93,7 +93,7 @@
             </div>
         </div>
 
-        <!-- Matrice Taglie x Colori (Si attiva solo se c'è un unico articolo/codice filtrato) -->
+        <!-- Matrice Taglie x Colori -->
         <div id="matrice-card" class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 mb-6 hidden">
             <div class="flex justify-between items-center mb-3">
                 <h3 class="text-xs font-bold uppercase text-indigo-600 tracking-wider"><i class="fa-solid fa-table-cells mr-2"></i> Matrice Dettaglio Articolo (Taglie x Colori)</h3>
@@ -508,7 +508,7 @@
             });
         }
 
-        // MOTORE DI GENERAZIONE REPORT E ANALISI IA
+        // MOTORE DI GENERAZIONE REPORT E ANALISI IA AVANZATA (CON TOP MODELLI)
         function generaReportAI() {
             const modal = document.getElementById('report-modal');
             const container = document.getElementById('report-content');
@@ -520,7 +520,6 @@
 
             lblFiltri.innerText = `Store: [ ${storeSel.toUpperCase()} ] | Ricerca: [ ${querySel} ] | Data Report: ${dataOggi}`;
 
-            // Calcoli analitici per l'IA
             let totCarico = filteredData.reduce((acc, curr) => acc + curr.carico, 0);
             let totVenduto = filteredData.reduce((acc, curr) => acc + curr.venduto, 0);
             let totGiacenza = filteredData.reduce((acc, curr) => acc + curr.giacenza, 0);
@@ -528,15 +527,40 @@
 
             let esauriti = filteredData.filter(i => i.giacenza <= 0).length;
             let fermi = filteredData.filter(i => i.venduto === 0 && i.carico > 0).length;
-            let topRotazione = filteredData.filter(i => (i.venduto / (i.carico || 1)) >= 0.7).length;
+            let topRotazioneCount = filteredData.filter(i => (i.venduto / (i.carico || 1)) >= 0.7).length;
 
-            // Sintesi testuale automatica in stile IA
-            let giudizioStrore = totCarico > 0 ? (tassoMedio >= 50 ? "Eccellente dinamica di vendita con un indice di rotazione superiore alla media stagionale." : "Rotazione moderata; si consigliano azioni promozionali o riassortimenti mirati sulle taglie a maggiore richiesta.") : "Nessun movimento rilevato per i criteri selezionati.";
+            // Elaborazione Top Modelli per Vendite e Rotazione
+            // Raggruppiamo per Codice Interno / Articolo per sommare le vendite totali del modello
+            let mapModelli = {};
+            filteredData.forEach(item => {
+                let chiave = item.codiceInterno || item.ean || 'Sconosciuto';
+                if (!mapModelli[chiave]) {
+                    mapModelli[chiave] = {
+                        codice: chiave,
+                        descrizione: item.descrizione,
+                        store: item.store,
+                        carico: 0,
+                        venduto: 0,
+                        giacenza: 0
+                    };
+                }
+                mapModelli[chiave].carico += item.carico;
+                mapModelli[chiave].venduto += item.venduto;
+                mapModelli[chiave].giacenza += item.giacenza;
+            });
+
+            // Ordiniamo i modelli per Pezzi Venduti (decrescente) e poi per Tasso di Rotazione
+            let topModelliArr = Object.values(mapModelli).map(m => {
+                m.tasso = m.carico > 0 ? (m.venduto / m.carico) * 100 : 0;
+                return m;
+            }).sort((a, b) => b.venduto - a.venduto || b.tasso - a.tasso).slice(0, 6);
+
+            let giudizioStore = totCarico > 0 ? (tassoMedio >= 50 ? "Ottima performance di vendita con un indice di rotazione superiore alla soglia di riferimento stagionale." : "Dinamica commerciale prudente; si suggerisce di valutare azioni di visibilità o promozioni mirate.") : "Nessun movimento rilevato.";
 
             let html = `
                 <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
                     <h3 class="font-bold text-indigo-900 text-sm mb-1"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Sintesi Esecutiva IA</h3>
-                    <p class="text-xs text-indigo-800 leading-relaxed">Analisi condotta su un campione di <strong>${filteredData.length}</strong> record filtrati per il punto vendita <strong>${storeSel}</strong>. ${giudizioStrore}</p>
+                    <p class="text-xs text-indigo-800 leading-relaxed">Report analitico elaborato su <strong>${filteredData.length}</strong> record per lo store <strong>${storeSel}</strong>. ${giudizioStore}</p>
                 </div>
 
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -558,22 +582,57 @@
                     </div>
                 </div>
 
-                <div class="bg-white p-4 rounded-xl border space-y-2">
-                    <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider">Indicatori di Criticità e Performance</h4>
-                    <ul class="text-xs space-y-1.5 text-gray-700">
-                        <li><i class="fa-solid fa-circle-exclamation text-red-500 mr-2"></i> Articoli / Taglie Esaurite (Giacenza &le; 0): <strong>${esauriti}</strong> varianti</li>
-                        <li><i class="fa-solid fa-hourglass-half text-amber-500 mr-2"></i> Articoli a stock Fermo (Vendite a zero): <strong>${fermi}</strong> varianti</li>
-                        <li><i class="fa-solid fa-rocket text-emerald-500 mr-2"></i> Varianti in Top Rotazione (&ge; 70% venduto): <strong>${topRotazione}</strong> articoli</li>
-                    </ul>
-                </div>
-
                 <div class="bg-white p-4 rounded-xl border">
-                    <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider mb-3">Consigli Operativi Generati dall'IA</h4>
-                    <p class="text-xs text-gray-600 leading-relaxed">
-                        ${tassoMedio > 60 ? "• Alta richiesta riscontrata: valutare tempestivi riordini delle taglie centrali per evitare stock-out prematuri.<br>" : ""}
-                        ${fermi > 0 ? "• Presenza di stock fermo: pianificare vetrine dedicate o promozioni mirate per accelerare la rotazione della merce meno attiva.<br>" : ""}
-                        • Monitorare regolarmente la matrice taglie per bilanciare i trasferimenti di magazzino tra i diversi store del gruppo.
-                    </p>
+                    <h4 class="font-bold text-xs uppercase text-indigo-700 tracking-wider mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-medal text-amber-500"></i> Top 6 Modelli con Maggiore Vendita e Rotazione
+                    </h4>
+            `;
+
+            if (topModelliArr.length === 0 || topModelliArr.reduce((acc, m) => acc + m.venduto, 0) === 0) {
+                html += `<p class="text-xs text-gray-400">Nessun modello con vendite registrate nei filtri correnti.</p>`;
+            } else {
+                html += `<div class="overflow-x-auto"><table class="w-full text-left text-xs border-collapse">
+                    <thead><tr class="bg-gray-50 border-b text-gray-500">
+                        <th class="p-2">Codice</th>
+                        <th class="p-2">Descrizione Articolo</th>
+                        <th class="p-2 text-center">Caricato</th>
+                        <th class="p-2 text-center">Venduto</th>
+                        <th class="p-2 text-center">Giacenza</th>
+                        <th class="p-2 text-center">Sell-Through</th>
+                    </tr></thead><tbody>`;
+
+                topModelliArr.forEach(m => {
+                    let badgeRot = m.tasso >= 70 ? 'bg-emerald-100 text-emerald-800' : (m.tasso >= 40 ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800');
+                    html += `<tr class="border-b hover:bg-gray-50">
+                        <td class="p-2 font-mono font-bold text-indigo-700">${m.codice}</td>
+                        <td class="p-2 font-medium text-gray-900">${m.descrizione}</td>
+                        <td class="p-2 text-center text-blue-600 font-semibold">${m.carico}</td>
+                        <td class="p-2 text-center text-emerald-600 font-bold">${m.venduto}</td>
+                        <td class="p-2 text-center font-semibold">${m.giacenza}</td>
+                        <td class="p-2 text-center"><span class="px-2 py-0.5 rounded font-bold ${badgeRot}">${m.tasso.toFixed(1)}%</span></td>
+                    </tr>`;
+                });
+                html += `</tbody></table></div>`;
+            }
+
+            html += `</div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded-xl border space-y-2">
+                        <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider">Indicatori di Magazzino</h4>
+                        <ul class="text-xs space-y-1.5 text-gray-700">
+                            <li><i class="fa-solid fa-circle-exclamation text-red-500 mr-2"></i> Varianti Esaurite (Giacenza &le; 0): <strong>${esauriti}</strong></li>
+                            <li><i class="fa-solid fa-hourglass-half text-amber-500 mr-2"></i> Varianti a Stock Fermo (Vendite 0): <strong>${fermi}</strong></li>
+                            <li><i class="fa-solid fa-rocket text-emerald-500 mr-2"></i> Varianti Top Rotazione (&ge; 70%): <strong>${topRotazioneCount}</strong></li>
+                        </ul>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border">
+                        <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider mb-2">Linee Guida Strategiche</h4>
+                        <p class="text-xs text-gray-600 leading-relaxed">
+                            • Concentrare le attività di riassortimento sui modelli in cima alla classifica dei Top Venduti.<br>
+                            • Pianificare iniziative di smaltimento o promozioni mirate sulle referenze con giacenze ferme da tempo.
+                        </p>
+                    </div>
                 </div>
             `;
 
