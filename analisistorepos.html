@@ -60,21 +60,25 @@
         </div>
         
         <div class="row g-3 align-items-end">
-            <div class="col-md-6">
+            <div class="col-md-8">
                 <div class="accordion" id="accordionSettings">
                     <div class="accordion-item border-0 bg-transparent">
                         <h2 class="accordion-header" id="headingOne">
                             <button class="accordion-button collapsed py-2 px-3 rounded text-muted bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne" style="font-size: 0.9rem;">
-                                <i class="fas fa-cog me-2"></i> Impostazioni Colonne (Modifica se l'AI non trova i dati)
+                                <i class="fas fa-cog me-2"></i> Impostazioni Colonne (Modifica se i dati non corrispondono)
                             </button>
                         </h2>
                         <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#accordionSettings">
                             <div class="accordion-body bg-white border rounded mt-2 row">
-                                <div class="col-md-6 mb-2">
+                                <div class="col-md-4 mb-2">
+                                    <label class="form-label small fw-bold text-secondary">Colonna Data:</label>
+                                    <select id="colData" class="form-select form-select-sm" onchange="changeDataColumn()"></select>
+                                </div>
+                                <div class="col-md-4 mb-2">
                                     <label class="form-label small fw-bold text-secondary">Colonna Clienti (Scontrino):</label>
                                     <select id="colTransazione" class="form-select form-select-sm" onchange="updateDashboard()"></select>
                                 </div>
-                                <div class="col-md-6 mb-2">
+                                <div class="col-md-4 mb-2">
                                     <label class="form-label small fw-bold text-secondary">Colonna Descrizione:</label>
                                     <select id="colDescrizione" class="form-select form-select-sm" onchange="updateDashboard()"></select>
                                 </div>
@@ -217,7 +221,7 @@
     let columns = [];
     
     // Configurazione Colonne (Indici)
-    let COL_DATA = 0;      // A
+    let COL_DATA = null;   // Dinamico, default a colonna B
     let COL_QTA = 7;       // H
     let COL_LISTINO = 8;   // I
     let COL_NETTO = 9;     // J
@@ -252,7 +256,8 @@
                 rawData = results.data;
                 columns = results.meta.fields;
                 
-                COL_DATA = columns[0];
+                // Imposta Colonna B (indice 1) come Data di default
+                COL_DATA = columns[1] || columns[0];
                 COL_QTA = columns[7] || columns[0];
                 COL_LISTINO = columns[8] || columns[0];
                 COL_NETTO = columns[9] || columns[0];
@@ -273,14 +278,16 @@
 
     function setupFilters() {
         // Dropdown Colonne
+        const selData = document.getElementById('colData');
         const selTrans = document.getElementById('colTransazione');
         const selDesc = document.getElementById('colDescrizione');
-        selTrans.innerHTML = ''; selDesc.innerHTML = '';
+        selData.innerHTML = ''; selTrans.innerHTML = ''; selDesc.innerHTML = '';
         
-        let guessedTrans = columns[1];
-        let guessedDesc = columns[3] || columns[0]; // Di solito descrizione è prima di H (es. C o D)
+        let guessedTrans = columns[0]; // Visto che la Data è in B, lo Scontrino è probabilmente in A
+        let guessedDesc = columns[3] || columns[0];
 
         columns.forEach(col => {
+            let optDate = document.createElement('option'); optDate.value = col; optDate.textContent = col; selData.appendChild(optDate);
             let optT = document.createElement('option'); optT.value = col; optT.textContent = col; selTrans.appendChild(optT);
             let optD = document.createElement('option'); optD.value = col; optD.textContent = col; selDesc.appendChild(optD);
             
@@ -289,42 +296,56 @@
             if (low.includes('descriz') || low.includes('articol') || low.includes('prodotto')) guessedDesc = col;
         });
         
+        selData.value = COL_DATA;
         selTrans.value = guessedTrans; COL_TRANS = guessedTrans;
         selDesc.value = guessedDesc; COL_DESC = guessedDesc;
 
-        // Estrai Negozi e Mesi Unici
-        let stores = new Set();
-        let months = new Set();
-
-        rawData.forEach(row => {
-            if(row[COL_STORE]) stores.add(row[COL_STORE].trim());
-            if(row[COL_DATA]) {
-                let d = moment(row[COL_DATA].trim(), ["DD/MM/YYYY", "YYYY-MM-DD"]);
-                if(d.isValid()) months.add(d.format("YYYY-MM"));
-            }
-        });
-
-        // Popola Store/Mesi
-        const selStore = document.getElementById('filterStore');
-        selStore.innerHTML = '<option value="ALL">Tutti i Negozi</option>';
-        Array.from(stores).sort().forEach(s => { selStore.insertAdjacentHTML('beforeend', `<option value="${s}">${s}</option>`); });
-
-        const selMonth = document.getElementById('filterMonth');
-        selMonth.innerHTML = '<option value="ALL">Tutti i Mesi</option>';
-        Array.from(months).sort().reverse().forEach(m => {
-            let label = moment(m, "YYYY-MM").format("MMMM YYYY").toUpperCase();
-            selMonth.insertAdjacentHTML('beforeend', `<option value="${m}">${label}</option>`);
-        });
+        extractMonthsAndStores();
 
         document.getElementById('filterSection').classList.remove('d-none');
         
         selTrans.addEventListener('change', function() { COL_TRANS = this.value; updateDashboard(); });
         selDesc.addEventListener('change', function() { COL_DESC = this.value; updateDashboard(); });
     }
+    
+    function changeDataColumn() {
+        COL_DATA = document.getElementById('colData').value;
+        extractMonthsAndStores(); // Ri-calcola i mesi disponibili nel filtro
+        updateDashboard();
+    }
+
+    function extractMonthsAndStores() {
+        let stores = new Set();
+        let months = new Set();
+
+        rawData.forEach(row => {
+            if(row[COL_STORE]) stores.add(row[COL_STORE].trim());
+            if(row[COL_DATA]) {
+                let d = moment(row[COL_DATA].trim(), ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
+                if(d.isValid()) months.add(d.format("YYYY-MM"));
+            }
+        });
+
+        // Popola Store/Mesi
+        const selStore = document.getElementById('filterStore');
+        const currStore = selStore.value;
+        selStore.innerHTML = '<option value="ALL">Tutti i Negozi</option>';
+        Array.from(stores).sort().forEach(s => { selStore.insertAdjacentHTML('beforeend', `<option value="${s}">${s}</option>`); });
+        if (currStore && Array.from(stores).includes(currStore)) selStore.value = currStore;
+
+        const selMonth = document.getElementById('filterMonth');
+        const currMonth = selMonth.value;
+        selMonth.innerHTML = '<option value="ALL">Tutti i Mesi</option>';
+        Array.from(months).sort().reverse().forEach(m => {
+            let label = moment(m, "YYYY-MM").format("MMMM YYYY").toUpperCase();
+            selMonth.insertAdjacentHTML('beforeend', `<option value="${m}">${label}</option>`);
+        });
+        if (currMonth && Array.from(months).includes(currMonth)) selMonth.value = currMonth;
+    }
 
     function debounceUpdate() {
         clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => { updateDashboard(); }, 400); // 400ms delay per non bloccare durante la digitazione
+        debounceTimer = setTimeout(() => { updateDashboard(); }, 400);
     }
 
     function parseEuro(valString) {
@@ -357,7 +378,7 @@
         rawData.forEach(row => {
             let storeVal = (row[COL_STORE] || 'Sconosciuto').trim();
             let dateVal = (row[COL_DATA] || '').trim();
-            let mDate = moment(dateVal, ["DD/MM/YYYY", "YYYY-MM-DD"]);
+            let mDate = moment(dateVal, ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
             let monthVal = mDate.isValid() ? mDate.format("YYYY-MM") : 'Sconosciuto';
             let descVal = (row[COL_DESC] || '').trim();
             
@@ -466,9 +487,7 @@
         // 4. Analisi Prodotti
         let prodNames = Object.keys(productStats);
         if(prodNames.length > 0) {
-            // Find max by revenue
             let topRevProd = prodNames.reduce((a, b) => productStats[a].incasso > productStats[b].incasso ? a : b);
-            // Find max by quantity
             let topQtaProd = prodNames.reduce((a, b) => productStats[a].qta > productStats[b].qta ? a : b);
             
             if (topRevProd === topQtaProd) {
