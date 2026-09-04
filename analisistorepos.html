@@ -51,8 +51,8 @@
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label fw-bold text-secondary text-primary">Data Specifica:</label>
-                <select id="filterDay" class="form-select form-select-lg border-primary" onchange="updateDashboard()">
+                <label class="form-label fw-bold text-secondary">Data Specifica:</label>
+                <select id="filterDay" class="form-select form-select-lg" onchange="updateDashboard()">
                     <option value="ALL">Tutte le Date</option>
                 </select>
             </div>
@@ -158,6 +158,40 @@
                     <div class="card-body d-flex flex-column justify-content-center">
                         <div class="kpi-title">Spesa Media Cliente</div>
                         <div class="kpi-value text-secondary" id="kpiSpesaMedia">€ 0.00</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEZIONE NUOVA: RIEPILOGO GIORNALIERO PER STORE -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm" style="border-left: 5px solid #0dcaf0 !important;">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                        <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-calendar-day me-2 text-info"></i>Riepilogo Totale del Giorno per Negozio</h5>
+                        <div style="width: 250px;">
+                            <select id="dailySummaryDate" class="form-select border-info fw-bold text-info" onchange="updateDailySummary()">
+                                <option value="">Caricamento date...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover text-center align-middle mb-0" id="dailySummaryTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="text-start ps-4">Punto Vendita</th>
+                                        <th>Incasso Totale</th>
+                                        <th>Capi Venduti</th>
+                                        <th>Num. Clienti (Scontrini)</th>
+                                        <th>Sconto Applicato</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="5" class="text-muted py-4">Seleziona una data per visualizzare il riepilogo</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -310,7 +344,7 @@
 
         document.getElementById('filterSection').classList.remove('d-none');
         
-        selTrans.addEventListener('change', function() { COL_TRANS = this.value; updateDashboard(); });
+        selTrans.addEventListener('change', function() { COL_TRANS = this.value; updateDashboard(); updateDailySummary(); });
         selDesc.addEventListener('change', function() { COL_DESC = this.value; updateDashboard(); });
     }
     
@@ -353,7 +387,7 @@
         });
         if (currMonth && Array.from(months).includes(currMonth)) selMonth.value = currMonth;
 
-        // Popola Giorni specifici
+        // Popola Giorni specifici Filtro Globale
         const selDay = document.getElementById('filterDay');
         const currDay = selDay.value;
         selDay.innerHTML = '<option value="ALL">Tutte le Date</option>';
@@ -362,6 +396,97 @@
             selDay.insertAdjacentHTML('beforeend', `<option value="${d}">${label}</option>`);
         });
         if (currDay && Array.from(days).includes(currDay)) selDay.value = currDay;
+
+        // Popola Giorni specifici per il Riepilogo Giornaliero Indipendente
+        const selDailyDate = document.getElementById('dailySummaryDate');
+        const currDailyDate = selDailyDate.value;
+        selDailyDate.innerHTML = '';
+        let sortedDays = Array.from(days).sort().reverse();
+        if(sortedDays.length > 0) {
+            sortedDays.forEach(d => {
+                let label = moment(d, "YYYY-MM-DD").format("DD/MM/YYYY");
+                selDailyDate.insertAdjacentHTML('beforeend', `<option value="${d}">${label}</option>`);
+            });
+            if (currDailyDate && Array.from(days).includes(currDailyDate)) {
+                selDailyDate.value = currDailyDate;
+            } else {
+                selDailyDate.value = sortedDays[0]; // Seleziona l'ultimo giorno in automatico
+            }
+        }
+        updateDailySummary();
+    }
+
+    function updateDailySummary() {
+        const dateVal = document.getElementById('dailySummaryDate').value;
+        const tbody = document.querySelector('#dailySummaryTable tbody');
+        
+        if(!dateVal) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-muted py-4">Nessuna data disponibile</td></tr>';
+            return;
+        }
+
+        let storeStats = {};
+        let totalIncasso = 0, totalCapi = 0, totalSconto = 0, totalTrans = 0;
+
+        rawData.forEach(row => {
+            let rDate = moment((row[COL_DATA] || '').trim(), ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
+            if(!rDate.isValid() || rDate.format("YYYY-MM-DD") !== dateVal) return;
+
+            let store = (row[COL_STORE] || 'Sconosciuto').trim();
+            let qta = parseEuro(row[COL_QTA]); if(qta === 0) qta = 1;
+            let listino = parseEuro(row[COL_LISTINO]);
+            let netto = parseEuro(row[COL_NETTO]);
+            let incasso = netto * qta;
+            let sconto = (listino * qta) - incasso; if(sconto < 0) sconto = 0;
+            let transId = (row[COL_TRANS] || '').trim();
+
+            if(!storeStats[store]) {
+                storeStats[store] = { incasso: 0, capi: 0, sconto: 0, transSet: new Set() };
+            }
+            storeStats[store].incasso += incasso;
+            storeStats[store].capi += qta;
+            storeStats[store].sconto += sconto;
+            if(transId) storeStats[store].transSet.add(transId);
+        });
+
+        tbody.innerHTML = '';
+        let stores = Object.keys(storeStats).sort((a,b) => storeStats[b].incasso - storeStats[a].incasso);
+        
+        if(stores.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-muted py-4">Nessuna operazione in questa data</td></tr>';
+            return;
+        }
+
+        stores.forEach(s => {
+            let st = storeStats[s];
+            let numTrans = st.transSet.size > 0 ? st.transSet.size : "-";
+            
+            totalIncasso += st.incasso;
+            totalCapi += st.capi;
+            totalSconto += st.sconto;
+            if(st.transSet.size > 0) totalTrans += st.transSet.size;
+
+            tbody.insertAdjacentHTML('beforeend', `
+                <tr>
+                    <td class="text-start ps-4 fw-bold text-secondary">${s}</td>
+                    <td class="text-primary fw-bold" style="font-size: 1.1rem;">${formatEur(st.incasso)}</td>
+                    <td class="fw-semibold">${st.capi}</td>
+                    <td class="text-info fw-bold">${numTrans}</td>
+                    <td class="text-danger">${formatEur(st.sconto)}</td>
+                </tr>
+            `);
+        });
+
+        // Add total row
+        tbody.insertAdjacentHTML('beforeend', `
+            <tr class="table-info border-info fw-bold" style="font-size: 1.1rem;">
+                <td class="text-start ps-4">TOTALE RETE</td>
+                <td class="text-primary">${formatEur(totalIncasso)}</td>
+                <td>${totalCapi}</td>
+                <td class="text-info">${totalTrans > 0 ? totalTrans : "-"}</td>
+                <td class="text-danger">${formatEur(totalSconto)}</td>
+            </tr>
+        `);
     }
 
     function debounceUpdate() {
@@ -405,7 +530,7 @@
             let dayVal = mDate.isValid() ? mDate.format("YYYY-MM-DD") : 'Sconosciuto';
             let descVal = (row[COL_DESC] || '').trim();
             
-            // Applica Filtri
+            // Applica Filtri Globali
             if (selStore !== 'ALL' && storeVal !== selStore) return;
             if (selMonth !== 'ALL' && monthVal !== selMonth) return;
             if (selDay !== 'ALL' && dayVal !== selDay) return;
