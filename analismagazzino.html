@@ -1,1295 +1,723 @@
 <!DOCTYPE html>
-
 <html lang="it">
-
 <head>
-
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Retail BI - Ciclo Completo, Matrice e Report IA Avanzato</title>
-
     <script src="https://cdn.tailwindcss.com"></script>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
     <style>
-
+        /* === MOTORE DI STAMPA AVANZATO === */
         @media print {
+            @page {
+                size: A4 portrait;
+                margin: 1.5cm;
+            }
+            
+            html, body {
+                height: auto !important;
+                overflow: visible !important;
+                background: white !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
 
-            body { background: white !important; }
+            * {
+                overflow: visible !important;
+                max-height: none !important;
+                height: auto !important;
+                box-shadow: none !important;
+            }
 
-            no-print, header, button, .no-print { display: none !important; }
+            header, button, .no-print { 
+                display: none !important; 
+            }
 
-            .print-only { display: block !important; }
+            .fixed, .absolute, .inset-0, .sticky {
+                position: static !important;
+            }
 
-            .shadow-sm, .shadow-2xl { box-shadow: none !important; }
+            body.modal-open main { 
+                display: none !important; 
+            }
+            
+            body:not(.modal-open) #report-modal { 
+                display: none !important; 
+            }
 
+            #report-modal,
+            #report-modal > div,
+            #report-content {
+                display: block !important;
+                position: static !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+                background: white !important;
+            }
+
+            table {
+                width: 100% !important;
+                table-layout: auto !important;
+                border-collapse: collapse !important;
+                min-width: 0 !important; 
+            }
+            tr {
+                page-break-inside: avoid !important;
+                page-break-after: auto !important;
+            }
+            thead {
+                display: table-header-group !important;
+            }
+            
+            #matrice-card, .grid > div {
+                page-break-inside: avoid !important;
+            }
         }
-
     </style>
-
 </head>
-
 <body class="bg-gray-100 text-gray-800 font-sans">
 
-
-
     <!-- Navbar -->
-
     <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
-
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-
             <h1 class="text-base md:text-xl font-bold tracking-wide truncate">
-
                 <i class="fa-solid fa-store mr-2 text-emerald-400"></i> Controllo Ciclo Merce & Report IA
-
             </h1>
-
             <div class="flex items-center space-x-2">
-
                 <span id="status-badge" class="text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap">Sincronizzazione...</span>
-
                 <button onclick="caricaDati()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-sm" title="Aggiorna Dati">
-
                     <i class="fa-solid fa-sync"></i>
-
                 </button>
-
                 <button onclick="generaReportAI()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-sm flex items-center gap-1.5">
-
                     <i class="fa-solid fa-file-lines"></i> Genera Report & IA
-
                 </button>
-
             </div>
-
         </div>
-
     </header>
 
-
-
     <!-- Container Principale -->
-
     <main class="container mx-auto px-4 py-6 max-w-7xl">
-
-
-
+        
         <!-- KPI Cards -->
-
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-
             <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
-
                 <div class="p-3 md:p-4 bg-blue-50 text-blue-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-arrow-down-long"></i></div>
-
                 <div>
-
                     <p class="text-xs md:text-sm text-gray-500 font-medium">Totale Caricato</p>
-
                     <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-caricato">0</h3>
-
                 </div>
-
             </div>
-
             <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
-
                 <div class="p-3 md:p-4 bg-emerald-50 text-emerald-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-bag-shopping"></i></div>
-
                 <div>
-
                     <p class="text-xs md:text-sm text-gray-500 font-medium">Totale Venduto</p>
-
                     <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-venduto">0</h3>
-
                 </div>
-
             </div>
-
             <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
-
                 <div class="p-3 md:p-4 bg-purple-50 text-purple-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-warehouse"></i></div>
-
                 <div>
-
                     <p class="text-xs md:text-sm text-gray-500 font-medium">Giacenza Residua</p>
-
                     <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-giacenza">0</h3>
-
                 </div>
-
             </div>
-
             <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 flex items-center">
-
                 <div class="p-3 md:p-4 bg-amber-50 text-amber-600 rounded-lg text-lg md:text-xl mr-3"><i class="fa-solid fa-chart-pie"></i></div>
-
                 <div>
-
                     <p class="text-xs md:text-sm text-gray-500 font-medium">Tasso Vendita Medio</p>
-
                     <h3 class="text-lg md:text-2xl font-bold text-gray-900" id="kpi-tasso">0%</h3>
-
                 </div>
-
             </div>
-
         </div>
 
-
-
-        <!-- Filtri (Store e Ricerca) -->
-
+        <!-- Filtri -->
         <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-6 no-print">
-
             <div class="flex justify-between items-center mb-4">
-
                 <h2 class="text-sm font-bold uppercase text-gray-500 tracking-wider"><i class="fa-solid fa-filter mr-2"></i> Filtri di Ricerca</h2>
-
                 <button onclick="resetFiltri()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-lg font-medium transition">
-
                     <i class="fa-solid fa-rotate-left mr-1"></i> Reset Filtri
-
                 </button>
-
             </div>
-
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-
                 <div>
-
                     <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Punto Vendita (Store)</label>
-
                     <select id="filterStore" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-gray-50 font-medium">
-
                         <option value="">Tutti gli Store</option>
-
                     </select>
-
                 </div>
-
                 <div>
-
                     <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Cerca Articolo / EAN / Codice / Misura / Colore</label>
-
                     <input type="text" id="searchQuery" placeholder="Tocca un codice sotto o digita per filtrare..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
-
                 </div>
-
             </div>
-
         </div>
-
-
 
         <!-- Matrice Taglie x Colori -->
-
         <div id="matrice-card" class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 mb-6 hidden">
-
             <div class="flex justify-between items-center mb-3">
-
-                <h3 class="text-xs font-bold uppercase text-indigo-600 tracking-wider"><i class="fa-solid fa-table-cells mr-2"></i> Matrice Dettaglio Articolo (Taglie x Colori)</h3>
-
+                <h3 class="text-xs font-bold uppercase text-indigo-600 tracking-wider"><i class="fa-solid fa-table-cells mr-2"></i> Matrice Dettaglio Articolo</h3>
                 <span id="matrice-info-articolo" class="text-xs font-semibold text-gray-700 bg-indigo-50 px-2.5 py-1 rounded-md"></span>
-
             </div>
-
             <div id="matrice-container" class="overflow-x-auto"></div>
-
         </div>
 
-
-
-        <!-- Statistiche Dinamiche Top Misure e Colori -->
-
+        <!-- Statistiche Top Misure e Colori -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-
             <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-
                 <h3 class="text-xs font-bold uppercase text-gray-500 mb-3 tracking-wider"><i class="fa-solid fa-ruler mr-2 text-indigo-500"></i> Top Misure più Vendute</h3>
-
                 <div id="top-misure-container" class="space-y-2">
-
                     <span class="text-xs text-gray-400">Nessun dato disponibile</span>
-
                 </div>
-
             </div>
-
             <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-
                 <h3 class="text-xs font-bold uppercase text-gray-500 mb-3 tracking-wider"><i class="fa-solid fa-palette mr-2 text-pink-500"></i> Top Colori più Venduti</h3>
-
                 <div id="top-colori-container" class="space-y-2">
-
                     <span class="text-xs text-gray-400">Nessun dato disponibile</span>
-
                 </div>
-
             </div>
-
         </div>
-
-
 
         <!-- Tabella Dati -->
-
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-
             <div class="border-b border-gray-200 bg-gray-50 px-4 md:px-6 pt-4 flex justify-between items-center">
-
-                <span class="pb-3 px-2 inline-block font-semibold text-sm text-emerald-600 border-b-2 border-emerald-600">Dettaglio Articoli per Negozio (Ordinati per Misura e Colore)</span>
-
+                <span class="pb-3 px-2 inline-block font-semibold text-sm text-emerald-600 border-b-2 border-emerald-600">Dettaglio Articoli per Negozio</span>
                 <span id="counter-righe" class="text-xs text-gray-500 font-medium pb-2">0 righe trovate</span>
-
             </div>
-
-
-
             <div class="p-4 md:p-6 overflow-x-auto">
-
                 <table class="w-full text-left border-collapse min-w-[1100px]">
-
                     <thead>
-
                         <tr class="border-b text-xs font-semibold text-gray-500 uppercase bg-gray-50 select-none">
-
                             <th class="py-3 px-3">Store</th>
-
                             <th class="py-3 px-3">EAN</th>
-
                             <th class="py-3 px-3">Codice</th>
-
                             <th class="py-3 px-3">Descrizione</th>
-
                             <th class="py-3 px-3 text-center">Misura</th>
-
                             <th class="py-3 px-3 text-center">Colore</th>
-
                             <th class="py-3 px-3 text-center">Pezzi Caricati</th>
-
                             <th class="py-3 px-3 text-center">Pezzi Venduti</th>
-
                             <th class="py-3 px-3 text-center">Giacenza</th>
-
                             <th class="py-3 px-3 text-center">Tasso Vendita</th>
-
                             <th class="py-3 px-3 text-center">Stato</th>
-
                         </tr>
-
                     </thead>
-
                     <tbody id="table-body" class="text-sm divide-y divide-gray-100">
-
                         <tr><td colspan="11" class="text-center py-6 text-gray-400">Caricamento dati in corso...</td></tr>
-
                     </tbody>
-
                 </table>
-
             </div>
-
         </div>
-
     </main>
 
-
-
     <!-- Modal Report & Analisi IA -->
-
     <div id="report-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center p-4">
-
         <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-
             <div class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
-
                 <div>
-
                     <h2 class="text-base font-bold"><i class="fa-solid fa-robot mr-2 text-indigo-400"></i> Report Analitico & IA Assistant</h2>
-
                     <p id="report-filtri-attivi" class="text-xs text-slate-300 mt-0.5">Filtri applicati: Nessuno</p>
-
                 </div>
-
                 <button onclick="chiudiReportAI()" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
-
             </div>
-
             <div id="report-content" class="p-6 overflow-y-auto space-y-6 text-sm text-gray-700 bg-gray-50">
-
-                <!-- Contenuto dinamico generato dall'IA -->
-
             </div>
-
-            <div class="bg-white border-t px-6 py-4 flex justify-end space-x-3">
-
+            <div class="bg-white border-t px-6 py-4 flex justify-end space-x-3 no-print">
                 <button onclick="chiudiReportAI()" class="px-4 py-2 border rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100">Chiudi</button>
-
                 <button onclick="window.print()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 flex items-center gap-1.5 shadow-sm">
-
                     <i class="fa-solid fa-print"></i> Stampa / Salva in PDF
-
                 </button>
-
             </div>
-
         </div>
-
     </div>
 
-
-
     <!-- Script JavaScript -->
-
     <script>
-
-        const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1717092575&single=true&output=csv";
-
-        
-
-        let rawData = [];
-
-        let filteredData = [];
-
-
-
-        const sizePriorityMap = {
-
-            'xs': 1, 'extra small': 1,
-
-            's': 2, 'small': 2,
-
-            'm': 3, 'medium': 3,
-
-            'l': 4, 'large': 4,
-
-            'xl': 5, 'extra large': 5,
-
-            'xxl': 6, '2xl': 6, '3xl': 7, '4xl': 8
-
+        // =====================================================================
+        // CONFIGURAZIONE COLONNE CSV (Indici partendo da 0)
+        // Se il "Venduto" rimane a zero, significa che l'indice qui sotto (7) non 
+        // corrisponde alla colonna reale su Google Sheet. (Es: A=0, B=1... H=7, I=8)
+        // =====================================================================
+        const COL_INDEX = {
+            STORE: 0,
+            EAN: 1,
+            CODICE: 2,
+            DESCRIZIONE: 3,
+            MISURA: 4,
+            COLORE: 5,
+            CARICO: 6,
+            VENDUTO: 7  // <--- MODIFICA QUESTO NUMERO SE IL VENDUTO È IN UN'ALTRA COLONNA (es. 8 o 9)
         };
 
+        const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1717092575&single=true&output=csv";
+        
+        let rawData = [];
+        let filteredData = [];
 
+        const sizePriorityMap = {
+            'xs': 1, 'extra small': 1,
+            's': 2, 'small': 2,
+            'm': 3, 'medium': 3,
+            'l': 4, 'large': 4,
+            'xl': 5, 'extra large': 5,
+            'xxl': 6, '2xl': 6, '3xl': 7, '4xl': 8
+        };
 
         function getMisuraWeight(misura) {
-
             if (!misura) return 999;
-
             let mClean = String(misura).trim().toLowerCase();
-
             if (sizePriorityMap[mClean] !== undefined) return sizePriorityMap[mClean];
-
             let num = parseFloat(mClean);
-
             if (!isNaN(num)) return 100 + num;
-
             return 500;
-
         }
 
-
-
         function caricaDati() {
-
             const badge = document.getElementById('status-badge');
-
             badge.className = "text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-
             badge.innerText = "Sincronizzazione in corso...";
-
-
 
             const urlConCacheBuster = CSV_URL + (CSV_URL.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
 
-
-
             fetch(urlConCacheBuster)
-
                 .then(res => {
-
                     if (!res.ok) throw new Error("Errore HTTP: " + res.status);
-
                     return res.text();
-
                 })
-
                 .then(text => elaboraCSV(text, badge))
-
                 .catch(err => {
-
                     console.error("Errore:", err);
-
                     badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-
                     badge.innerText = "Errore Connessione";
-
                 });
-
         }
-
-
 
         function elaboraCSV(text, badge) {
-
             Papa.parse(text, {
-
                 header: false,
-
                 skipEmptyLines: true,
-
                 complete: function(results) {
-
                     pulisciDati(results.data);
-
                     badge.className = "text-[10px] md:text-xs bg-emerald-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-
                     badge.innerText = "Aggiornato";
-
                 },
-
                 error: function(err) {
-
                     badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-
                     badge.innerText = "Errore Parsing";
-
                 }
-
             });
-
         }
-
-
 
         caricaDati();
 
-
-
         function parseNum(val) {
-
             if (!val) return 0;
-
             return parseFloat(String(val).replace('€', '').replace(/\./g, '').replace(',', '.')) || 0;
-
         }
-
-
 
         function pulisciDati(rows) {
-
             rawData = [];
-
             if (!rows || rows.length === 0) return;
 
-
-
             let startIndex = 0;
-
             if (rows.length > 0 && rows[0] && String(rows[0][0]).toLowerCase().includes('store')) {
-
                 startIndex = 1;
-
             }
-
-
 
             for (let i = startIndex; i < rows.length; i++) {
-
                 let row = rows[i];
+                if (!row || row.length === 0 || !row[COL_INDEX.STORE]) continue;
+                if (String(row[COL_INDEX.STORE]).toLowerCase() === 'store') continue;
 
-                if (!row || row.length === 0 || !row[0]) continue;
-
-                if (String(row[0]).toLowerCase() === 'store') continue;
-
-
-
-                let carico = parseNum(row[6]);
-
-                let venduto = parseNum(row[7]);
-
+                let carico = parseNum(row[COL_INDEX.CARICO]);
+                let venduto = parseNum(row[COL_INDEX.VENDUTO]);
                 let giacenza = carico - venduto;
-
                 let tasso = carico > 0 ? (venduto / carico) * 100 : 0;
 
-
-
                 rawData.push({
-
-                    store: String(row[0] || 'Altro').trim(),
-
-                    ean: String(row[1] || '').trim(),
-
-                    codiceInterno: String(row[2] || '').trim(),
-
-                    descrizione: String(row[3] || '').trim(),
-
-                    misura: String(row[4] || '-').trim(),
-
-                    colore: String(row[5] || '-').trim(),
-
+                    store: String(row[COL_INDEX.STORE] || 'Altro').trim(),
+                    ean: String(row[COL_INDEX.EAN] || '').trim(),
+                    codiceInterno: String(row[COL_INDEX.CODICE] || '').trim(),
+                    descrizione: String(row[COL_INDEX.DESCRIZIONE] || '').trim(),
+                    misura: String(row[COL_INDEX.MISURA] || '-').trim(),
+                    colore: String(row[COL_INDEX.COLORE] || '-').trim(),
                     carico: carico,
-
                     venduto: venduto,
-
                     giacenza: giacenza,
-
                     tasso: tasso
-
                 });
-
             }
-
-
 
             popolaFiltroStore(rawData);
-
             applicaFiltri();
-
         }
-
-
 
         function popolaFiltroStore(data) {
-
             let storeSet = new Set();
-
             data.forEach(d => { if (d.store) storeSet.add(d.store); });
 
-
-
             const select = document.getElementById('filterStore');
-
             let valCorrente = select.value;
-
             select.innerHTML = '<option value="">Tutti gli Store</option>';
-
             Array.from(storeSet).sort().forEach(store => {
-
                 let opt = document.createElement('option');
-
                 opt.value = store;
-
                 opt.innerText = store;
-
                 select.appendChild(opt);
-
             });
-
             select.value = valCorrente;
-
         }
-
-
 
         document.getElementById('filterStore').addEventListener('change', applicaFiltri);
-
         document.getElementById('searchQuery').addEventListener('input', applicaFiltri);
 
-
-
         function applicaFiltri() {
-
             let storeSelezionato = document.getElementById('filterStore').value;
-
             let query = document.getElementById('searchQuery').value.toLowerCase().trim();
 
-
-
             filteredData = rawData.filter(item => {
-
                 let matchStore = !storeSelezionato || item.store === storeSelezionato;
-
                 let matchQuery = !query || 
-
                                  item.ean.toLowerCase().includes(query) || 
-
                                  item.codiceInterno.toLowerCase().includes(query) || 
-
                                  item.descrizione.toLowerCase().includes(query) ||
-
                                  item.misura.toLowerCase().includes(query) ||
-
                                  item.colore.toLowerCase().includes(query);
-
                 return matchStore && matchQuery;
-
             });
-
-
 
             filteredData.sort((a, b) => {
-
                 let wA = getMisuraWeight(a.misura);
-
                 let wB = getMisuraWeight(b.misura);
-
                 if (wA !== wB) return wA - wB;
-
                 return a.colore.localeCompare(b.colore);
-
             });
-
-
 
             aggiornaInterfaccia();
-
             calcolaTopStatistiche();
-
             gestisciMatriceDinamica();
-
         }
-
-
 
         window.filtraPerCodice = function(codice) {
-
             if (!codice) return;
-
             const inputSearch = document.getElementById('searchQuery');
-
             inputSearch.value = codice;
-
             applicaFiltri();
-
             window.scrollTo({ top: 0, behavior: 'smooth' });
-
         }
-
-
 
         function resetFiltri() {
-
             document.getElementById('filterStore').value = "";
-
             document.getElementById('searchQuery').value = "";
-
             applicaFiltri();
-
         }
-
-
 
         function gestisciMatriceDinamica() {
-
             const cardMatrice = document.getElementById('matrice-card');
-
             const container = document.getElementById('matrice-container');
-
             const infoArticolo = document.getElementById('matrice-info-articolo');
-
             
-
             let codiciUnici = [...new Set(filteredData.map(item => item.codiceInterno))];
-
             
-
             if (codiciUnici.length === 1 && filteredData.length > 0) {
-
                 cardMatrice.classList.remove('hidden');
-
                 let articoloCorrente = filteredData[0];
-
                 infoArticolo.innerText = `${articoloCorrente.codiceInterno} - ${articoloCorrente.descrizione}`;
 
-
-
                 let setMisure = new Set();
-
                 let setColori = new Set();
-
                 let matriceGiacenza = {}; 
 
-
-
                 filteredData.forEach(item => {
-
                     let m = item.misura && item.misura !== '' ? item.misura : 'Unica';
-
                     let c = item.colore && item.colore !== '' ? item.colore : 'Standard';
-
                     
-
                     setMisure.add(m);
-
                     setColori.add(c);
 
-
-
                     if (!matriceGiacenza[c]) matriceGiacenza[c] = {};
-
                     matriceGiacenza[c][m] = (matriceGiacenza[c][m] || 0) + item.giacenza;
-
                 });
-
-
 
                 let arrMisure = Array.from(setMisure).sort((a, b) => getMisuraWeight(a) - getMisuraWeight(b));
-
                 let arrColori = Array.from(setColori).sort((a, b) => a.localeCompare(b));
 
-
-
                 let html = `<table class="w-full text-center border-collapse text-xs">
-
                     <thead>
-
                         <tr class="bg-gray-100 border-b">
-
                             <th class="p-2 text-left border-r font-bold text-gray-600">Colore \\ Misura</th>`;
-
                 
-
                 arrMisure.forEach(m => {
-
                     html += `<th class="p-2 border-r font-bold text-indigo-600 bg-indigo-50/50">${m}</th>`;
-
                 });
-
                 html += `<th class="p-2 font-bold text-gray-700 bg-gray-200">Tot Colore</th></tr></thead><tbody>`;
 
-
-
                 arrColori.forEach(c => {
-
                     html += `<tr class="border-b hover:bg-gray-50"><td class="p-2 text-left font-bold border-r text-slate-700 bg-gray-50">${c}</td>`;
-
                     let totRiga = 0;
-
                     arrMisure.forEach(m => {
-
                         let val = matriceGiacenza[c][m] || 0;
-
                         let colorClass = val > 0 ? "text-emerald-600 font-bold" : (val < 0 ? "text-red-500 font-bold" : "text-gray-300");
-
                         html += `<td class="p-2 border-r ${colorClass}">${val}</td>`;
-
                         totRiga += val;
-
                     });
-
                     html += `<td class="p-2 font-bold text-slate-900 bg-gray-100">${totRiga}</td></tr>`;
-
                 });
-
-
 
                 html += `<tr class="bg-gray-100 font-bold"><td class="p-2 text-left border-r text-gray-700">Tot Taglia</td>`;
-
                 arrMisure.forEach(m => {
-
                     let totCol = arrColori.reduce((acc, c) => acc + (matriceGiacenza[c][m] || 0), 0);
-
                     html += `<td class="p-2 border-r text-indigo-700">${totCol}</td>`;
-
                 });
-
                 let totGenerale = Object.values(matriceGiacenza).reduce((acc, cObj) => acc + Object.values(cObj).reduce((a, b) => a + b, 0), 0);
-
                 html += `<td class="p-2 text-emerald-700 bg-emerald-50">${totGenerale}</td></tr></tbody></table>`;
 
-
-
                 container.innerHTML = html;
-
             } else {
-
                 cardMatrice.classList.add('hidden');
-
                 container.innerHTML = '';
-
             }
-
         }
 
-
-
         function calcolaTopStatistiche() {
-
             let mapMisure = {};
-
             let mapColori = {};
 
-
-
             filteredData.forEach(item => {
-
                 let mis = item.misura;
-
                 let col = item.colore;
-
                 let vend = item.venduto;
 
-
-
                 if (mis && mis !== '-' && mis !== '') {
-
                     mapMisure[mis] = (mapMisure[mis] || 0) + vend;
-
                 }
-
                 if (col && col !== '-' && col !== '') {
-
                     mapColori[col] = (mapColori[col] || 0) + vend;
-
                 }
-
             });
 
-
-
             let topMisure = Object.entries(mapMisure).sort((a, b) => {
-
                 let wA = getMisuraWeight(a[0]);
-
                 let wB = getMisuraWeight(b[0]);
-
                 if (wA !== wB) return wA - wB;
-
                 return b[1] - a[1];
-
             }).slice(0, 5);
-
-
 
             let topColori = Object.entries(mapColori).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-
-
             renderTopList('top-misure-container', topMisure, 'bg-indigo-50 text-indigo-700');
-
             renderTopList('top-colori-container', topColori, 'bg-pink-50 text-pink-700');
-
         }
-
-
 
         function renderTopList(containerId, dataArray, badgeClass) {
-
             const container = document.getElementById(containerId);
-
             container.innerHTML = '';
 
-
-
             if (dataArray.length === 0 || dataArray.reduce((acc, curr) => acc + curr[1], 0) === 0) {
-
                 container.innerHTML = '<span class="text-xs text-gray-400">Nessuna vendita registrata con i filtri attivi.</span>';
-
                 return;
-
             }
-
-
 
             dataArray.forEach(([nome, qta], index) => {
-
                 let div = document.createElement('div');
-
                 div.className = "flex justify-between items-center bg-gray-50 px-3 py-2 rounded-lg text-xs font-medium";
-
                 div.innerHTML = `
-
                     <div class="flex items-center space-x-2">
-
                         <span class="w-5 h-5 rounded-full ${badgeClass} flex items-center justify-center font-bold text-[10px]">${index + 1}</span>
-
                         <span class="text-gray-800 font-semibold">${nome}</span>
-
                     </div>
-
                     <span class="font-bold text-emerald-600">${qta} pz venduti</span>
-
                 `;
-
                 container.appendChild(div);
-
             });
-
         }
-
-
 
         function aggiornaInterfaccia() {
-
             let totCarico = filteredData.reduce((acc, curr) => acc + curr.carico, 0);
-
             let totVenduto = filteredData.reduce((acc, curr) => acc + curr.venduto, 0);
-
             let totGiacenza = filteredData.reduce((acc, curr) => acc + curr.giacenza, 0);
-
             let tassoMedio = totCarico > 0 ? ((totVenduto / totCarico) * 100).toFixed(1) : 0;
 
-
-
             document.getElementById('kpi-caricato').innerText = totCarico.toLocaleString('it-IT');
-
             document.getElementById('kpi-venduto').innerText = totVenduto.toLocaleString('it-IT');
-
             document.getElementById('kpi-giacenza').innerText = totGiacenza.toLocaleString('it-IT');
-
             document.getElementById('kpi-tasso').innerText = tassoMedio + '%';
-
             document.getElementById('counter-righe').innerText = filteredData.length + ' righe trovate';
 
-
-
             const tbody = document.getElementById('table-body');
-
             tbody.innerHTML = '';
 
-
-
             if (filteredData.length === 0) {
-
                 tbody.innerHTML = '<tr><td colspan="11" class="text-center py-6 text-gray-400">Nessun articolo trovato con i filtri correnti.</td></tr>';
-
                 return;
-
             }
 
-
-
             filteredData.slice(0, 300).forEach(item => {
-
                 let badgeStato = '';
-
                 if (item.giacenza <= 0) {
-
                     badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-800">Esaurito 🔴</span>';
-
                 } else if (item.venduto === 0) {
-
                     badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800">Fermo ⏳</span>';
-
                 } else if (item.tasso >= 70) {
-
                     badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">Top Rotazione 🚀</span>';
-
                 } else {
-
                     badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800">In Stock 📦</span>';
-
                 }
 
-
-
                 let tr = document.createElement('tr');
-
                 tr.className = "hover:bg-gray-50 border-b border-gray-100";
-
                 tr.innerHTML = `
-
                     <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-800">${item.store}</span></td>
-
                     <td class="py-3 px-3 font-mono text-xs text-indigo-600 font-semibold cursor-pointer hover:underline" onclick="filtraPerCodice('${item.ean}')" title="Clicca per aprire la matrice">${item.ean}</td>
-
                     <td class="py-3 px-3 font-mono text-xs font-bold text-indigo-800 cursor-pointer hover:underline" onclick="filtraPerCodice('${item.codiceInterno}')" title="Clicca per aprire la matrice">${item.codiceInterno}</td>
-
                     <td class="py-3 px-3 font-medium text-gray-900">${item.descrizione}</td>
-
                     <td class="py-3 px-3 text-center text-xs font-bold text-slate-700">${item.misura}</td>
-
                     <td class="py-3 px-3 text-center text-xs font-bold text-slate-700">${item.colore}</td>
-
                     <td class="py-3 px-3 text-center font-semibold text-blue-600">${item.carico}</td>
-
                     <td class="py-3 px-3 text-center font-semibold text-emerald-600">${item.venduto}</td>
-
                     <td class="py-3 px-3 text-center font-bold ${item.giacenza > 0 ? 'text-gray-800' : 'text-red-500'}">${item.giacenza}</td>
-
                     <td class="py-3 px-3 text-center font-semibold text-indigo-600">${item.tasso.toFixed(1)}%</td>
-
                     <td class="py-3 px-3 text-center">${badgeStato}</td>
-
                 `;
-
                 tbody.appendChild(tr);
-
             });
-
         }
 
-
-
-        // MOTORE DI GENERAZIONE REPORT E ANALISI IA AVANZATA (CON TOP MODELLI)
-
         function generaReportAI() {
-
+            document.body.classList.add('modal-open');
             const modal = document.getElementById('report-modal');
-
             const container = document.getElementById('report-content');
-
             const lblFiltri = document.getElementById('report-filtri-attivi');
 
-
-
             let storeSel = document.getElementById('filterStore').value || "Tutti gli Store";
-
             let querySel = document.getElementById('searchQuery').value.trim() || "Nessun filtro testuale specifico";
-
             let dataOggi = new Date().toLocaleDateString('it-IT');
-
-
 
             lblFiltri.innerText = `Store: [ ${storeSel.toUpperCase()} ] | Ricerca: [ ${querySel} ] | Data Report: ${dataOggi}`;
 
-
-
             let totCarico = filteredData.reduce((acc, curr) => acc + curr.carico, 0);
-
             let totVenduto = filteredData.reduce((acc, curr) => acc + curr.venduto, 0);
-
             let totGiacenza = filteredData.reduce((acc, curr) => acc + curr.giacenza, 0);
-
             let tassoMedio = totCarico > 0 ? ((totVenduto / totCarico) * 100).toFixed(1) : 0;
 
-
-
             let esauriti = filteredData.filter(i => i.giacenza <= 0).length;
-
             let fermi = filteredData.filter(i => i.venduto === 0 && i.carico > 0).length;
-
             let topRotazioneCount = filteredData.filter(i => (i.venduto / (i.carico || 1)) >= 0.7).length;
 
-
-
-            // Elaborazione Top Modelli per Vendite e Rotazione
-
-            // Raggruppiamo per Codice Interno / Articolo per sommare le vendite totali del modello
-
             let mapModelli = {};
-
             filteredData.forEach(item => {
-
                 let chiave = item.codiceInterno || item.ean || 'Sconosciuto';
-
                 if (!mapModelli[chiave]) {
-
                     mapModelli[chiave] = {
-
                         codice: chiave,
-
                         descrizione: item.descrizione,
-
                         store: item.store,
-
                         carico: 0,
-
                         venduto: 0,
-
                         giacenza: 0
-
                     };
-
                 }
-
                 mapModelli[chiave].carico += item.carico;
-
                 mapModelli[chiave].venduto += item.venduto;
-
                 mapModelli[chiave].giacenza += item.giacenza;
-
             });
 
-
-
-            // Ordiniamo i modelli per Pezzi Venduti (decrescente) e poi per Tasso di Rotazione
-
             let topModelliArr = Object.values(mapModelli).map(m => {
-
                 m.tasso = m.carico > 0 ? (m.venduto / m.carico) * 100 : 0;
-
                 return m;
-
             }).sort((a, b) => b.venduto - a.venduto || b.tasso - a.tasso).slice(0, 6);
-
-
 
             let giudizioStore = totCarico > 0 ? (tassoMedio >= 50 ? "Ottima performance di vendita con un indice di rotazione superiore alla soglia di riferimento stagionale." : "Dinamica commerciale prudente; si suggerisce di valutare azioni di visibilità o promozioni mirate.") : "Nessun movimento rilevato.";
 
-
-
             let html = `
-
-                <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
-
+                <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-xl mb-4">
                     <h3 class="font-bold text-indigo-900 text-sm mb-1"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Sintesi Esecutiva IA</h3>
-
                     <p class="text-xs text-indigo-800 leading-relaxed">Report analitico elaborato su <strong>${filteredData.length}</strong> record per lo store <strong>${storeSel}</strong>. ${giudizioStore}</p>
-
                 </div>
 
-
-
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div class="bg-white p-3 rounded-lg border text-center">
-
                         <span class="text-[10px] text-gray-500 uppercase font-semibold">Volume Caricato</span>
-
                         <p class="text-lg font-bold text-blue-600">${totCarico}</p>
-
                     </div>
-
                     <div class="bg-white p-3 rounded-lg border text-center">
-
                         <span class="text-[10px] text-gray-500 uppercase font-semibold">Pezzi Venduti</span>
-
                         <p class="text-lg font-bold text-emerald-600">${totVenduto}</p>
-
                     </div>
-
                     <div class="bg-white p-3 rounded-lg border text-center">
-
                         <span class="text-[10px] text-gray-500 uppercase font-semibold">Giacenza Residua</span>
-
                         <p class="text-lg font-bold text-purple-600">${totGiacenza}</p>
-
                     </div>
-
                     <div class="bg-white p-3 rounded-lg border text-center">
-
                         <span class="text-[10px] text-gray-500 uppercase font-semibold">Sell-Through %</span>
-
                         <p class="text-lg font-bold text-indigo-600">${tassoMedio}%</p>
-
                     </div>
-
                 </div>
 
-
-
-                <div class="bg-white p-4 rounded-xl border">
-
+                <div class="bg-white p-4 rounded-xl border mb-4">
                     <h4 class="font-bold text-xs uppercase text-indigo-700 tracking-wider mb-3 flex items-center gap-2">
-
                         <i class="fa-solid fa-medal text-amber-500"></i> Top 6 Modelli con Maggiore Vendita e Rotazione
-
                     </h4>
-
             `;
 
-
-
             if (topModelliArr.length === 0 || topModelliArr.reduce((acc, m) => acc + m.venduto, 0) === 0) {
-
                 html += `<p class="text-xs text-gray-400">Nessun modello con vendite registrate nei filtri correnti.</p>`;
-
             } else {
-
                 html += `<div class="overflow-x-auto"><table class="w-full text-left text-xs border-collapse">
-
                     <thead><tr class="bg-gray-50 border-b text-gray-500">
-
                         <th class="p-2">Codice</th>
-
                         <th class="p-2">Descrizione Articolo</th>
-
                         <th class="p-2 text-center">Caricato</th>
-
                         <th class="p-2 text-center">Venduto</th>
-
                         <th class="p-2 text-center">Giacenza</th>
-
                         <th class="p-2 text-center">Sell-Through</th>
-
                     </tr></thead><tbody>`;
 
-
-
                 topModelliArr.forEach(m => {
-
                     let badgeRot = m.tasso >= 70 ? 'bg-emerald-100 text-emerald-800' : (m.tasso >= 40 ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800');
-
                     html += `<tr class="border-b hover:bg-gray-50">
-
                         <td class="p-2 font-mono font-bold text-indigo-700">${m.codice}</td>
-
                         <td class="p-2 font-medium text-gray-900">${m.descrizione}</td>
-
                         <td class="p-2 text-center text-blue-600 font-semibold">${m.carico}</td>
-
                         <td class="p-2 text-center text-emerald-600 font-bold">${m.venduto}</td>
-
                         <td class="p-2 text-center font-semibold">${m.giacenza}</td>
-
                         <td class="p-2 text-center"><span class="px-2 py-0.5 rounded font-bold ${badgeRot}">${m.tasso.toFixed(1)}%</span></td>
-
                     </tr>`;
-
                 });
-
                 html += `</tbody></table></div>`;
-
             }
-
-
 
             html += `</div>
 
-
-
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-
                     <div class="bg-white p-4 rounded-xl border space-y-2">
-
                         <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider">Indicatori di Magazzino</h4>
-
                         <ul class="text-xs space-y-1.5 text-gray-700">
-
                             <li><i class="fa-solid fa-circle-exclamation text-red-500 mr-2"></i> Varianti Esaurite (Giacenza &le; 0): <strong>${esauriti}</strong></li>
-
                             <li><i class="fa-solid fa-hourglass-half text-amber-500 mr-2"></i> Varianti a Stock Fermo (Vendite 0): <strong>${fermi}</strong></li>
-
                             <li><i class="fa-solid fa-rocket text-emerald-500 mr-2"></i> Varianti Top Rotazione (&ge; 70%): <strong>${topRotazioneCount}</strong></li>
-
                         </ul>
-
                     </div>
-
                     <div class="bg-white p-4 rounded-xl border">
-
                         <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider mb-2">Linee Guida Strategiche</h4>
-
                         <p class="text-xs text-gray-600 leading-relaxed">
-
                             • Concentrare le attività di riassortimento sui modelli in cima alla classifica dei Top Venduti.<br>
-
                             • Pianificare iniziative di smaltimento o promozioni mirate sulle referenze con giacenze ferme da tempo.
-
                         </p>
-
                     </div>
-
                 </div>
-
             `;
 
-
-
             container.innerHTML = html;
-
             modal.classList.remove('hidden');
-
         }
-
-
 
         function chiudiReportAI() {
-
+            document.body.classList.remove('modal-open');
             document.getElementById('report-modal').classList.add('hidden');
-
         }
-
     </script>
-
 </body>
-
 </html>
