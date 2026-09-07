@@ -88,8 +88,8 @@
                 <i class="fa-solid fa-store mr-2 text-emerald-400"></i> Controllo Ciclo Merce & Report IA
             </h1>
             <div class="flex items-center space-x-2">
-                <span id="status-badge" class="text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap">Sincronizzazione...</span>
-                <button onclick="caricaDati()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-sm" title="Aggiorna Dati">
+                <span id="status-badge" class="text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap">In attesa...</span>
+                <button onclick="caricaDatiSincronizzati()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-sm" title="Aggiorna Dati">
                     <i class="fa-solid fa-sync"></i>
                 </button>
                 <button onclick="generaReportAI()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-sm flex items-center gap-1.5">
@@ -205,7 +205,7 @@
                         </tr>
                     </thead>
                     <tbody id="table-body" class="text-sm divide-y divide-gray-100">
-                        <tr><td colspan="11" class="text-center py-6 text-gray-400">Caricamento dati in corso...</td></tr>
+                        <tr><td colspan="11" class="text-center py-6 text-gray-400">Inizializzazione modulo. Clicca Aggiorna Dati in alto.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -236,22 +236,27 @@
     <!-- Script JavaScript -->
     <script>
         // =====================================================================
-        // CONFIGURAZIONE COLONNE CSV (Indici partendo da 0)
-        // Se il "Venduto" rimane a zero, significa che l'indice qui sotto (7) non 
-        // corrisponde alla colonna reale su Google Sheet. (Es: A=0, B=1... H=7, I=8)
+        // CONFIGURAZIONE URL DEI DUE FILE
         // =====================================================================
-        const COL_INDEX = {
+        const URL_VENDITE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1717092575&single=true&output=csv";
+        const URL_CARICHI = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=684692288&single=true&output=csv";
+
+        // =====================================================================
+        // CONFIGURAZIONE COLONNE CSV (Indici partendo da 0)
+        // La colonna A = 0, B = 1, C = 2, H = 7, I = 8 ecc...
+        // =====================================================================
+        const COL_BASE = {
             STORE: 0,
             EAN: 1,
             CODICE: 2,
             DESCRIZIONE: 3,
             MISURA: 4,
-            COLORE: 5,
-            CARICO: 6,
-            VENDUTO: 7  // <--- MODIFICA QUESTO NUMERO SE IL VENDUTO È IN UN'ALTRA COLONNA (es. 8 o 9)
+            COLORE: 5
         };
 
-        const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1717092575&single=true&output=csv";
+        // INDICI QUANTITÀ: Modifica qui se il totale pezzi si trova in un'altra colonna
+        const IDX_QTA_VENDUTA = 7; // Colonna H nel file VENDITE
+        const IDX_QTA_CARICO  = 6; // Colonna G nel file CARICHI
         
         let rawData = [];
         let filteredData = [];
@@ -274,85 +279,123 @@
             return 500;
         }
 
-        function caricaDati() {
+        // Funzione per avviare il caricamento simultaneo (Promise.all)
+        function caricaDatiSincronizzati() {
             const badge = document.getElementById('status-badge');
             badge.className = "text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-            badge.innerText = "Sincronizzazione in corso...";
+            badge.innerText = "Sincronizzazione 2 Sorgenti...";
 
-            const urlConCacheBuster = CSV_URL + (CSV_URL.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
+            const t = new Date().getTime();
+            const fetchVendite = fetch(URL_VENDITE + "&_t=" + t).then(res => {
+                if (!res.ok) throw new Error("Errore HTTP Vendite: " + res.status);
+                return res.text();
+            });
+            const fetchCarichi = fetch(URL_CARICHI + "&_t=" + t).then(res => {
+                if (!res.ok) throw new Error("Errore HTTP Carichi: " + res.status);
+                return res.text();
+            });
 
-            fetch(urlConCacheBuster)
-                .then(res => {
-                    if (!res.ok) throw new Error("Errore HTTP: " + res.status);
-                    return res.text();
+            Promise.all([fetchVendite, fetchCarichi])
+                .then(([csvVendite, csvCarichi]) => {
+                    elaboraDoppioFlusso(csvVendite, csvCarichi, badge);
                 })
-                .then(text => elaboraCSV(text, badge))
                 .catch(err => {
-                    console.error("Errore:", err);
+                    console.error("Errore Caricamento File Multiplo:", err);
                     badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-                    badge.innerText = "Errore Connessione";
+                    badge.innerText = "Errore Connessione Flussi";
                 });
         }
-
-        function elaboraCSV(text, badge) {
-            Papa.parse(text, {
-                header: false,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    pulisciDati(results.data);
-                    badge.className = "text-[10px] md:text-xs bg-emerald-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-                    badge.innerText = "Aggiornato";
-                },
-                error: function(err) {
-                    badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-                    badge.innerText = "Errore Parsing";
-                }
-            });
-        }
-
-        caricaDati();
 
         function parseNum(val) {
             if (!val) return 0;
             return parseFloat(String(val).replace('€', '').replace(/\./g, '').replace(',', '.')) || 0;
         }
 
-        function pulisciDati(rows) {
+        function elaboraDoppioFlusso(csvVendite, csvCarichi, badge) {
+            let dataVendite = Papa.parse(csvVendite, { skipEmptyLines: true }).data;
+            let dataCarichi = Papa.parse(csvCarichi, { skipEmptyLines: true }).data;
+
+            // Mappa per unire e sommare i dati tramite chiave unica
+            let mappaArticoli = new Map();
+
+            // Funzione per generare una chiave unica ed evitare conflitti su EAN assenti
+            function getChiaveUnivoca(r) {
+                let store = String(r[COL_BASE.STORE] || '').trim().toUpperCase();
+                let ean = String(r[COL_BASE.EAN] || '').trim().toUpperCase();
+                let cod = String(r[COL_BASE.CODICE] || '').trim().toUpperCase();
+                let mis = String(r[COL_BASE.MISURA] || '').trim().toUpperCase();
+                let col = String(r[COL_BASE.COLORE] || '').trim().toUpperCase();
+                return `${store}|${ean}|${cod}|${mis}|${col}`;
+            }
+
+            // 1. Processa CARICHI
+            let startCarichi = (dataCarichi.length > 0 && String(dataCarichi[0][COL_BASE.STORE]).toLowerCase().includes('store')) ? 1 : 0;
+            for (let i = startCarichi; i < dataCarichi.length; i++) {
+                let r = dataCarichi[i];
+                if (!r || r.length === 0 || !r[COL_BASE.STORE]) continue;
+                if (String(r[COL_BASE.STORE]).toLowerCase() === 'store') continue;
+
+                let chiave = getChiaveUnivoca(r);
+                let qta = parseNum(r[IDX_QTA_CARICO]);
+
+                if (!mappaArticoli.has(chiave)) {
+                    mappaArticoli.set(chiave, {
+                        store: String(r[COL_BASE.STORE] || 'Altro').trim(),
+                        ean: String(r[COL_BASE.EAN] || '').trim(),
+                        codiceInterno: String(r[COL_BASE.CODICE] || '').trim(),
+                        descrizione: String(r[COL_BASE.DESCRIZIONE] || '').trim(),
+                        misura: String(r[COL_BASE.MISURA] || '-').trim(),
+                        colore: String(r[COL_BASE.COLORE] || '-').trim(),
+                        carico: 0,
+                        venduto: 0
+                    });
+                }
+                mappaArticoli.get(chiave).carico += qta;
+            }
+
+            // 2. Processa VENDITE
+            let startVendite = (dataVendite.length > 0 && String(dataVendite[0][COL_BASE.STORE]).toLowerCase().includes('store')) ? 1 : 0;
+            for (let i = startVendite; i < dataVendite.length; i++) {
+                let r = dataVendite[i];
+                if (!r || r.length === 0 || !r[COL_BASE.STORE]) continue;
+                if (String(r[COL_BASE.STORE]).toLowerCase() === 'store') continue;
+
+                let chiave = getChiaveUnivoca(r);
+                let qta = parseNum(r[IDX_QTA_VENDUTA]);
+
+                if (!mappaArticoli.has(chiave)) {
+                    mappaArticoli.set(chiave, {
+                        store: String(r[COL_BASE.STORE] || 'Altro').trim(),
+                        ean: String(r[COL_BASE.EAN] || '').trim(),
+                        codiceInterno: String(r[COL_BASE.CODICE] || '').trim(),
+                        descrizione: String(r[COL_BASE.DESCRIZIONE] || '').trim(),
+                        misura: String(r[COL_BASE.MISURA] || '-').trim(),
+                        colore: String(r[COL_BASE.COLORE] || '-').trim(),
+                        carico: 0,
+                        venduto: 0
+                    });
+                }
+                mappaArticoli.get(chiave).venduto += qta;
+            }
+
+            // 3. Compila RawData calcolando Giacenze
             rawData = [];
-            if (!rows || rows.length === 0) return;
+            mappaArticoli.forEach(item => {
+                item.giacenza = item.carico - item.venduto;
+                item.tasso = item.carico > 0 ? (item.venduto / item.carico) * 100 : 0;
+                rawData.push(item);
+            });
 
-            let startIndex = 0;
-            if (rows.length > 0 && rows[0] && String(rows[0][0]).toLowerCase().includes('store')) {
-                startIndex = 1;
-            }
-
-            for (let i = startIndex; i < rows.length; i++) {
-                let row = rows[i];
-                if (!row || row.length === 0 || !row[COL_INDEX.STORE]) continue;
-                if (String(row[COL_INDEX.STORE]).toLowerCase() === 'store') continue;
-
-                let carico = parseNum(row[COL_INDEX.CARICO]);
-                let venduto = parseNum(row[COL_INDEX.VENDUTO]);
-                let giacenza = carico - venduto;
-                let tasso = carico > 0 ? (venduto / carico) * 100 : 0;
-
-                rawData.push({
-                    store: String(row[COL_INDEX.STORE] || 'Altro').trim(),
-                    ean: String(row[COL_INDEX.EAN] || '').trim(),
-                    codiceInterno: String(row[COL_INDEX.CODICE] || '').trim(),
-                    descrizione: String(row[COL_INDEX.DESCRIZIONE] || '').trim(),
-                    misura: String(row[COL_INDEX.MISURA] || '-').trim(),
-                    colore: String(row[COL_INDEX.COLORE] || '-').trim(),
-                    carico: carico,
-                    venduto: venduto,
-                    giacenza: giacenza,
-                    tasso: tasso
-                });
-            }
-
+            // 4. Esegue il flow della UI
             popolaFiltroStore(rawData);
             applicaFiltri();
+
+            badge.className = "text-[10px] md:text-xs bg-emerald-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+            badge.innerText = "Sincronizzato (2 File)";
         }
+
+        // Avvia la dashboard al caricamento della pagina
+        window.onload = () => caricaDatiSincronizzati();
 
         function popolaFiltroStore(data) {
             let storeSet = new Set();
@@ -375,16 +418,18 @@
 
         function applicaFiltri() {
             let storeSelezionato = document.getElementById('filterStore').value;
-            let query = document.getElementById('searchQuery').value.toLowerCase().trim();
+            let searchTerms = document.getElementById('searchQuery').value.toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
 
             filteredData = rawData.filter(item => {
                 let matchStore = !storeSelezionato || item.store === storeSelezionato;
-                let matchQuery = !query || 
-                                 item.ean.toLowerCase().includes(query) || 
-                                 item.codiceInterno.toLowerCase().includes(query) || 
-                                 item.descrizione.toLowerCase().includes(query) ||
-                                 item.misura.toLowerCase().includes(query) ||
-                                 item.colore.toLowerCase().includes(query);
+                
+                // Ricerca multiparola ovunque nel record
+                let fullStringLower = `${item.ean} ${item.codiceInterno} ${item.descrizione} ${item.misura} ${item.colore}`.toLowerCase();
+                let matchQuery = true;
+                if (searchTerms.length > 0) {
+                    matchQuery = searchTerms.every(term => fullStringLower.includes(term));
+                }
+
                 return matchStore && matchQuery;
             });
 
