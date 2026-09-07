@@ -35,6 +35,45 @@
         </button>
     </div>
 
+    <!-- Pulsante Toggle Riepilogo Giornaliero -->
+    <div class="d-none mb-3 text-end" id="summaryToggleWrapper">
+        <button class="btn btn-info text-white fw-bold shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDailySummary" aria-expanded="false" aria-controls="collapseDailySummary">
+            <i class="fas fa-calendar-alt me-2"></i>Mostra/Nascondi Riepilogo Giornaliero
+        </button>
+    </div>
+
+    <!-- SEZIONE RIEPILOGO GIORNALIERO PER STORE (Sopra i filtri) -->
+    <div class="collapse mb-4" id="collapseDailySummary">
+        <div class="card border-0 shadow-sm" style="border-left: 5px solid #0dcaf0 !important;">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 flex-wrap gap-2">
+                <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-calendar-day me-2 text-info"></i>Riepilogo Totale del Giorno per Negozio</h5>
+                <div style="width: 250px;">
+                    <select id="dailySummaryDate" class="form-select border-info fw-bold text-info" onchange="updateDailySummary()">
+                        <option value="">Caricamento date...</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover text-center align-middle mb-0" id="dailySummaryTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-start ps-4">Punto Vendita</th>
+                                <th>Incasso Totale</th>
+                                <th>Capi Venduti</th>
+                                <th>Num. Clienti (Scontrini)</th>
+                                <th>Sconto Applicato</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="5" class="text-muted py-4">Seleziona una data per visualizzare il riepilogo</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Filters -->
     <div class="filter-section d-none" id="filterSection">
         <div class="row g-3 align-items-end mb-3">
@@ -163,40 +202,6 @@
             </div>
         </div>
 
-        <!-- SEZIONE NUOVA: RIEPILOGO GIORNALIERO PER STORE -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card border-0 shadow-sm" style="border-left: 5px solid #0dcaf0 !important;">
-                    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
-                        <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-calendar-day me-2 text-info"></i>Riepilogo Totale del Giorno per Negozio</h5>
-                        <div style="width: 250px;">
-                            <select id="dailySummaryDate" class="form-select border-info fw-bold text-info" onchange="updateDailySummary()">
-                                <option value="">Caricamento date...</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover text-center align-middle mb-0" id="dailySummaryTable">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th class="text-start ps-4">Punto Vendita</th>
-                                        <th>Incasso Totale</th>
-                                        <th>Capi Venduti</th>
-                                        <th>Num. Clienti (Scontrini)</th>
-                                        <th>Sconto Applicato</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr><td colspan="5" class="text-muted py-4">Seleziona una data per visualizzare il riepilogo</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Charts Row 1 -->
         <div class="row">
             <div class="col-lg-6">
@@ -246,6 +251,8 @@
 </div>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- Aggiunta script Bootstrap necessario per il collapse -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
@@ -343,6 +350,7 @@
         extractMonthsAndStores();
 
         document.getElementById('filterSection').classList.remove('d-none');
+        document.getElementById('summaryToggleWrapper').classList.remove('d-none');
         
         selTrans.addEventListener('change', function() { COL_TRANS = this.value; updateDashboard(); updateDailySummary(); });
         selDesc.addEventListener('change', function() { COL_DESC = this.value; updateDashboard(); });
@@ -350,7 +358,7 @@
     
     function changeDataColumn() {
         COL_DATA = document.getElementById('colData').value;
-        extractMonthsAndStores(); // Ri-calcola i mesi disponibili nel filtro
+        extractMonthsAndStores(); 
         updateDashboard();
     }
 
@@ -410,7 +418,7 @@
             if (currDailyDate && Array.from(days).includes(currDailyDate)) {
                 selDailyDate.value = currDailyDate;
             } else {
-                selDailyDate.value = sortedDays[0]; // Seleziona l'ultimo giorno in automatico
+                selDailyDate.value = sortedDays[0];
             }
         }
         updateDailySummary();
@@ -477,7 +485,6 @@
             `);
         });
 
-        // Add total row
         tbody.insertAdjacentHTML('beforeend', `
             <tr class="table-info border-info fw-bold" style="font-size: 1.1rem;">
                 <td class="text-start ps-4">TOTALE RETE</td>
@@ -510,7 +517,6 @@
         const selMonth = document.getElementById('filterMonth').value;
         const selDay = document.getElementById('filterDay').value;
         
-        // MODIFICA: Dividiamo il testo di ricerca in un array di singole parole
         const searchTerms = document.getElementById('filterDesc').value.toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
 
         let totIncasso = 0; let totListino = 0; let totCapi = 0;
@@ -531,12 +537,10 @@
             let descVal = (row[COL_DESC] || '').trim();
             let descLower = descVal.toLowerCase();
             
-            // Applica Filtri Globali
             if (selStore !== 'ALL' && storeVal !== selStore) return;
             if (selMonth !== 'ALL' && monthVal !== selMonth) return;
             if (selDay !== 'ALL' && dayVal !== selDay) return;
             
-            // MODIFICA: Verifica che ogni singola parola cercata sia inclusa nella descrizione
             if (searchTerms.length > 0 && !searchTerms.every(term => descLower.includes(term))) return;
             
             filteredData.push(row);
@@ -609,13 +613,11 @@
 
         let reportHtml = "<ul>";
 
-        // 1. Analisi Sconto
         let valSconto = "Il margine è solido, la leva promozionale applicata è bassa.";
         if (scontoPerc > 15 && scontoPerc <= 35) valSconto = "È in atto una strategia di sconti media per spingere i volumi.";
         else if (scontoPerc > 35) valSconto = "Forte incidenza promozionale (presumibilmente periodo di saldi o liquidazione). Margini compressi per massimizzare il volume d'uscita.";
         reportHtml += `<li><strong>Strategia Prezzi:</strong> Lo sconto medio si attesta al <strong>${scontoPerc.toFixed(1)}%</strong>. ${valSconto}</li>`;
 
-        // 2. Best Store (se applicabile)
         let stores = Object.keys(dataStore);
         if (stores.length > 1) {
             let bestStore = stores.reduce((a, b) => dataStore[a] > dataStore[b] ? a : b);
@@ -623,14 +625,12 @@
             reportHtml += `<li><strong>Performance Negozi:</strong> Il punto vendita trainante in questa selezione è <strong>${bestStore}</strong>, che da solo genera il <strong>${percBest}%</strong> del fatturato totale filtrato.</li>`;
         }
 
-        // 3. Best Day
         let bestDay = Object.keys(dataDow).reduce((a, b) => dataDow[a] > dataDow[b] ? a : b);
         let maxDayVal = dataDow[bestDay];
         if(maxDayVal > 0) {
             reportHtml += `<li><strong>Giorno di Picco:</strong> Storicamente (sulla base dei filtri), il momento di maggiore affluenza e conversioni risulta essere il <strong>${bestDay}</strong>, indicando dove concentrare il personale o le azioni di marketing locali.</li>`;
         }
 
-        // 4. Analisi Prodotti
         let prodNames = Object.keys(productStats);
         if(prodNames.length > 0) {
             let topRevProd = prodNames.reduce((a, b) => productStats[a].incasso > productStats[b].incasso ? a : b);
@@ -695,7 +695,6 @@
             document.getElementById('dtBody').innerHTML = '';
         }
 
-        // Trova l'indice esatto della colonna Date
         let dateColIdx = columns.indexOf(COL_DATA);
 
         let trHead = document.createElement('tr');
@@ -713,7 +712,6 @@
                 let cellVal = row[col] !== null ? row[col] : '';
                 td.textContent = cellVal;
                 
-                // Iniettare l'attributo data-sort per forzare l'ordinamento cronologico di DataTables
                 if (col === COL_DATA) {
                     let m = moment(cellVal.trim(), ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
                     if(m.isValid()) td.setAttribute('data-sort', m.format('YYYYMMDDHHmmss'));
@@ -724,7 +722,6 @@
             document.getElementById('dtBody').appendChild(tr);
         });
 
-        // Inizializza DataTables ordinato per data decrescente (indice dinamico calcolato)
         dataTableInstance = $('#dataTable').DataTable({
             language: { url: 'https://cdn.datatables.net/plug-ins/1.13.4/i18n/it-IT.json' },
             pageLength: 15,
