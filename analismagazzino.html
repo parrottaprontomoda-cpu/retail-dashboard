@@ -87,7 +87,7 @@
             </button>
             <div id="mapping-panel" class="hidden p-5 border-t border-gray-200 bg-white">
                 <div class="mb-4 text-xs text-amber-800 bg-amber-50 p-3 rounded border border-amber-200">
-                    <i class="fa-solid fa-circle-info mr-1"></i> Se il "Venduto" o il "Caricato" segnano 0 o sballano, verifica qui sotto che la voce <strong>"Quantità"</strong> sia assegnata alla colonna corretta per entrambi i file.
+                    <i class="fa-solid fa-circle-info mr-1"></i> <strong>Risoluzione problemi zeri:</strong> Il sistema trasforma in automatico le quantità negative (es. "Scarichi") in Venduto. Controlla solo che l'ultima voce <strong>"Quantità"</strong> sia assegnata alla colonna corretta del tuo foglio Google.
                 </div>
                 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -107,7 +107,7 @@
 
                     <!-- Configurazione VENDITE -->
                     <div class="space-y-3">
-                        <h4 class="text-xs font-bold text-emerald-700 uppercase border-b pb-1">2. File Vendite (Scontrini)</h4>
+                        <h4 class="text-xs font-bold text-emerald-700 uppercase border-b pb-1">2. File Vendite (Scontrini/Scarichi)</h4>
                         <div class="grid grid-cols-2 gap-2 text-xs items-center">
                             <label class="font-semibold text-gray-600 text-right">Store:</label> <select id="map_v_store" class="border p-1.5 rounded focus:ring-1"></select>
                             <label class="font-semibold text-gray-600 text-right">EAN:</label> <select id="map_v_ean" class="border p-1.5 rounded focus:ring-1"></select>
@@ -231,7 +231,7 @@
         const URL_VENDITE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1717092575&single=true&output=csv";
         const URL_CARICHI = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=684692288&single=true&output=csv";
 
-        // Variabili globali per memorizzare i file interi non processati
+        // Variabili globali per memorizzare i file interi crudi
         let rawCarichiMatrix = [];
         let rawVenditeMatrix = [];
         
@@ -257,7 +257,6 @@
             }
         }
 
-        // Funzione per scaricare i CSV via Fetch e salvarli crudi
         function avviaSincronizzazione() {
             const badge = document.getElementById('status-badge');
             badge.className = "text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
@@ -269,7 +268,6 @@
 
             Promise.all([fetchVendite, fetchCarichi])
                 .then(([csvVendite, csvCarichi]) => {
-                    // PapaParse mode array (header: false) per poter leggere riga 0 come nomi colonne
                     rawVenditeMatrix = Papa.parse(csvVendite, { skipEmptyLines: true, header: false }).data;
                     rawCarichiMatrix = Papa.parse(csvCarichi, { skipEmptyLines: true, header: false }).data;
 
@@ -290,12 +288,12 @@
                 });
         }
 
-        // Analizza la riga 0 e popola i select HTML
+        // Legge l'intestazione e popola i selettori tendando di indovinare le colonne
         function costruisciInterfacciaMappatura() {
             const headerCarichi = rawCarichiMatrix[0];
             const headerVendite = rawVenditeMatrix[0];
 
-            function popolaSelect(idSelect, headerRow, expectedHint) {
+            function popolaSelect(idSelect, headerRow, keywords) {
                 const select = document.getElementById(idSelect);
                 select.innerHTML = '';
                 let bestMatchIdx = 0;
@@ -306,37 +304,37 @@
                     opt.innerText = `[Col ${idx+1}] ${colName}`;
                     select.appendChild(opt);
 
-                    // Tenta di auto-indovinare la colonna se il nome contiene la hint
-                    if (expectedHint && colName.toLowerCase().includes(expectedHint)) {
+                    let lowerCol = colName.toLowerCase();
+                    if (keywords.some(kw => lowerCol.includes(kw))) {
                         bestMatchIdx = idx;
                     }
                 });
                 select.value = bestMatchIdx;
             }
 
-            // Popola Carichi (Tenta di auto-mappare con parole chiave)
-            popolaSelect('map_c_store', headerCarichi, 'store');
-            popolaSelect('map_c_ean', headerCarichi, 'ean');
-            popolaSelect('map_c_cod', headerCarichi, 'codice');
-            popolaSelect('map_c_desc', headerCarichi, 'descriz');
-            popolaSelect('map_c_mis', headerCarichi, 'misura');
-            popolaSelect('map_c_col', headerCarichi, 'colore');
-            popolaSelect('map_c_qta', headerCarichi, 'qta'); // Tenta indovinare Quantità
+            // Indovina per CARICHI
+            popolaSelect('map_c_store', headerCarichi, ['store', 'negozio']);
+            popolaSelect('map_c_ean', headerCarichi, ['ean', 'barcode']);
+            popolaSelect('map_c_cod', headerCarichi, ['codice', 'articolo']);
+            popolaSelect('map_c_desc', headerCarichi, ['descriz']);
+            popolaSelect('map_c_mis', headerCarichi, ['misura', 'taglia']);
+            popolaSelect('map_c_col', headerCarichi, ['colore']);
+            popolaSelect('map_c_qta', headerCarichi, ['qta', 'quant', 'pezzi', 'carico']);
 
-            // Popola Vendite (Tenta di auto-mappare con parole chiave)
-            popolaSelect('map_v_store', headerVendite, 'store');
-            popolaSelect('map_v_ean', headerVendite, 'ean');
-            popolaSelect('map_v_cod', headerVendite, 'codice');
-            popolaSelect('map_v_desc', headerVendite, 'descriz');
-            popolaSelect('map_v_mis', headerVendite, 'misura');
-            popolaSelect('map_v_col', headerVendite, 'colore');
-            popolaSelect('map_v_qta', headerVendite, 'qta'); // Tenta indovinare Quantità
+            // Indovina per VENDITE
+            popolaSelect('map_v_store', headerVendite, ['store', 'negozio']);
+            popolaSelect('map_v_ean', headerVendite, ['ean', 'barcode']);
+            popolaSelect('map_v_cod', headerVendite, ['codice', 'articolo']);
+            popolaSelect('map_v_desc', headerVendite, ['descriz']);
+            popolaSelect('map_v_mis', headerVendite, ['misura', 'taglia']);
+            popolaSelect('map_v_col', headerVendite, ['colore']);
+            popolaSelect('map_v_qta', headerVendite, ['qta', 'quant', 'pezzi', 'scarico', 'vendut']);
         }
 
-        // Funzione di utilità per i numeri
+        // Pulisce le valute o i segni negativi e restituisce un numero valido
         function parseNum(val) {
             if (!val) return 0;
-            let str = String(val).replace(/[€\s]/g, '');
+            let str = String(val).replace(/[a-zA-Z€\s]/g, ''); // Toglie lettere e valute (es. "pz", "€")
             if(str.includes(',') && str.includes('.')) {
                 str = str.replace(/\./g, '').replace(',', '.');
             } else if(str.includes(',')) {
@@ -345,9 +343,8 @@
             return parseFloat(str) || 0;
         }
 
-        // Legge le impostazioni scelte dall'utente e costruisce rawData
+        // Funzione Cuore: Unisce i due file basandosi sulle scelte dei menu a tendina
         function applicaMappaturaERicalcola() {
-            // Mappa configurazioni lette dall'interfaccia
             const MAP_C = {
                 STORE: parseInt(document.getElementById('map_c_store').value),
                 EAN: parseInt(document.getElementById('map_c_ean').value),
@@ -370,26 +367,29 @@
 
             let mappaArticoli = new Map();
 
+            // Chiave resiliente: usa il CODICE. Se è vuoto, ripiega sull'EAN.
             function getChiave(r, map) {
-                let ean = String(r[map.EAN] || '').trim().toUpperCase();
                 let cod = String(r[map.CODICE] || '').trim().toUpperCase();
+                let ean = String(r[map.EAN] || '').trim().toUpperCase();
+                let keyID = cod !== '' ? cod : ean; 
                 let mis = String(r[map.MISURA] || '').trim().toUpperCase();
                 let col = String(r[map.COLORE] || '').trim().toUpperCase();
-                return `${ean}|${cod}|${mis}|${col}`; 
+                return `${keyID}|${mis}|${col}`; 
             }
 
-            // PROCESSO CARICHI (Parte da indice 1 per saltare header)
+            // PROCESSO CARICHI
             for (let i = 1; i < rawCarichiMatrix.length; i++) {
                 let r = rawCarichiMatrix[i];
-                if (!r || r.length <= MAP_C.QTA) continue; // Evita righe vuote
-                if (String(r[MAP_C.STORE] || '').toLowerCase() === 'store') continue;
+                if (!r || r.length < 3) continue; 
+                let storeVal = String(r[MAP_C.STORE] || '').trim();
+                if (storeVal.toLowerCase() === 'store' || storeVal === '') continue;
 
                 let chiave = getChiave(r, MAP_C);
-                let qta = parseNum(r[MAP_C.QTA]);
+                let qta = parseNum(r[MAP_C.QTA]); 
 
                 if (!mappaArticoli.has(chiave)) {
                     mappaArticoli.set(chiave, {
-                        store: String(r[MAP_C.STORE] || 'Altro').trim(),
+                        store: storeVal || 'Altro',
                         ean: String(r[MAP_C.EAN] || '').trim(),
                         codiceInterno: String(r[MAP_C.CODICE] || '').trim(),
                         descrizione: String(r[MAP_C.DESCRIZIONE] || '').trim(),
@@ -401,18 +401,21 @@
                 mappaArticoli.get(chiave).carico += qta;
             }
 
-            // PROCESSO VENDITE (Parte da indice 1 per saltare header)
+            // PROCESSO VENDITE
             for (let i = 1; i < rawVenditeMatrix.length; i++) {
                 let r = rawVenditeMatrix[i];
-                if (!r || r.length <= MAP_V.QTA) continue;
-                if (String(r[MAP_V.STORE] || '').toLowerCase() === 'store') continue;
+                if (!r || r.length < 3) continue;
+                let storeVal = String(r[MAP_V.STORE] || '').trim();
+                if (storeVal.toLowerCase() === 'store' || storeVal === '') continue;
 
                 let chiave = getChiave(r, MAP_V);
-                let qta = parseNum(r[MAP_V.QTA]);
+                // ATTENZIONE: Math.abs() assicura che se il gestionale esporta le vendite 
+                // come movimenti in negativo (es: -24), vengano calcolate come vendite positive.
+                let qta = Math.abs(parseNum(r[MAP_V.QTA])); 
 
                 if (!mappaArticoli.has(chiave)) {
                     mappaArticoli.set(chiave, {
-                        store: String(r[MAP_V.STORE] || 'Altro').trim(),
+                        store: storeVal || 'Altro',
                         ean: String(r[MAP_V.EAN] || '').trim(),
                         codiceInterno: String(r[MAP_V.CODICE] || '').trim(),
                         descrizione: String(r[MAP_V.DESCRIZIONE] || '').trim(),
@@ -424,7 +427,6 @@
                 mappaArticoli.get(chiave).venduto += qta;
             }
 
-            // UNIFICAZIONE
             rawData = [];
             mappaArticoli.forEach(item => {
                 item.giacenza = item.carico - item.venduto;
@@ -435,7 +437,7 @@
             popolaFiltroStore(rawData);
             applicaFiltri();
             
-            // Chiude il pannello mapping in automatico
+            // Chiudi il pannello mappatura una volta applicato
             document.getElementById('mapping-panel').classList.add('hidden');
             document.getElementById('mapping-icon').classList.remove('rotate-180');
         }
@@ -621,7 +623,7 @@
             tbody.innerHTML = '';
 
             if (filteredData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" class="text-center py-6 text-gray-400">Nessun articolo trovato. Modifica i filtri.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" class="text-center py-6 text-gray-400">Nessun articolo trovato. Controlla le associazioni dal pannello Mappatura.</td></tr>';
                 return;
             }
 
@@ -753,7 +755,7 @@
             document.getElementById('report-modal').classList.add('hidden');
         }
 
-        // Trigger automatico al caricamento
+        // Auto-avvio
         window.addEventListener('DOMContentLoaded', avviaSincronizzazione);
     </script>
 </body>
