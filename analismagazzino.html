@@ -228,18 +228,16 @@
 
     <!-- SCRIPT MOTORE DATI -->
     <script>
-        const URL_VENDITE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1717092575&single=true&output=csv";
+        // SOSTITUITA URL_VENDITE CON IL LINK DIRETTO BYPASSANDO IMPORTDATA()
+        const URL_VENDITE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRDe8CuX5hmmsw2Gjm2kioukyXSc8fvMYr28miD3r0D6H0y1mRjAz_9cTJSmXFFpkWqqc-CWXFM-IEc/pub?gid=0&single=true&output=csv";
         const URL_CARICHI = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=684692288&single=true&output=csv";
 
-        // Variabili globali per memorizzare i file interi crudi
         let rawCarichiMatrix = [];
         let rawVenditeMatrix = [];
         
-        // Risultato processato e filtrato
         let rawData = [];
         let filteredData = [];
 
-        // Sistema di priorità per le taglie
         const sizePriorityMap = {
             'xs': 1, 'extra small': 1, 's': 2, 'small': 2, 'm': 3, 'medium': 3,
             'l': 4, 'large': 4, 'xl': 5, 'extra large': 5, 'xxl': 6, '2xl': 6, '3xl': 7, '4xl': 8
@@ -288,7 +286,6 @@
                 });
         }
 
-        // Legge l'intestazione e popola i selettori tendando di indovinare le colonne
         function costruisciInterfacciaMappatura() {
             const headerCarichi = rawCarichiMatrix[0];
             const headerVendite = rawVenditeMatrix[0];
@@ -304,7 +301,7 @@
                     opt.innerText = `[Col ${idx+1}] ${colName}`;
                     select.appendChild(opt);
 
-                    let lowerCol = colName.toLowerCase();
+                    let lowerCol = String(colName).toLowerCase();
                     if (keywords.some(kw => lowerCol.includes(kw))) {
                         bestMatchIdx = idx;
                     }
@@ -312,38 +309,39 @@
                 select.value = bestMatchIdx;
             }
 
-            // Indovina per CARICHI
-            popolaSelect('map_c_store', headerCarichi, ['store', 'negozio']);
+            popolaSelect('map_c_store', headerCarichi, ['store', 'negozio', 'cli']);
             popolaSelect('map_c_ean', headerCarichi, ['ean', 'barcode']);
-            popolaSelect('map_c_cod', headerCarichi, ['codice', 'articolo']);
+            popolaSelect('map_c_cod', headerCarichi, ['codice', 'articolo', 'cod']);
             popolaSelect('map_c_desc', headerCarichi, ['descriz']);
-            popolaSelect('map_c_mis', headerCarichi, ['misura', 'taglia']);
-            popolaSelect('map_c_col', headerCarichi, ['colore']);
+            popolaSelect('map_c_mis', headerCarichi, ['misura', 'taglia', 'mis']);
+            popolaSelect('map_c_col', headerCarichi, ['colore', 'col']);
             popolaSelect('map_c_qta', headerCarichi, ['qta', 'quant', 'pezzi', 'carico']);
 
-            // Indovina per VENDITE
-            popolaSelect('map_v_store', headerVendite, ['store', 'negozio']);
+            popolaSelect('map_v_store', headerVendite, ['store', 'negozio', 'cli']);
             popolaSelect('map_v_ean', headerVendite, ['ean', 'barcode']);
-            popolaSelect('map_v_cod', headerVendite, ['codice', 'articolo']);
+            popolaSelect('map_v_cod', headerVendite, ['codice', 'articolo', 'cod']);
             popolaSelect('map_v_desc', headerVendite, ['descriz']);
-            popolaSelect('map_v_mis', headerVendite, ['misura', 'taglia']);
-            popolaSelect('map_v_col', headerVendite, ['colore']);
+            popolaSelect('map_v_mis', headerVendite, ['misura', 'taglia', 'mis']);
+            popolaSelect('map_v_col', headerVendite, ['colore', 'col']);
             popolaSelect('map_v_qta', headerVendite, ['qta', 'quant', 'pezzi', 'scarico', 'vendut']);
         }
 
-        // Pulisce le valute o i segni negativi e restituisce un numero valido
-        function parseNum(val) {
-            if (!val) return 0;
-            let str = String(val).replace(/[a-zA-Z€\s]/g, ''); // Toglie lettere e valute (es. "pz", "€")
+        function parseNumMigliorato(val) {
+            if (val === null || val === undefined) return 0;
+            let str = String(val).replace(/["=a-zA-Z€\s]/g, ''); 
+            
+            if (str.startsWith('(') && str.endsWith(')')) {
+                str = '-' + str.slice(1, -1);
+            }
             if(str.includes(',') && str.includes('.')) {
                 str = str.replace(/\./g, '').replace(',', '.');
             } else if(str.includes(',')) {
                 str = str.replace(',', '.');
             }
-            return parseFloat(str) || 0;
+            let num = parseFloat(str);
+            return isNaN(num) ? 0 : num;
         }
 
-        // Funzione Cuore: Unisce i due file basandosi sulle scelte dei menu a tendina
         function applicaMappaturaERicalcola() {
             const MAP_C = {
                 STORE: parseInt(document.getElementById('map_c_store').value),
@@ -366,61 +364,76 @@
             };
 
             let mappaArticoli = new Map();
+            let codiceToEan = {}; 
 
-            // Chiave resiliente: usa il CODICE. Se è vuoto, ripiega sull'EAN.
-            function getChiave(r, map) {
-                let cod = String(r[map.CODICE] || '').trim().toUpperCase();
-                let ean = String(r[map.EAN] || '').trim().toUpperCase();
-                let keyID = cod !== '' ? cod : ean; 
-                let mis = String(r[map.MISURA] || '').trim().toUpperCase();
-                let col = String(r[map.COLORE] || '').trim().toUpperCase();
-                return `${keyID}|${mis}|${col}`; 
+            function pulisciTesto(str) {
+                return String(str || '').replace(/["=]/g, '').trim().toUpperCase();
             }
 
-            // PROCESSO CARICHI
             for (let i = 1; i < rawCarichiMatrix.length; i++) {
                 let r = rawCarichiMatrix[i];
-                if (!r || r.length < 3) continue; 
-                let storeVal = String(r[MAP_C.STORE] || '').trim();
-                if (storeVal.toLowerCase() === 'store' || storeVal === '') continue;
+                if (!r || r.length < 3) continue;
+                
+                let storeVal = pulisciTesto(r[MAP_C.STORE]);
+                if (storeVal === 'STORE' || storeVal === 'NEGOZIO' || storeVal === 'CLI') continue; 
+                if (storeVal === '') storeVal = 'Principale';
 
-                let chiave = getChiave(r, MAP_C);
-                let qta = parseNum(r[MAP_C.QTA]); 
+                let ean = pulisciTesto(r[MAP_C.EAN]);
+                let cod = pulisciTesto(r[MAP_C.CODICE]);
+                let mis = pulisciTesto(r[MAP_C.MISURA]);
+                let col = pulisciTesto(r[MAP_C.COLORE]);
+                let desc = String(r[MAP_C.DESCRIZIONE] || '').replace(/["=]/g, '').trim();
+
+                if (cod !== '' && ean !== '') codiceToEan[cod] = ean;
+
+                let keyID = ean !== '' ? ean : cod; 
+                let chiave = `${keyID}|${mis}|${col}`;
+                let qta = parseNumMigliorato(r[MAP_C.QTA]); 
 
                 if (!mappaArticoli.has(chiave)) {
                     mappaArticoli.set(chiave, {
-                        store: storeVal || 'Altro',
-                        ean: String(r[MAP_C.EAN] || '').trim(),
-                        codiceInterno: String(r[MAP_C.CODICE] || '').trim(),
-                        descrizione: String(r[MAP_C.DESCRIZIONE] || '').trim(),
-                        misura: String(r[MAP_C.MISURA] || '-').trim(),
-                        colore: String(r[MAP_C.COLORE] || '-').trim(),
+                        store: storeVal,
+                        ean: ean,
+                        codiceInterno: cod,
+                        descrizione: desc,
+                        misura: mis,
+                        colore: col,
                         carico: 0, venduto: 0
                     });
                 }
                 mappaArticoli.get(chiave).carico += qta;
             }
 
-            // PROCESSO VENDITE
             for (let i = 1; i < rawVenditeMatrix.length; i++) {
                 let r = rawVenditeMatrix[i];
                 if (!r || r.length < 3) continue;
-                let storeVal = String(r[MAP_V.STORE] || '').trim();
-                if (storeVal.toLowerCase() === 'store' || storeVal === '') continue;
+                
+                let storeVal = pulisciTesto(r[MAP_V.STORE]);
+                if (storeVal === 'STORE' || storeVal === 'NEGOZIO' || storeVal === 'CLI') continue;
+                if (storeVal === '') storeVal = 'Principale';
 
-                let chiave = getChiave(r, MAP_V);
-                // ATTENZIONE: Math.abs() assicura che se il gestionale esporta le vendite 
-                // come movimenti in negativo (es: -24), vengano calcolate come vendite positive.
-                let qta = Math.abs(parseNum(r[MAP_V.QTA])); 
+                let ean = pulisciTesto(r[MAP_V.EAN]);
+                let cod = pulisciTesto(r[MAP_V.CODICE]);
+                let mis = pulisciTesto(r[MAP_V.MISURA]);
+                let col = pulisciTesto(r[MAP_V.COLORE]);
+
+                if (ean === '' && cod !== '' && codiceToEan[cod]) {
+                    ean = codiceToEan[cod];
+                }
+
+                let keyID = ean !== '' ? ean : cod;
+                let chiave = `${keyID}|${mis}|${col}`;
+                let qta = Math.abs(parseNumMigliorato(r[MAP_V.QTA])); 
 
                 if (!mappaArticoli.has(chiave)) {
+                    let desc = String(r[MAP_V.DESCRIZIONE] || '').replace(/["=]/g, '').trim();
                     mappaArticoli.set(chiave, {
-                        store: storeVal || 'Altro',
-                        ean: String(r[MAP_V.EAN] || '').trim(),
-                        codiceInterno: String(r[MAP_V.CODICE] || '').trim(),
-                        descrizione: String(r[MAP_V.DESCRIZIONE] || '').trim(),
-                        misura: String(r[MAP_V.MISURA] || '-').trim(),
-                        colore: String(r[MAP_V.COLORE] || '-').trim(),
+                        store: storeVal,
+                        ean: ean,
+                        codiceInterno: cod,
+                        descrizione: desc,
+                        misura: mis,
+                        colore: col,
                         carico: 0, venduto: 0
                     });
                 }
@@ -437,7 +450,6 @@
             popolaFiltroStore(rawData);
             applicaFiltri();
             
-            // Chiudi il pannello mappatura una volta applicato
             document.getElementById('mapping-panel').classList.add('hidden');
             document.getElementById('mapping-icon').classList.remove('rotate-180');
         }
