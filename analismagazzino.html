@@ -8,75 +8,82 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* === MOTORE DI STAMPA AVANZATO === */
         @media print {
-            /* 1. Imposta la pagina in orizzontale e i margini */
             @page {
-                size: A4 landscape;
-                margin: 10mm;
+                size: A4 portrait;
+                margin: 1.5cm;
             }
             
-            /* 2. Sblocca sfondi, limiti di altezza e scrollbars */
-            body, html { 
-                background: white !important; 
+            /* 1. Forza visibilità e blocca lo scorrimento ovunque */
+            html, body {
                 height: auto !important;
                 overflow: visible !important;
+                background: white !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
-            
+
+            /* 2. Neutralizza tutti i limiti di altezza e scroll orizzontali/verticali */
             * {
                 overflow: visible !important;
                 max-height: none !important;
+                height: auto !important;
+                box-shadow: none !important;
             }
 
             /* 3. Nascondi gli elementi inutili alla stampa */
             header, button, .no-print { 
                 display: none !important; 
             }
-            .print-only { 
-                display: block !important; 
-            }
-            .shadow-sm, .shadow-2xl, .shadow-md, .border { 
-                box-shadow: none !important; 
-            }
 
-            /* 4. Disabilita posizionamenti assoluti/fissi che bloccano l'impaginazione */
-            .fixed, .absolute, .inset-0 {
+            /* 4. Annulla posizionamenti assoluti e fissi (i veri colpevoli del blocco stampa) */
+            .fixed, .absolute, .inset-0, .sticky {
                 position: static !important;
             }
 
-            /* 5. Impaginazione intelligente per tabelle (evita righe tagliate a metà pagina) */
+            /* 5. GESTIONE ESCLUSIVA: Stampa Modale vs Stampa Dashboard */
+            /* Se il modale è aperto, nascondi la dashboard sotto */
+            body.modal-open main { 
+                display: none !important; 
+            }
+            /* Se il modale è chiuso, non stamparlo */
+            body:not(.modal-open) #report-modal { 
+                display: none !important; 
+            }
+
+            /* 6. Trasforma il Modale in un blocco di testo standard impaginabile */
+            #report-modal,
+            #report-modal > div,
+            #report-content {
+                display: block !important;
+                position: static !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+                background: white !important;
+            }
+
+            /* 7. Impaginazione intelligente Tabelle (Evita tagli a metà riga) */
             table {
                 width: 100% !important;
-                min-width: 0 !important; /* Annulla il min-w-[1100px] */
-                page-break-inside: auto;
+                table-layout: auto !important;
+                border-collapse: collapse !important;
+                min-width: 0 !important; /* Rimuove il vincolo orizzontale */
             }
             tr {
-                page-break-inside: avoid;
-                page-break-after: auto;
+                page-break-inside: avoid !important;
+                page-break-after: auto !important;
             }
             thead {
-                display: table-header-group;
+                display: table-header-group !important;
             }
             
-            /* 6. Formattazione specifica per assicurare che la matrice e il modale stampino tutti i fogli */
-            #matrice-card {
-                page-break-inside: avoid; /* Tiene unita l'intestazione della matrice ai dati */
-            }
-            
-            #report-modal {
-                padding: 0 !important;
-                background: white !important;
-            }
-            
-            /* Rimuove i limiti di layout del contenitore del modale per fluire tra le pagine */
-            #report-modal > div {
-                width: 100% !important;
-                max-width: none !important;
-                border: none !important;
-            }
-            
-            #report-content {
-                padding: 0 !important;
-                background: white !important;
+            /* 8. Mantieni uniti i blocchi matrice */
+            #matrice-card, .grid > div {
+                page-break-inside: avoid !important;
             }
         }
     </style>
@@ -573,8 +580,11 @@
             });
         }
 
-        // MOTORE DI GENERAZIONE REPORT E ANALISI IA AVANZATA (CON TOP MODELLI)
+        // MOTORE DI GENERAZIONE REPORT E ANALISI IA AVANZATA
         function generaReportAI() {
+            // Aggiunge la classe che nasconde la dashboard e "spiana" il modale in fase di stampa
+            document.body.classList.add('modal-open');
+            
             const modal = document.getElementById('report-modal');
             const container = document.getElementById('report-content');
             const lblFiltri = document.getElementById('report-filtri-attivi');
@@ -620,12 +630,12 @@
             let giudizioStore = totCarico > 0 ? (tassoMedio >= 50 ? "Ottima performance di vendita con un indice di rotazione superiore alla soglia di riferimento stagionale." : "Dinamica commerciale prudente; si suggerisce di valutare azioni di visibilità o promozioni mirate.") : "Nessun movimento rilevato.";
 
             let html = `
-                <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
+                <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-xl mb-4">
                     <h3 class="font-bold text-indigo-900 text-sm mb-1"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Sintesi Esecutiva IA</h3>
                     <p class="text-xs text-indigo-800 leading-relaxed">Report analitico elaborato su <strong>${filteredData.length}</strong> record per lo store <strong>${storeSel}</strong>. ${giudizioStore}</p>
                 </div>
 
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div class="bg-white p-3 rounded-lg border text-center">
                         <span class="text-[10px] text-gray-500 uppercase font-semibold">Volume Caricato</span>
                         <p class="text-lg font-bold text-blue-600">${totCarico}</p>
@@ -644,7 +654,7 @@
                     </div>
                 </div>
 
-                <div class="bg-white p-4 rounded-xl border">
+                <div class="bg-white p-4 rounded-xl border mb-4">
                     <h4 class="font-bold text-xs uppercase text-indigo-700 tracking-wider mb-3 flex items-center gap-2">
                         <i class="fa-solid fa-medal text-amber-500"></i> Top 6 Modelli con Maggiore Vendita e Rotazione
                     </h4>
@@ -703,6 +713,8 @@
         }
 
         function chiudiReportAI() {
+            // Rimuove la classe di stampa al termine
+            document.body.classList.remove('modal-open');
             document.getElementById('report-modal').classList.add('hidden');
         }
     </script>
