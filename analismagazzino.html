@@ -237,7 +237,6 @@
         let rawData = [];
         let filteredData = [];
 
-        // Sistema di priorità per le taglie come da indicazioni
         const sizePriorityMap = {
             'xs': 1, 'extra small': 1, 's': 2, 'small': 2, 'm': 3, 'medium': 3,
             'l': 4, 'large': 4, 'xl': 5, 'extra large': 5, 'xxl': 6, '2xl': 6, '3xl': 7, '4xl': 8
@@ -307,7 +306,7 @@
                 }
             }
 
-            // CARICHI (Magazzino)
+            // CARICHI (Magazzino) - Mappatura fissa da file originale
             popolaSelect('map_c_store', headerCarichi, 8);  // Col 9 CLI
             popolaSelect('map_c_ean', headerCarichi, 10);   // Col 11 LISTATO EAN
             popolaSelect('map_c_cod', headerCarichi, 2);    // Col 3 COD
@@ -316,13 +315,13 @@
             popolaSelect('map_c_col', headerCarichi, 19);   // Col 20 col
             popolaSelect('map_c_qta', headerCarichi, 3);    // Col 4 qta
 
-            // VENDITE - Mappatura aggiornata secondo l'immagine fornita dall'utente
+            // VENDITE - Mappatura corretta come da ultimo screenshot richiesto
             popolaSelect('map_v_store', headerVendite, 16); // Col 17 STORE
             popolaSelect('map_v_ean', headerVendite, 1);    // Col 2 Data
             popolaSelect('map_v_cod', headerVendite, 2);    // Col 3 ean
             popolaSelect('map_v_desc', headerVendite, 3);   // Col 4 cod int
-            popolaSelect('map_v_mis', headerVendite, 4);    // Col 5 Nome Articolo
-            popolaSelect('map_v_col', headerVendite, 5);    // Col 6 Misura
+            popolaSelect('map_v_mis', headerVendite, 5);    // Col 6 Misura
+            popolaSelect('map_v_col', headerVendite, 6);    // Col 7 Colore
             popolaSelect('map_v_qta', headerVendite, 7);    // Col 8 Quantità
         }
 
