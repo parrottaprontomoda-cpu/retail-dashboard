@@ -3,79 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retail BI - Sincronizzazione Flussi e IA</title>
+    <title>Retail BI - Sincronizzazione Flussi, Mappatura Dinamica e IA</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* === MOTORE DI STAMPA AVANZATO === */
         @media print {
-            @page {
-                size: A4 portrait;
-                margin: 1.5cm;
-            }
-            
-            html, body {
-                height: auto !important;
-                overflow: visible !important;
-                background: white !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-
-            * {
-                overflow: visible !important;
-                max-height: none !important;
-                height: auto !important;
-                box-shadow: none !important;
-            }
-
-            header, button, .no-print { 
-                display: none !important; 
-            }
-
-            .fixed, .absolute, .inset-0, .sticky {
-                position: static !important;
-            }
-
-            body.modal-open main { 
-                display: none !important; 
-            }
-            
-            body:not(.modal-open) #report-modal { 
-                display: none !important; 
-            }
-
-            #report-modal,
-            #report-modal > div,
-            #report-content {
-                display: block !important;
-                position: static !important;
-                width: 100% !important;
-                max-width: 100% !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                border: none !important;
-                background: white !important;
-            }
-
-            table {
-                width: 100% !important;
-                table-layout: auto !important;
-                border-collapse: collapse !important;
-                min-width: 0 !important; 
-            }
-            tr {
-                page-break-inside: avoid !important;
-                page-break-after: auto !important;
-            }
-            thead {
-                display: table-header-group !important;
-            }
-            
-            #matrice-card, .grid > div {
-                page-break-inside: avoid !important;
-            }
+            @page { size: A4 portrait; margin: 1.5cm; }
+            html, body { height: auto !important; overflow: visible !important; background: white !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            * { overflow: visible !important; max-height: none !important; height: auto !important; box-shadow: none !important; }
+            header, button, .no-print { display: none !important; }
+            .fixed, .absolute, .inset-0, .sticky { position: static !important; }
+            body.modal-open main { display: none !important; }
+            body:not(.modal-open) #report-modal { display: none !important; }
+            #report-modal, #report-modal > div, #report-content { display: block !important; position: static !important; width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 0 !important; border: none !important; background: white !important; }
+            table { width: 100% !important; table-layout: auto !important; border-collapse: collapse !important; min-width: 0 !important; }
+            tr { page-break-inside: avoid !important; page-break-after: auto !important; }
+            thead { display: table-header-group !important; }
+            #matrice-card, .grid > div { page-break-inside: avoid !important; }
         }
     </style>
 </head>
@@ -89,8 +35,8 @@
             </h1>
             <div class="flex items-center space-x-2">
                 <span id="status-badge" class="text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap">In attesa...</span>
-                <button onclick="caricaDatiSincronizzati()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-sm" title="Aggiorna Dati">
-                    <i class="fa-solid fa-sync"></i>
+                <button onclick="avviaSincronizzazione()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-sm" title="Scarica Dati dai Link">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
                 </button>
                 <button onclick="generaReportAI()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition shadow-sm flex items-center gap-1.5">
                     <i class="fa-solid fa-file-lines"></i> Genera Report & IA
@@ -99,7 +45,6 @@
         </div>
     </header>
 
-    <!-- Container Principale -->
     <main class="container mx-auto px-4 py-6 max-w-7xl">
         
         <!-- KPI Cards -->
@@ -134,10 +79,59 @@
             </div>
         </div>
 
-        <!-- Filtri -->
+        <!-- MODULO NASCOSTO: MAPPATURA COLONNE DINAMICA -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 no-print overflow-hidden">
+            <button onclick="toggleMappingPanel()" class="w-full bg-slate-50 hover:bg-slate-100 p-4 flex justify-between items-center text-sm font-bold uppercase text-slate-700 tracking-wider transition">
+                <span><i class="fa-solid fa-cogs mr-2 text-slate-500"></i> Impostazioni Mappatura Colonne CSV</span>
+                <i id="mapping-icon" class="fa-solid fa-chevron-down text-slate-500 transition-transform duration-300"></i>
+            </button>
+            <div id="mapping-panel" class="hidden p-5 border-t border-gray-200 bg-white">
+                <div class="mb-4 text-xs text-amber-800 bg-amber-50 p-3 rounded border border-amber-200">
+                    <i class="fa-solid fa-circle-info mr-1"></i> Se il "Venduto" o il "Caricato" segnano 0 o sballano, verifica qui sotto che la voce <strong>"Quantità"</strong> sia assegnata alla colonna corretta per entrambi i file.
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Configurazione CARICHI -->
+                    <div class="space-y-3">
+                        <h4 class="text-xs font-bold text-blue-700 uppercase border-b pb-1">1. File Carichi (Magazzino)</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs items-center">
+                            <label class="font-semibold text-gray-600 text-right">Store:</label> <select id="map_c_store" class="border p-1.5 rounded focus:ring-1"></select>
+                            <label class="font-semibold text-gray-600 text-right">EAN:</label> <select id="map_c_ean" class="border p-1.5 rounded focus:ring-1"></select>
+                            <label class="font-semibold text-gray-600 text-right">Codice:</label> <select id="map_c_cod" class="border p-1.5 rounded focus:ring-1"></select>
+                            <label class="font-semibold text-gray-600 text-right">Descrizione:</label> <select id="map_c_desc" class="border p-1.5 rounded focus:ring-1"></select>
+                            <label class="font-semibold text-gray-600 text-right">Misura:</label> <select id="map_c_mis" class="border p-1.5 rounded focus:ring-1"></select>
+                            <label class="font-semibold text-gray-600 text-right">Colore:</label> <select id="map_c_col" class="border p-1.5 rounded focus:ring-1"></select>
+                            <label class="font-bold text-blue-700 text-right">Quantità Caricata:</label> <select id="map_c_qta" class="border-2 border-blue-300 bg-blue-50 p-1.5 rounded font-bold text-blue-800"></select>
+                        </div>
+                    </div>
+
+                    <!-- Configurazione VENDITE -->
+                    <div class="space-y-3">
+                        <h4 class="text-xs font-bold text-emerald-700 uppercase border-b pb-1">2. File Vendite (Scontrini)</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs items-center">
+                            <label class="font-semibold text-gray-600 text-right">Store:</label> <select id="map_v_store" class="border p-1.5 rounded focus:ring-1"></select>
+                            <label class="font-semibold text-gray-600 text-right">EAN:</label> <select id="map_v_ean" class="border p-1.5 rounded focus:ring-1"></select>
+                            <label class="font-semibold text-gray-600 text-right">Codice:</label> <select id="map_v_cod" class="border p-1.5 rounded focus:ring-1"></select>
+                            <label class="font-semibold text-gray-600 text-right">Descrizione:</label> <select id="map_v_desc" class="border p-1.5 rounded focus:ring-1"></select>
+                            <label class="font-semibold text-gray-600 text-right">Misura:</label> <select id="map_v_mis" class="border p-1.5 rounded focus:ring-1"></select>
+                            <label class="font-semibold text-gray-600 text-right">Colore:</label> <select id="map_v_col" class="border p-1.5 rounded focus:ring-1"></select>
+                            <label class="font-bold text-emerald-700 text-right">Quantità Venduta:</label> <select id="map_v_qta" class="border-2 border-emerald-300 bg-emerald-50 p-1.5 rounded font-bold text-emerald-800"></select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex justify-end">
+                    <button onclick="applicaMappaturaERicalcola()" class="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2 rounded shadow-sm text-sm font-bold transition flex items-center gap-2">
+                        <i class="fa-solid fa-check-double"></i> Applica Mappatura e Ricalcola
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtri Ricerca Rapida -->
         <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 mb-6 no-print">
             <div class="flex justify-between items-center mb-4">
-                <h2 class="text-sm font-bold uppercase text-gray-500 tracking-wider"><i class="fa-solid fa-filter mr-2"></i> Filtri di Ricerca</h2>
+                <h2 class="text-sm font-bold uppercase text-gray-500 tracking-wider"><i class="fa-solid fa-filter mr-2"></i> Filtri di Ricerca Rapida</h2>
                 <button onclick="resetFiltri()" class="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-lg font-medium transition">
                     <i class="fa-solid fa-rotate-left mr-1"></i> Reset Filtri
                 </button>
@@ -151,7 +145,7 @@
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Cerca Articolo / EAN / Codice / Misura / Colore</label>
-                    <input type="text" id="searchQuery" placeholder="Digita per filtrare (anche parole multiple non consecutive)..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
+                    <input type="text" id="searchQuery" placeholder="Digita parole multiple..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
                 </div>
             </div>
         </div>
@@ -165,7 +159,7 @@
             <div id="matrice-container" class="overflow-x-auto"></div>
         </div>
 
-        <!-- Statistiche Top Misure e Colori -->
+        <!-- Statistiche Top -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
                 <h3 class="text-xs font-bold uppercase text-gray-500 mb-3 tracking-wider"><i class="fa-solid fa-ruler mr-2 text-indigo-500"></i> Top Misure più Vendute</h3>
@@ -197,15 +191,15 @@
                             <th class="py-3 px-3">Descrizione</th>
                             <th class="py-3 px-3 text-center">Misura</th>
                             <th class="py-3 px-3 text-center">Colore</th>
-                            <th class="py-3 px-3 text-center">Pezzi Caricati</th>
-                            <th class="py-3 px-3 text-center">Pezzi Venduti</th>
+                            <th class="py-3 px-3 text-center">Pz. Caricati</th>
+                            <th class="py-3 px-3 text-center">Pz. Venduti</th>
                             <th class="py-3 px-3 text-center">Giacenza</th>
                             <th class="py-3 px-3 text-center">Tasso Vendita</th>
                             <th class="py-3 px-3 text-center">Stato</th>
                         </tr>
                     </thead>
                     <tbody id="table-body" class="text-sm divide-y divide-gray-100">
-                        <tr><td colspan="11" class="text-center py-6 text-gray-400">Inizializzazione modulo. Clicca Aggiorna Dati in alto.</td></tr>
+                        <tr><td colspan="11" class="text-center py-6 text-gray-400">Inizializzazione modulo. Clicca la nuvola in alto per scaricare.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -222,87 +216,124 @@
                 </div>
                 <button onclick="chiudiReportAI()" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div id="report-content" class="p-6 overflow-y-auto space-y-6 text-sm text-gray-700 bg-gray-50">
-                <!-- Contenuto dinamico IA -->
-            </div>
+            <div id="report-content" class="p-6 overflow-y-auto space-y-6 text-sm text-gray-700 bg-gray-50"></div>
             <div class="bg-white border-t px-6 py-4 flex justify-end space-x-3 no-print">
                 <button onclick="chiudiReportAI()" class="px-4 py-2 border rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100">Chiudi</button>
                 <button onclick="window.print()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 flex items-center gap-1.5 shadow-sm">
-                    <i class="fa-solid fa-print"></i> Stampa / Salva in PDF
+                    <i class="fa-solid fa-print"></i> Stampa PDF
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Script JavaScript -->
+    <!-- SCRIPT MOTORE DATI -->
     <script>
-        // =====================================================================
-        // 1. IMPOSTAZIONI FILE CSV
-        // =====================================================================
         const URL_VENDITE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1717092575&single=true&output=csv";
         const URL_CARICHI = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=684692288&single=true&output=csv";
 
-        // =====================================================================
-        // 2. MAPPATURA COLONNE INDIPENDENTE (Indici partendo da 0)
-        // A=0, B=1, C=2, D=3, E=4, F=5, G=6, H=7, I=8
-        // =====================================================================
-        const MAP_CARICHI = {
-            STORE: 0, EAN: 1, CODICE: 2, DESCRIZIONE: 3, MISURA: 4, COLORE: 5,
-            QTA: 6 // <-- COLONNA CON LA QTA DI CARICO
-        };
-
-        const MAP_VENDITE = {
-            STORE: 0, EAN: 1, CODICE: 2, DESCRIZIONE: 3, MISURA: 4, COLORE: 5,
-            QTA: 7 // <-- COLONNA CON LA QTA VENDUTA
-        };
+        // Variabili globali per memorizzare i file interi non processati
+        let rawCarichiMatrix = [];
+        let rawVenditeMatrix = [];
         
+        // Risultato processato e filtrato
         let rawData = [];
         let filteredData = [];
 
         // Sistema di priorità per le taglie
         const sizePriorityMap = {
-            'xs': 1, 'extra small': 1,
-            's': 2, 'small': 2,
-            'm': 3, 'medium': 3,
-            'l': 4, 'large': 4,
-            'xl': 5, 'extra large': 5,
-            'xxl': 6, '2xl': 6, '3xl': 7, '4xl': 8
+            'xs': 1, 'extra small': 1, 's': 2, 'small': 2, 'm': 3, 'medium': 3,
+            'l': 4, 'large': 4, 'xl': 5, 'extra large': 5, 'xxl': 6, '2xl': 6, '3xl': 7, '4xl': 8
         };
 
-        function getMisuraWeight(misura) {
-            if (!misura) return 999;
-            let mClean = String(misura).trim().toLowerCase();
-            if (sizePriorityMap[mClean] !== undefined) return sizePriorityMap[mClean];
-            let num = parseFloat(mClean);
-            if (!isNaN(num)) return 100 + num;
-            return 500;
+        function toggleMappingPanel() {
+            const panel = document.getElementById('mapping-panel');
+            const icon = document.getElementById('mapping-icon');
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                icon.classList.add('rotate-180');
+            } else {
+                panel.classList.add('hidden');
+                icon.classList.remove('rotate-180');
+            }
         }
 
-        // Funzione per avviare il caricamento simultaneo
-        function caricaDatiSincronizzati() {
+        // Funzione per scaricare i CSV via Fetch e salvarli crudi
+        function avviaSincronizzazione() {
             const badge = document.getElementById('status-badge');
             badge.className = "text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-            badge.innerText = "Sincronizzazione 2 Sorgenti...";
+            badge.innerText = "Download in corso...";
 
             const t = new Date().getTime();
-            const fetchVendite = fetch(URL_VENDITE + "&_t=" + t).then(res => {
-                if (!res.ok) throw new Error("Errore Vendite: " + res.status);
-                return res.text();
-            });
-            const fetchCarichi = fetch(URL_CARICHI + "&_t=" + t).then(res => {
-                if (!res.ok) throw new Error("Errore Carichi: " + res.status);
-                return res.text();
-            });
+            const fetchVendite = fetch(URL_VENDITE + "&_t=" + t).then(res => res.text());
+            const fetchCarichi = fetch(URL_CARICHI + "&_t=" + t).then(res => res.text());
 
             Promise.all([fetchVendite, fetchCarichi])
-                .then(([csvVendite, csvCarichi]) => elaboraDoppioFlusso(csvVendite, csvCarichi, badge))
+                .then(([csvVendite, csvCarichi]) => {
+                    // PapaParse mode array (header: false) per poter leggere riga 0 come nomi colonne
+                    rawVenditeMatrix = Papa.parse(csvVendite, { skipEmptyLines: true, header: false }).data;
+                    rawCarichiMatrix = Papa.parse(csvCarichi, { skipEmptyLines: true, header: false }).data;
+
+                    if(rawCarichiMatrix.length === 0 || rawVenditeMatrix.length === 0){
+                        throw new Error("Uno o entrambi i file sono vuoti.");
+                    }
+
+                    costruisciInterfacciaMappatura();
+                    applicaMappaturaERicalcola();
+
+                    badge.className = "text-[10px] md:text-xs bg-emerald-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
+                    badge.innerText = "Dati Sincronizzati";
+                })
                 .catch(err => {
                     console.error(err);
                     badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-                    badge.innerText = "Errore Flussi";
+                    badge.innerText = "Errore Connessione";
                 });
         }
 
+        // Analizza la riga 0 e popola i select HTML
+        function costruisciInterfacciaMappatura() {
+            const headerCarichi = rawCarichiMatrix[0];
+            const headerVendite = rawVenditeMatrix[0];
+
+            function popolaSelect(idSelect, headerRow, expectedHint) {
+                const select = document.getElementById(idSelect);
+                select.innerHTML = '';
+                let bestMatchIdx = 0;
+                
+                headerRow.forEach((colName, idx) => {
+                    let opt = document.createElement('option');
+                    opt.value = idx;
+                    opt.innerText = `[Col ${idx+1}] ${colName}`;
+                    select.appendChild(opt);
+
+                    // Tenta di auto-indovinare la colonna se il nome contiene la hint
+                    if (expectedHint && colName.toLowerCase().includes(expectedHint)) {
+                        bestMatchIdx = idx;
+                    }
+                });
+                select.value = bestMatchIdx;
+            }
+
+            // Popola Carichi (Tenta di auto-mappare con parole chiave)
+            popolaSelect('map_c_store', headerCarichi, 'store');
+            popolaSelect('map_c_ean', headerCarichi, 'ean');
+            popolaSelect('map_c_cod', headerCarichi, 'codice');
+            popolaSelect('map_c_desc', headerCarichi, 'descriz');
+            popolaSelect('map_c_mis', headerCarichi, 'misura');
+            popolaSelect('map_c_col', headerCarichi, 'colore');
+            popolaSelect('map_c_qta', headerCarichi, 'qta'); // Tenta indovinare Quantità
+
+            // Popola Vendite (Tenta di auto-mappare con parole chiave)
+            popolaSelect('map_v_store', headerVendite, 'store');
+            popolaSelect('map_v_ean', headerVendite, 'ean');
+            popolaSelect('map_v_cod', headerVendite, 'codice');
+            popolaSelect('map_v_desc', headerVendite, 'descriz');
+            popolaSelect('map_v_mis', headerVendite, 'misura');
+            popolaSelect('map_v_col', headerVendite, 'colore');
+            popolaSelect('map_v_qta', headerVendite, 'qta'); // Tenta indovinare Quantità
+        }
+
+        // Funzione di utilità per i numeri
         function parseNum(val) {
             if (!val) return 0;
             let str = String(val).replace(/[€\s]/g, '');
@@ -314,14 +345,32 @@
             return parseFloat(str) || 0;
         }
 
-        function elaboraDoppioFlusso(csvVendite, csvCarichi, badge) {
-            let dataVendite = Papa.parse(csvVendite, { skipEmptyLines: true }).data;
-            let dataCarichi = Papa.parse(csvCarichi, { skipEmptyLines: true }).data;
+        // Legge le impostazioni scelte dall'utente e costruisce rawData
+        function applicaMappaturaERicalcola() {
+            // Mappa configurazioni lette dall'interfaccia
+            const MAP_C = {
+                STORE: parseInt(document.getElementById('map_c_store').value),
+                EAN: parseInt(document.getElementById('map_c_ean').value),
+                CODICE: parseInt(document.getElementById('map_c_cod').value),
+                DESCRIZIONE: parseInt(document.getElementById('map_c_desc').value),
+                MISURA: parseInt(document.getElementById('map_c_mis').value),
+                COLORE: parseInt(document.getElementById('map_c_col').value),
+                QTA: parseInt(document.getElementById('map_c_qta').value)
+            };
+
+            const MAP_V = {
+                STORE: parseInt(document.getElementById('map_v_store').value),
+                EAN: parseInt(document.getElementById('map_v_ean').value),
+                CODICE: parseInt(document.getElementById('map_v_cod').value),
+                DESCRIZIONE: parseInt(document.getElementById('map_v_desc').value),
+                MISURA: parseInt(document.getElementById('map_v_mis').value),
+                COLORE: parseInt(document.getElementById('map_v_col').value),
+                QTA: parseInt(document.getElementById('map_v_qta').value)
+            };
 
             let mappaArticoli = new Map();
 
-            // Costruisce la chiave basata sui dati articolo (EAN + Codice + Misura + Colore)
-            function getChiaveUnivoca(r, map) {
+            function getChiave(r, map) {
                 let ean = String(r[map.EAN] || '').trim().toUpperCase();
                 let cod = String(r[map.CODICE] || '').trim().toUpperCase();
                 let mis = String(r[map.MISURA] || '').trim().toUpperCase();
@@ -329,54 +378,53 @@
                 return `${ean}|${cod}|${mis}|${col}`; 
             }
 
-            // 1. CARICHI
-            let startCarichi = (dataCarichi.length > 0 && String(dataCarichi[0][MAP_CARICHI.STORE] || '').toLowerCase().includes('store')) ? 1 : 0;
-            for (let i = startCarichi; i < dataCarichi.length; i++) {
-                let r = dataCarichi[i];
-                if (!r || r.length === 0) continue;
+            // PROCESSO CARICHI (Parte da indice 1 per saltare header)
+            for (let i = 1; i < rawCarichiMatrix.length; i++) {
+                let r = rawCarichiMatrix[i];
+                if (!r || r.length <= MAP_C.QTA) continue; // Evita righe vuote
+                if (String(r[MAP_C.STORE] || '').toLowerCase() === 'store') continue;
 
-                let chiave = getChiaveUnivoca(r, MAP_CARICHI);
-                let qta = parseNum(r[MAP_CARICHI.QTA]);
+                let chiave = getChiave(r, MAP_C);
+                let qta = parseNum(r[MAP_C.QTA]);
 
                 if (!mappaArticoli.has(chiave)) {
                     mappaArticoli.set(chiave, {
-                        store: String(r[MAP_CARICHI.STORE] || 'Altro').trim(),
-                        ean: String(r[MAP_CARICHI.EAN] || '').trim(),
-                        codiceInterno: String(r[MAP_CARICHI.CODICE] || '').trim(),
-                        descrizione: String(r[MAP_CARICHI.DESCRIZIONE] || '').trim(),
-                        misura: String(r[MAP_CARICHI.MISURA] || '-').trim(),
-                        colore: String(r[MAP_CARICHI.COLORE] || '-').trim(),
-                        carico: 0,
-                        venduto: 0
+                        store: String(r[MAP_C.STORE] || 'Altro').trim(),
+                        ean: String(r[MAP_C.EAN] || '').trim(),
+                        codiceInterno: String(r[MAP_C.CODICE] || '').trim(),
+                        descrizione: String(r[MAP_C.DESCRIZIONE] || '').trim(),
+                        misura: String(r[MAP_C.MISURA] || '-').trim(),
+                        colore: String(r[MAP_C.COLORE] || '-').trim(),
+                        carico: 0, venduto: 0
                     });
                 }
                 mappaArticoli.get(chiave).carico += qta;
             }
 
-            // 2. VENDITE
-            let startVendite = (dataVendite.length > 0 && String(dataVendite[0][MAP_VENDITE.STORE] || '').toLowerCase().includes('store')) ? 1 : 0;
-            for (let i = startVendite; i < dataVendite.length; i++) {
-                let r = dataVendite[i];
-                if (!r || r.length === 0) continue;
+            // PROCESSO VENDITE (Parte da indice 1 per saltare header)
+            for (let i = 1; i < rawVenditeMatrix.length; i++) {
+                let r = rawVenditeMatrix[i];
+                if (!r || r.length <= MAP_V.QTA) continue;
+                if (String(r[MAP_V.STORE] || '').toLowerCase() === 'store') continue;
 
-                let chiave = getChiaveUnivoca(r, MAP_VENDITE);
-                let qta = parseNum(r[MAP_VENDITE.QTA]);
+                let chiave = getChiave(r, MAP_V);
+                let qta = parseNum(r[MAP_V.QTA]);
 
                 if (!mappaArticoli.has(chiave)) {
                     mappaArticoli.set(chiave, {
-                        store: String(r[MAP_VENDITE.STORE] || 'Altro').trim(),
-                        ean: String(r[MAP_VENDITE.EAN] || '').trim(),
-                        codiceInterno: String(r[MAP_VENDITE.CODICE] || '').trim(),
-                        descrizione: String(r[MAP_VENDITE.DESCRIZIONE] || '').trim(),
-                        misura: String(r[MAP_VENDITE.MISURA] || '-').trim(),
-                        colore: String(r[MAP_VENDITE.COLORE] || '-').trim(),
-                        carico: 0,
-                        venduto: 0
+                        store: String(r[MAP_V.STORE] || 'Altro').trim(),
+                        ean: String(r[MAP_V.EAN] || '').trim(),
+                        codiceInterno: String(r[MAP_V.CODICE] || '').trim(),
+                        descrizione: String(r[MAP_V.DESCRIZIONE] || '').trim(),
+                        misura: String(r[MAP_V.MISURA] || '-').trim(),
+                        colore: String(r[MAP_V.COLORE] || '-').trim(),
+                        carico: 0, venduto: 0
                     });
                 }
                 mappaArticoli.get(chiave).venduto += qta;
             }
 
+            // UNIFICAZIONE
             rawData = [];
             mappaArticoli.forEach(item => {
                 item.giacenza = item.carico - item.venduto;
@@ -386,12 +434,19 @@
 
             popolaFiltroStore(rawData);
             applicaFiltri();
-
-            badge.className = "text-[10px] md:text-xs bg-emerald-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-            badge.innerText = "Sincronizzato (2 File)";
+            
+            // Chiude il pannello mapping in automatico
+            document.getElementById('mapping-panel').classList.add('hidden');
+            document.getElementById('mapping-icon').classList.remove('rotate-180');
         }
 
-        window.onload = () => caricaDatiSincronizzati();
+        function getMisuraWeight(misura) {
+            let mClean = String(misura).trim().toLowerCase();
+            if (sizePriorityMap[mClean] !== undefined) return sizePriorityMap[mClean];
+            let num = parseFloat(mClean);
+            if (!isNaN(num)) return 100 + num;
+            return 500;
+        }
 
         function popolaFiltroStore(data) {
             let storeSet = new Set();
@@ -566,7 +621,7 @@
             tbody.innerHTML = '';
 
             if (filteredData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" class="text-center py-6 text-gray-400">Nessun articolo trovato.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" class="text-center py-6 text-gray-400">Nessun articolo trovato. Modifica i filtri.</td></tr>';
                 return;
             }
 
@@ -697,6 +752,9 @@
             document.body.classList.remove('modal-open');
             document.getElementById('report-modal').classList.add('hidden');
         }
+
+        // Trigger automatico al caricamento
+        window.addEventListener('DOMContentLoaded', avviaSincronizzazione);
     </script>
 </body>
 </html>
