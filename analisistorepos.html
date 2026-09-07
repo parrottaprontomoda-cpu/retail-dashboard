@@ -60,7 +60,7 @@
                 <label class="form-label fw-bold text-secondary">Ricerca Prodotto:</label>
                 <div class="input-group">
                     <span class="input-group-text"><i class="fas fa-search"></i></span>
-                    <input type="text" id="filterDesc" class="form-control form-control-lg" placeholder="Es. Giubbotto..." oninput="debounceUpdate()">
+                    <input type="text" id="filterDesc" class="form-control form-control-lg" placeholder="Es. Giubbotto blu..." oninput="debounceUpdate()">
                 </div>
             </div>
         </div>
@@ -509,7 +509,9 @@
         const selStore = document.getElementById('filterStore').value;
         const selMonth = document.getElementById('filterMonth').value;
         const selDay = document.getElementById('filterDay').value;
-        const textDescFilter = document.getElementById('filterDesc').value.toLowerCase().trim();
+        
+        // MODIFICA: Dividiamo il testo di ricerca in un array di singole parole
+        const searchTerms = document.getElementById('filterDesc').value.toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
 
         let totIncasso = 0; let totListino = 0; let totCapi = 0;
         let transazioniSet = new Set();
@@ -517,9 +519,7 @@
         let dataStore = {}; let dataMonth = {};
         let dataDow = { 'Lunedì':0, 'Martedì':0, 'Mercoledì':0, 'Giovedì':0, 'Venerdì':0, 'Sabato':0, 'Domenica':0 };
         
-        // Strutture per AI
         let productStats = {}; 
-
         let filteredData = [];
 
         rawData.forEach(row => {
@@ -529,12 +529,15 @@
             let monthVal = mDate.isValid() ? mDate.format("YYYY-MM") : 'Sconosciuto';
             let dayVal = mDate.isValid() ? mDate.format("YYYY-MM-DD") : 'Sconosciuto';
             let descVal = (row[COL_DESC] || '').trim();
+            let descLower = descVal.toLowerCase();
             
             // Applica Filtri Globali
             if (selStore !== 'ALL' && storeVal !== selStore) return;
             if (selMonth !== 'ALL' && monthVal !== selMonth) return;
             if (selDay !== 'ALL' && dayVal !== selDay) return;
-            if (textDescFilter !== '' && !descVal.toLowerCase().includes(textDescFilter)) return;
+            
+            // MODIFICA: Verifica che ogni singola parola cercata sia inclusa nella descrizione
+            if (searchTerms.length > 0 && !searchTerms.every(term => descLower.includes(term))) return;
             
             filteredData.push(row);
 
@@ -551,7 +554,6 @@
             let transId = (row[COL_TRANS] || '').trim();
             if(transId) transazioniSet.add(`${storeVal}_${dateVal}_${transId}`);
 
-            // Statistiche Prodotti per AI
             if(descVal) {
                 if(!productStats[descVal]) productStats[descVal] = { qta: 0, incasso: 0 };
                 productStats[descVal].qta += qta;
@@ -579,7 +581,6 @@
         let pmCliente = numClienti > 0 ? (totIncasso / numClienti) : 0;
         let scontoPerc = totListino > 0 ? (totSconto / totListino) * 100 : 0;
 
-        // Update KPIs
         document.getElementById('kpiIncasso').textContent = formatEur(totIncasso);
         document.getElementById('kpiSconto').textContent = formatEur(totSconto);
         document.getElementById('kpiScontoPerc').textContent = `${scontoPerc.toFixed(1)}% del listino`;
@@ -588,7 +589,6 @@
         document.getElementById('kpiPrezzoMedio').textContent = formatEur(pmCapo);
         document.getElementById('kpiSpesaMedia').textContent = formatEur(pmCliente);
 
-        // Update Charts
         renderChart('storeChart', 'bar', dataStore, 'Incasso (€)', '#0d6efd');
         const sortedMonthKeys = Object.keys(dataMonth).sort();
         const finalMonthData = {};
@@ -596,10 +596,7 @@
         renderChart('monthChart', 'line', finalMonthData, 'Incasso Mensile (€)', '#198754');
         renderChart('dowChart', 'bar', dataDow, 'Incasso per Giorno (€)', '#ffc107');
 
-        // Genera Report AI Locale
         generateAiReport(filteredData.length, totIncasso, scontoPerc, dataStore, dataDow, productStats);
-
-        // Update Table
         updateTable(filteredData);
     }
 
