@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retail BI - Ciclo Completo, Matrice e Report IA Avanzato</title>
+    <title>Retail BI - Sincronizzazione Flussi e IA</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -85,7 +85,7 @@
     <header class="bg-slate-900 text-white shadow-md sticky top-0 z-50">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <h1 class="text-base md:text-xl font-bold tracking-wide truncate">
-                <i class="fa-solid fa-store mr-2 text-emerald-400"></i> Controllo Ciclo Merce & Report IA
+                <i class="fa-solid fa-store mr-2 text-emerald-400"></i> Controllo Ciclo Merce
             </h1>
             <div class="flex items-center space-x-2">
                 <span id="status-badge" class="text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap">In attesa...</span>
@@ -151,7 +151,7 @@
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase text-gray-500 mb-1">Cerca Articolo / EAN / Codice / Misura / Colore</label>
-                    <input type="text" id="searchQuery" placeholder="Tocca un codice sotto o digita per filtrare..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
+                    <input type="text" id="searchQuery" placeholder="Digita per filtrare (anche parole multiple non consecutive)..." class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm">
                 </div>
             </div>
         </div>
@@ -223,6 +223,7 @@
                 <button onclick="chiudiReportAI()" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div id="report-content" class="p-6 overflow-y-auto space-y-6 text-sm text-gray-700 bg-gray-50">
+                <!-- Contenuto dinamico IA -->
             </div>
             <div class="bg-white border-t px-6 py-4 flex justify-end space-x-3 no-print">
                 <button onclick="chiudiReportAI()" class="px-4 py-2 border rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-100">Chiudi</button>
@@ -236,31 +237,29 @@
     <!-- Script JavaScript -->
     <script>
         // =====================================================================
-        // CONFIGURAZIONE URL DEI DUE FILE
+        // 1. IMPOSTAZIONI FILE CSV
         // =====================================================================
         const URL_VENDITE = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1717092575&single=true&output=csv";
         const URL_CARICHI = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=684692288&single=true&output=csv";
 
         // =====================================================================
-        // CONFIGURAZIONE COLONNE CSV (Indici partendo da 0)
-        // La colonna A = 0, B = 1, C = 2, H = 7, I = 8 ecc...
+        // 2. MAPPATURA COLONNE INDIPENDENTE (Indici partendo da 0)
+        // A=0, B=1, C=2, D=3, E=4, F=5, G=6, H=7, I=8
         // =====================================================================
-        const COL_BASE = {
-            STORE: 0,
-            EAN: 1,
-            CODICE: 2,
-            DESCRIZIONE: 3,
-            MISURA: 4,
-            COLORE: 5
+        const MAP_CARICHI = {
+            STORE: 0, EAN: 1, CODICE: 2, DESCRIZIONE: 3, MISURA: 4, COLORE: 5,
+            QTA: 6 // <-- COLONNA CON LA QTA DI CARICO
         };
 
-        // INDICI QUANTITÀ: Modifica qui se il totale pezzi si trova in un'altra colonna
-        const IDX_QTA_VENDUTA = 7; // Colonna H nel file VENDITE
-        const IDX_QTA_CARICO  = 6; // Colonna G nel file CARICHI
+        const MAP_VENDITE = {
+            STORE: 0, EAN: 1, CODICE: 2, DESCRIZIONE: 3, MISURA: 4, COLORE: 5,
+            QTA: 7 // <-- COLONNA CON LA QTA VENDUTA
+        };
         
         let rawData = [];
         let filteredData = [];
 
+        // Sistema di priorità per le taglie
         const sizePriorityMap = {
             'xs': 1, 'extra small': 1,
             's': 2, 'small': 2,
@@ -279,7 +278,7 @@
             return 500;
         }
 
-        // Funzione per avviare il caricamento simultaneo (Promise.all)
+        // Funzione per avviare il caricamento simultaneo
         function caricaDatiSincronizzati() {
             const badge = document.getElementById('status-badge');
             badge.className = "text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
@@ -287,65 +286,66 @@
 
             const t = new Date().getTime();
             const fetchVendite = fetch(URL_VENDITE + "&_t=" + t).then(res => {
-                if (!res.ok) throw new Error("Errore HTTP Vendite: " + res.status);
+                if (!res.ok) throw new Error("Errore Vendite: " + res.status);
                 return res.text();
             });
             const fetchCarichi = fetch(URL_CARICHI + "&_t=" + t).then(res => {
-                if (!res.ok) throw new Error("Errore HTTP Carichi: " + res.status);
+                if (!res.ok) throw new Error("Errore Carichi: " + res.status);
                 return res.text();
             });
 
             Promise.all([fetchVendite, fetchCarichi])
-                .then(([csvVendite, csvCarichi]) => {
-                    elaboraDoppioFlusso(csvVendite, csvCarichi, badge);
-                })
+                .then(([csvVendite, csvCarichi]) => elaboraDoppioFlusso(csvVendite, csvCarichi, badge))
                 .catch(err => {
-                    console.error("Errore Caricamento File Multiplo:", err);
+                    console.error(err);
                     badge.className = "text-[10px] md:text-xs bg-red-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
-                    badge.innerText = "Errore Connessione Flussi";
+                    badge.innerText = "Errore Flussi";
                 });
         }
 
         function parseNum(val) {
             if (!val) return 0;
-            return parseFloat(String(val).replace('€', '').replace(/\./g, '').replace(',', '.')) || 0;
+            let str = String(val).replace(/[€\s]/g, '');
+            if(str.includes(',') && str.includes('.')) {
+                str = str.replace(/\./g, '').replace(',', '.');
+            } else if(str.includes(',')) {
+                str = str.replace(',', '.');
+            }
+            return parseFloat(str) || 0;
         }
 
         function elaboraDoppioFlusso(csvVendite, csvCarichi, badge) {
             let dataVendite = Papa.parse(csvVendite, { skipEmptyLines: true }).data;
             let dataCarichi = Papa.parse(csvCarichi, { skipEmptyLines: true }).data;
 
-            // Mappa per unire e sommare i dati tramite chiave unica
             let mappaArticoli = new Map();
 
-            // Funzione per generare una chiave unica ed evitare conflitti su EAN assenti
-            function getChiaveUnivoca(r) {
-                let store = String(r[COL_BASE.STORE] || '').trim().toUpperCase();
-                let ean = String(r[COL_BASE.EAN] || '').trim().toUpperCase();
-                let cod = String(r[COL_BASE.CODICE] || '').trim().toUpperCase();
-                let mis = String(r[COL_BASE.MISURA] || '').trim().toUpperCase();
-                let col = String(r[COL_BASE.COLORE] || '').trim().toUpperCase();
-                return `${store}|${ean}|${cod}|${mis}|${col}`;
+            // Costruisce la chiave basata sui dati articolo (EAN + Codice + Misura + Colore)
+            function getChiaveUnivoca(r, map) {
+                let ean = String(r[map.EAN] || '').trim().toUpperCase();
+                let cod = String(r[map.CODICE] || '').trim().toUpperCase();
+                let mis = String(r[map.MISURA] || '').trim().toUpperCase();
+                let col = String(r[map.COLORE] || '').trim().toUpperCase();
+                return `${ean}|${cod}|${mis}|${col}`; 
             }
 
-            // 1. Processa CARICHI
-            let startCarichi = (dataCarichi.length > 0 && String(dataCarichi[0][COL_BASE.STORE]).toLowerCase().includes('store')) ? 1 : 0;
+            // 1. CARICHI
+            let startCarichi = (dataCarichi.length > 0 && String(dataCarichi[0][MAP_CARICHI.STORE] || '').toLowerCase().includes('store')) ? 1 : 0;
             for (let i = startCarichi; i < dataCarichi.length; i++) {
                 let r = dataCarichi[i];
-                if (!r || r.length === 0 || !r[COL_BASE.STORE]) continue;
-                if (String(r[COL_BASE.STORE]).toLowerCase() === 'store') continue;
+                if (!r || r.length === 0) continue;
 
-                let chiave = getChiaveUnivoca(r);
-                let qta = parseNum(r[IDX_QTA_CARICO]);
+                let chiave = getChiaveUnivoca(r, MAP_CARICHI);
+                let qta = parseNum(r[MAP_CARICHI.QTA]);
 
                 if (!mappaArticoli.has(chiave)) {
                     mappaArticoli.set(chiave, {
-                        store: String(r[COL_BASE.STORE] || 'Altro').trim(),
-                        ean: String(r[COL_BASE.EAN] || '').trim(),
-                        codiceInterno: String(r[COL_BASE.CODICE] || '').trim(),
-                        descrizione: String(r[COL_BASE.DESCRIZIONE] || '').trim(),
-                        misura: String(r[COL_BASE.MISURA] || '-').trim(),
-                        colore: String(r[COL_BASE.COLORE] || '-').trim(),
+                        store: String(r[MAP_CARICHI.STORE] || 'Altro').trim(),
+                        ean: String(r[MAP_CARICHI.EAN] || '').trim(),
+                        codiceInterno: String(r[MAP_CARICHI.CODICE] || '').trim(),
+                        descrizione: String(r[MAP_CARICHI.DESCRIZIONE] || '').trim(),
+                        misura: String(r[MAP_CARICHI.MISURA] || '-').trim(),
+                        colore: String(r[MAP_CARICHI.COLORE] || '-').trim(),
                         carico: 0,
                         venduto: 0
                     });
@@ -353,24 +353,23 @@
                 mappaArticoli.get(chiave).carico += qta;
             }
 
-            // 2. Processa VENDITE
-            let startVendite = (dataVendite.length > 0 && String(dataVendite[0][COL_BASE.STORE]).toLowerCase().includes('store')) ? 1 : 0;
+            // 2. VENDITE
+            let startVendite = (dataVendite.length > 0 && String(dataVendite[0][MAP_VENDITE.STORE] || '').toLowerCase().includes('store')) ? 1 : 0;
             for (let i = startVendite; i < dataVendite.length; i++) {
                 let r = dataVendite[i];
-                if (!r || r.length === 0 || !r[COL_BASE.STORE]) continue;
-                if (String(r[COL_BASE.STORE]).toLowerCase() === 'store') continue;
+                if (!r || r.length === 0) continue;
 
-                let chiave = getChiaveUnivoca(r);
-                let qta = parseNum(r[IDX_QTA_VENDUTA]);
+                let chiave = getChiaveUnivoca(r, MAP_VENDITE);
+                let qta = parseNum(r[MAP_VENDITE.QTA]);
 
                 if (!mappaArticoli.has(chiave)) {
                     mappaArticoli.set(chiave, {
-                        store: String(r[COL_BASE.STORE] || 'Altro').trim(),
-                        ean: String(r[COL_BASE.EAN] || '').trim(),
-                        codiceInterno: String(r[COL_BASE.CODICE] || '').trim(),
-                        descrizione: String(r[COL_BASE.DESCRIZIONE] || '').trim(),
-                        misura: String(r[COL_BASE.MISURA] || '-').trim(),
-                        colore: String(r[COL_BASE.COLORE] || '-').trim(),
+                        store: String(r[MAP_VENDITE.STORE] || 'Altro').trim(),
+                        ean: String(r[MAP_VENDITE.EAN] || '').trim(),
+                        codiceInterno: String(r[MAP_VENDITE.CODICE] || '').trim(),
+                        descrizione: String(r[MAP_VENDITE.DESCRIZIONE] || '').trim(),
+                        misura: String(r[MAP_VENDITE.MISURA] || '-').trim(),
+                        colore: String(r[MAP_VENDITE.COLORE] || '-').trim(),
                         carico: 0,
                         venduto: 0
                     });
@@ -378,7 +377,6 @@
                 mappaArticoli.get(chiave).venduto += qta;
             }
 
-            // 3. Compila RawData calcolando Giacenze
             rawData = [];
             mappaArticoli.forEach(item => {
                 item.giacenza = item.carico - item.venduto;
@@ -386,7 +384,6 @@
                 rawData.push(item);
             });
 
-            // 4. Esegue il flow della UI
             popolaFiltroStore(rawData);
             applicaFiltri();
 
@@ -394,12 +391,11 @@
             badge.innerText = "Sincronizzato (2 File)";
         }
 
-        // Avvia la dashboard al caricamento della pagina
         window.onload = () => caricaDatiSincronizzati();
 
         function popolaFiltroStore(data) {
             let storeSet = new Set();
-            data.forEach(d => { if (d.store) storeSet.add(d.store); });
+            data.forEach(d => { if (d.store && d.store.toUpperCase() !== 'STORE') storeSet.add(d.store); });
 
             const select = document.getElementById('filterStore');
             let valCorrente = select.value;
@@ -422,14 +418,11 @@
 
             filteredData = rawData.filter(item => {
                 let matchStore = !storeSelezionato || item.store === storeSelezionato;
-                
-                // Ricerca multiparola ovunque nel record
                 let fullStringLower = `${item.ean} ${item.codiceInterno} ${item.descrizione} ${item.misura} ${item.colore}`.toLowerCase();
                 let matchQuery = true;
                 if (searchTerms.length > 0) {
                     matchQuery = searchTerms.every(term => fullStringLower.includes(term));
                 }
-
                 return matchStore && matchQuery;
             });
 
@@ -447,8 +440,7 @@
 
         window.filtraPerCodice = function(codice) {
             if (!codice) return;
-            const inputSearch = document.getElementById('searchQuery');
-            inputSearch.value = codice;
+            document.getElementById('searchQuery').value = codice;
             applicaFiltri();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -478,10 +470,7 @@
                 filteredData.forEach(item => {
                     let m = item.misura && item.misura !== '' ? item.misura : 'Unica';
                     let c = item.colore && item.colore !== '' ? item.colore : 'Standard';
-                    
-                    setMisure.add(m);
-                    setColori.add(c);
-
+                    setMisure.add(m); setColori.add(c);
                     if (!matriceGiacenza[c]) matriceGiacenza[c] = {};
                     matriceGiacenza[c][m] = (matriceGiacenza[c][m] || 0) + item.giacenza;
                 });
@@ -490,13 +479,8 @@
                 let arrColori = Array.from(setColori).sort((a, b) => a.localeCompare(b));
 
                 let html = `<table class="w-full text-center border-collapse text-xs">
-                    <thead>
-                        <tr class="bg-gray-100 border-b">
-                            <th class="p-2 text-left border-r font-bold text-gray-600">Colore \\ Misura</th>`;
-                
-                arrMisure.forEach(m => {
-                    html += `<th class="p-2 border-r font-bold text-indigo-600 bg-indigo-50/50">${m}</th>`;
-                });
+                    <thead><tr class="bg-gray-100 border-b"><th class="p-2 text-left border-r font-bold text-gray-600">Colore \\ Misura</th>`;
+                arrMisure.forEach(m => { html += `<th class="p-2 border-r font-bold text-indigo-600 bg-indigo-50/50">${m}</th>`; });
                 html += `<th class="p-2 font-bold text-gray-700 bg-gray-200">Tot Colore</th></tr></thead><tbody>`;
 
                 arrColori.forEach(c => {
@@ -527,25 +511,14 @@
         }
 
         function calcolaTopStatistiche() {
-            let mapMisure = {};
-            let mapColori = {};
-
+            let mapMisure = {}; let mapColori = {};
             filteredData.forEach(item => {
-                let mis = item.misura;
-                let col = item.colore;
-                let vend = item.venduto;
-
-                if (mis && mis !== '-' && mis !== '') {
-                    mapMisure[mis] = (mapMisure[mis] || 0) + vend;
-                }
-                if (col && col !== '-' && col !== '') {
-                    mapColori[col] = (mapColori[col] || 0) + vend;
-                }
+                if (item.misura && item.misura !== '-') mapMisure[item.misura] = (mapMisure[item.misura] || 0) + item.venduto;
+                if (item.colore && item.colore !== '-') mapColori[item.colore] = (mapColori[item.colore] || 0) + item.venduto;
             });
 
             let topMisure = Object.entries(mapMisure).sort((a, b) => {
-                let wA = getMisuraWeight(a[0]);
-                let wB = getMisuraWeight(b[0]);
+                let wA = getMisuraWeight(a[0]); let wB = getMisuraWeight(b[0]);
                 if (wA !== wB) return wA - wB;
                 return b[1] - a[1];
             }).slice(0, 5);
@@ -559,12 +532,10 @@
         function renderTopList(containerId, dataArray, badgeClass) {
             const container = document.getElementById(containerId);
             container.innerHTML = '';
-
             if (dataArray.length === 0 || dataArray.reduce((acc, curr) => acc + curr[1], 0) === 0) {
                 container.innerHTML = '<span class="text-xs text-gray-400">Nessuna vendita registrata con i filtri attivi.</span>';
                 return;
             }
-
             dataArray.forEach(([nome, qta], index) => {
                 let div = document.createElement('div');
                 div.className = "flex justify-between items-center bg-gray-50 px-3 py-2 rounded-lg text-xs font-medium";
@@ -595,28 +566,23 @@
             tbody.innerHTML = '';
 
             if (filteredData.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" class="text-center py-6 text-gray-400">Nessun articolo trovato con i filtri correnti.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="11" class="text-center py-6 text-gray-400">Nessun articolo trovato.</td></tr>';
                 return;
             }
 
             filteredData.slice(0, 300).forEach(item => {
                 let badgeStato = '';
-                if (item.giacenza <= 0) {
-                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-800">Esaurito 🔴</span>';
-                } else if (item.venduto === 0) {
-                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800">Fermo ⏳</span>';
-                } else if (item.tasso >= 70) {
-                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">Top Rotazione 🚀</span>';
-                } else {
-                    badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800">In Stock 📦</span>';
-                }
+                if (item.giacenza <= 0) { badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-800">Esaurito 🔴</span>'; } 
+                else if (item.venduto === 0) { badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800">Fermo ⏳</span>'; } 
+                else if (item.tasso >= 70) { badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">Top Rotazione 🚀</span>'; } 
+                else { badgeStato = '<span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800">In Stock 📦</span>'; }
 
                 let tr = document.createElement('tr');
                 tr.className = "hover:bg-gray-50 border-b border-gray-100";
                 tr.innerHTML = `
                     <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-800">${item.store}</span></td>
-                    <td class="py-3 px-3 font-mono text-xs text-indigo-600 font-semibold cursor-pointer hover:underline" onclick="filtraPerCodice('${item.ean}')" title="Clicca per aprire la matrice">${item.ean}</td>
-                    <td class="py-3 px-3 font-mono text-xs font-bold text-indigo-800 cursor-pointer hover:underline" onclick="filtraPerCodice('${item.codiceInterno}')" title="Clicca per aprire la matrice">${item.codiceInterno}</td>
+                    <td class="py-3 px-3 font-mono text-xs text-indigo-600 font-semibold cursor-pointer hover:underline" onclick="filtraPerCodice('${item.ean}')">${item.ean}</td>
+                    <td class="py-3 px-3 font-mono text-xs font-bold text-indigo-800 cursor-pointer hover:underline" onclick="filtraPerCodice('${item.codiceInterno}')">${item.codiceInterno}</td>
                     <td class="py-3 px-3 font-medium text-gray-900">${item.descrizione}</td>
                     <td class="py-3 px-3 text-center text-xs font-bold text-slate-700">${item.misura}</td>
                     <td class="py-3 px-3 text-center text-xs font-bold text-slate-700">${item.colore}</td>
@@ -634,19 +600,14 @@
             document.body.classList.add('modal-open');
             const modal = document.getElementById('report-modal');
             const container = document.getElementById('report-content');
-            const lblFiltri = document.getElementById('report-filtri-attivi');
-
             let storeSel = document.getElementById('filterStore').value || "Tutti gli Store";
-            let querySel = document.getElementById('searchQuery').value.trim() || "Nessun filtro testuale specifico";
-            let dataOggi = new Date().toLocaleDateString('it-IT');
-
-            lblFiltri.innerText = `Store: [ ${storeSel.toUpperCase()} ] | Ricerca: [ ${querySel} ] | Data Report: ${dataOggi}`;
+            document.getElementById('report-filtri-attivi').innerText = `Store: [ ${storeSel.toUpperCase()} ] | Data Report: ${new Date().toLocaleDateString('it-IT')}`;
 
             let totCarico = filteredData.reduce((acc, curr) => acc + curr.carico, 0);
             let totVenduto = filteredData.reduce((acc, curr) => acc + curr.venduto, 0);
             let totGiacenza = filteredData.reduce((acc, curr) => acc + curr.giacenza, 0);
             let tassoMedio = totCarico > 0 ? ((totVenduto / totCarico) * 100).toFixed(1) : 0;
-
+            
             let esauriti = filteredData.filter(i => i.giacenza <= 0).length;
             let fermi = filteredData.filter(i => i.venduto === 0 && i.carico > 0).length;
             let topRotazioneCount = filteredData.filter(i => (i.venduto / (i.carico || 1)) >= 0.7).length;
@@ -655,33 +616,23 @@
             filteredData.forEach(item => {
                 let chiave = item.codiceInterno || item.ean || 'Sconosciuto';
                 if (!mapModelli[chiave]) {
-                    mapModelli[chiave] = {
-                        codice: chiave,
-                        descrizione: item.descrizione,
-                        store: item.store,
-                        carico: 0,
-                        venduto: 0,
-                        giacenza: 0
-                    };
+                    mapModelli[chiave] = { codice: chiave, descrizione: item.descrizione, carico: 0, venduto: 0, giacenza: 0 };
                 }
                 mapModelli[chiave].carico += item.carico;
                 mapModelli[chiave].venduto += item.venduto;
                 mapModelli[chiave].giacenza += item.giacenza;
             });
 
-            let topModelliArr = Object.values(mapModelli).map(m => {
-                m.tasso = m.carico > 0 ? (m.venduto / m.carico) * 100 : 0;
-                return m;
-            }).sort((a, b) => b.venduto - a.venduto || b.tasso - a.tasso).slice(0, 6);
+            let topModelliArr = Object.values(mapModelli).map(m => { m.tasso = m.carico > 0 ? (m.venduto / m.carico) * 100 : 0; return m; }).sort((a, b) => b.venduto - a.venduto || b.tasso - a.tasso).slice(0, 6);
 
-            let giudizioStore = totCarico > 0 ? (tassoMedio >= 50 ? "Ottima performance di vendita con un indice di rotazione superiore alla soglia di riferimento stagionale." : "Dinamica commerciale prudente; si suggerisce di valutare azioni di visibilità o promozioni mirate.") : "Nessun movimento rilevato.";
+            let giudizioStore = totCarico > 0 ? (tassoMedio >= 50 ? "Ottima performance di vendita con un indice di rotazione superiore alla soglia di riferimento stagionale." : "Dinamica commerciale prudente; si suggerisce di valutare azioni di visibilità o promozioni mirate.") : "Nessun movimento rilevato nei filtri correnti.";
 
             let html = `
                 <div class="bg-indigo-50 border border-indigo-100 p-4 rounded-xl mb-4">
                     <h3 class="font-bold text-indigo-900 text-sm mb-1"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Sintesi Esecutiva IA</h3>
-                    <p class="text-xs text-indigo-800 leading-relaxed">Report analitico elaborato su <strong>${filteredData.length}</strong> record per lo store <strong>${storeSel}</strong>. ${giudizioStore}</p>
+                    <p class="text-xs text-indigo-800 leading-relaxed">Report elaborato su <strong>${filteredData.length}</strong> referenze per <strong>${storeSel}</strong>. ${giudizioStore}</p>
                 </div>
-
+                
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div class="bg-white p-3 rounded-lg border text-center">
                         <span class="text-[10px] text-gray-500 uppercase font-semibold">Volume Caricato</span>
@@ -703,39 +654,23 @@
 
                 <div class="bg-white p-4 rounded-xl border mb-4">
                     <h4 class="font-bold text-xs uppercase text-indigo-700 tracking-wider mb-3 flex items-center gap-2">
-                        <i class="fa-solid fa-medal text-amber-500"></i> Top 6 Modelli con Maggiore Vendita e Rotazione
+                        <i class="fa-solid fa-medal text-amber-500"></i> Top Modelli per Vendita
                     </h4>
             `;
 
             if (topModelliArr.length === 0 || topModelliArr.reduce((acc, m) => acc + m.venduto, 0) === 0) {
-                html += `<p class="text-xs text-gray-400">Nessun modello con vendite registrate nei filtri correnti.</p>`;
+                html += `<p class="text-xs text-gray-400">Nessun modello con vendite registrate.</p>`;
             } else {
                 html += `<div class="overflow-x-auto"><table class="w-full text-left text-xs border-collapse">
-                    <thead><tr class="bg-gray-50 border-b text-gray-500">
-                        <th class="p-2">Codice</th>
-                        <th class="p-2">Descrizione Articolo</th>
-                        <th class="p-2 text-center">Caricato</th>
-                        <th class="p-2 text-center">Venduto</th>
-                        <th class="p-2 text-center">Giacenza</th>
-                        <th class="p-2 text-center">Sell-Through</th>
-                    </tr></thead><tbody>`;
-
+                    <thead><tr class="bg-gray-50 border-b text-gray-500"><th class="p-2">Codice</th><th class="p-2">Descrizione</th><th class="p-2 text-center">Caricato</th><th class="p-2 text-center">Venduto</th><th class="p-2 text-center">Giacenza</th><th class="p-2 text-center">Rotazione</th></tr></thead><tbody>`;
                 topModelliArr.forEach(m => {
                     let badgeRot = m.tasso >= 70 ? 'bg-emerald-100 text-emerald-800' : (m.tasso >= 40 ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-800');
-                    html += `<tr class="border-b hover:bg-gray-50">
-                        <td class="p-2 font-mono font-bold text-indigo-700">${m.codice}</td>
-                        <td class="p-2 font-medium text-gray-900">${m.descrizione}</td>
-                        <td class="p-2 text-center text-blue-600 font-semibold">${m.carico}</td>
-                        <td class="p-2 text-center text-emerald-600 font-bold">${m.venduto}</td>
-                        <td class="p-2 text-center font-semibold">${m.giacenza}</td>
-                        <td class="p-2 text-center"><span class="px-2 py-0.5 rounded font-bold ${badgeRot}">${m.tasso.toFixed(1)}%</span></td>
-                    </tr>`;
+                    html += `<tr class="border-b hover:bg-gray-50"><td class="p-2 font-mono font-bold text-indigo-700">${m.codice}</td><td class="p-2 font-medium">${m.descrizione}</td><td class="p-2 text-center text-blue-600">${m.carico}</td><td class="p-2 text-center text-emerald-600 font-bold">${m.venduto}</td><td class="p-2 text-center">${m.giacenza}</td><td class="p-2 text-center"><span class="px-2 py-0.5 rounded font-bold ${badgeRot}">${m.tasso.toFixed(1)}%</span></td></tr>`;
                 });
                 html += `</tbody></table></div>`;
             }
-
             html += `</div>
-
+            
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="bg-white p-4 rounded-xl border space-y-2">
                         <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider">Indicatori di Magazzino</h4>
@@ -748,13 +683,12 @@
                     <div class="bg-white p-4 rounded-xl border">
                         <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider mb-2">Linee Guida Strategiche</h4>
                         <p class="text-xs text-gray-600 leading-relaxed">
-                            • Concentrare le attività di riassortimento sui modelli in cima alla classifica dei Top Venduti.<br>
-                            • Pianificare iniziative di smaltimento o promozioni mirate sulle referenze con giacenze ferme da tempo.
+                            • Concentrare i riassortimenti in base ai modelli in Top Rotazione.<br>
+                            • Attuare promozioni selettive per gli articoli "Fermo" prima della svalutazione stagionale.
                         </p>
                     </div>
                 </div>
             `;
-
             container.innerHTML = html;
             modal.classList.remove('hidden');
         }
