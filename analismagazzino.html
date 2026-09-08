@@ -254,6 +254,23 @@
             }
         }
 
+        // =====================================================================
+        // NORMALIZZAZIONE NOMI STORE (Per raggruppare i negozi ed evitare duplicati)
+        // =====================================================================
+        function normalizzaStore(nome) {
+            if (!nome) return 'PRINCIPALE';
+            let s = String(nome).toUpperCase().trim();
+            
+            // Allinea le diverse varianti dei nomi dello store alla versione "pulita"
+            if (s.includes("PEPLO")) return "PEPLO";
+            if (s.includes("CARAMELLO")) return "CARAMELLO";
+            if (s.includes("CHIARAVALLE")) return "PARROTTA POINT CHIARAVALLE";
+            if (s.includes("PRONTO MODA")) return "PARROTTA PRONTO MODA";
+            if (s.includes("PARROTTA POINT") && s.includes("LOCRI")) return "PARROTTA POINT LOCRI";
+            
+            return s; // Se non rientra nelle casistiche sopra, ritorna il nome pulito
+        }
+
         function avviaSincronizzazione() {
             const badge = document.getElementById('status-badge');
             badge.className = "text-[10px] md:text-xs bg-amber-600 px-2.5 py-1 rounded-full font-medium text-white whitespace-nowrap";
@@ -306,7 +323,7 @@
                 }
             }
 
-            // CARICHI (Magazzino) - Mappatura fissa da file originale
+            // CARICHI (Magazzino)
             popolaSelect('map_c_store', headerCarichi, 8);  // Col 9 CLI
             popolaSelect('map_c_ean', headerCarichi, 10);   // Col 11 LISTATO EAN
             popolaSelect('map_c_cod', headerCarichi, 2);    // Col 3 COD
@@ -315,14 +332,14 @@
             popolaSelect('map_c_col', headerCarichi, 19);   // Col 20 col
             popolaSelect('map_c_qta', headerCarichi, 3);    // Col 4 qta
 
-            // VENDITE - Mappatura corretta come da ultimo screenshot richiesto
-            popolaSelect('map_v_store', headerVendite, 22); // Col 23 (W) Store elab
-            popolaSelect('map_v_ean', headerVendite, 2);    // Col 3 (C) ean
-            popolaSelect('map_v_cod', headerVendite, 3);    // Col 4 (D) cod int
-            popolaSelect('map_v_desc', headerVendite, 4);   // Col 5 (E) Nome Articolo
-            popolaSelect('map_v_mis', headerVendite, 5);    // Col 6 (F) Misura
-            popolaSelect('map_v_col', headerVendite, 6);    // Col 7 (G) Colore
-            popolaSelect('map_v_qta', headerVendite, 7);    // Col 8 (H) Quantità
+            // VENDITE - Mappatura corretta come da ultimo screenshot
+            popolaSelect('map_v_store', headerVendite, 16); // Col 17 STORE
+            popolaSelect('map_v_ean', headerVendite, 1);    // Col 2 Data
+            popolaSelect('map_v_cod', headerVendite, 2);    // Col 3 ean
+            popolaSelect('map_v_desc', headerVendite, 3);   // Col 4 cod int
+            popolaSelect('map_v_mis', headerVendite, 5);    // Col 6 Misura
+            popolaSelect('map_v_col', headerVendite, 6);    // Col 7 Colore
+            popolaSelect('map_v_qta', headerVendite, 7);    // Col 8 Quantità
         }
 
         function parseNumMigliorato(val) {
@@ -330,7 +347,6 @@
             // Pulisce tutto tranne numeri, virgole, punti e segno meno
             let str = String(val).replace(/[^0-9.,-]/g, ''); 
             
-            // Gestisce formati negativi tipo (6) 
             let valString = String(val).trim();
             if (valString.startsWith('(') && valString.endsWith(')')) {
                 str = '-' + str.slice(1, -1);
@@ -377,9 +393,9 @@
             // PROCESSO CARICHI
             for (let i = 1; i < rawCarichiMatrix.length; i++) {
                 let r = rawCarichiMatrix[i];
-                let storeVal = pulisciTesto(r[MAP_C.STORE]);
-                if (storeVal === 'STORE' || storeVal === 'NEGOZIO' || storeVal === 'CLI') continue; 
-                if (storeVal === '') storeVal = 'Principale';
+                let storeValRaw = pulisciTesto(r[MAP_C.STORE]);
+                if (storeValRaw === 'STORE' || storeValRaw === 'NEGOZIO' || storeValRaw === 'CLI') continue; 
+                let storeVal = normalizzaStore(storeValRaw); // Normalizza il nome dello store
 
                 let ean = pulisciTesto(r[MAP_C.EAN]);
                 let cod = pulisciTesto(r[MAP_C.CODICE]);
@@ -390,7 +406,8 @@
                 if (cod !== '' && ean !== '') codiceToEan[cod] = ean;
 
                 let keyID = ean !== '' ? ean : (cod !== '' ? cod : 'UNKNOWN'); 
-                let chiave = `${keyID}|${mis}|${col}`;
+                // Aggiunge lo Store alla chiave per tenere separate le giacenze tra i vari negozi
+                let chiave = `${storeVal}|${keyID}|${mis}|${col}`; 
                 let qta = parseNumMigliorato(r[MAP_C.QTA]); 
 
                 if (!mappaArticoli.has(chiave)) {
@@ -410,24 +427,24 @@
             // PROCESSO VENDITE
             for (let i = 1; i < rawVenditeMatrix.length; i++) {
                 let r = rawVenditeMatrix[i];
-                let storeVal = pulisciTesto(r[MAP_V.STORE]);
-                if (storeVal === 'STORE' || storeVal === 'NEGOZIO' || storeVal === 'CLI') continue;
-                if (storeVal === '') storeVal = 'Principale';
+                let storeValRaw = pulisciTesto(r[MAP_V.STORE]);
+                if (storeValRaw === 'STORE' || storeValRaw === 'NEGOZIO' || storeValRaw === 'CLI') continue;
+                let storeVal = normalizzaStore(storeValRaw); // Normalizza il nome dello store
 
                 let ean = pulisciTesto(r[MAP_V.EAN]);
                 let cod = pulisciTesto(r[MAP_V.CODICE]);
                 let mis = pulisciTesto(r[MAP_V.MISURA]);
                 let col = pulisciTesto(r[MAP_V.COLORE]);
 
-                // Magic Link: Recupera l'EAN se manca
+                // Magic Link
                 if (ean === '' && cod !== '' && codiceToEan[cod]) {
                     ean = codiceToEan[cod];
                 }
 
                 let keyID = ean !== '' ? ean : (cod !== '' ? cod : 'UNKNOWN');
-                let chiave = `${keyID}|${mis}|${col}`;
+                // Usa lo Store normalizzato nella chiave per trovare il carico corrispondente
+                let chiave = `${storeVal}|${keyID}|${mis}|${col}`;
                 
-                // MATH.ABS trasforma scarichi in venduto
                 let qta = Math.abs(parseNumMigliorato(r[MAP_V.QTA])); 
 
                 if (!mappaArticoli.has(chiave)) {
@@ -447,7 +464,6 @@
 
             rawData = [];
             mappaArticoli.forEach(item => {
-                // Rimuove gli articoli 'fantasma' senza ean o codice se entrambi a 0
                 if(item.ean === '' && item.codiceInterno === '' && item.carico === 0 && item.venduto === 0) return;
                 
                 item.giacenza = item.carico - item.venduto;
