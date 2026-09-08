@@ -305,7 +305,6 @@
             const headerCarichi = rawCarichiMatrix[0] || [];
             const headerVendite = rawVenditeMatrix[0] || [];
 
-            // Recupera la configurazione salvata dal localStorage (se esiste)
             let savedConfig = null;
             try {
                 const stored = localStorage.getItem('retailBiMappingParams');
@@ -313,9 +312,7 @@
                     savedConfig = JSON.parse(stored);
                     document.getElementById('mapping-saved-badge').classList.remove('hidden');
                 }
-            } catch (e) {
-                console.warn("Storage non disponibile.");
-            }
+            } catch (e) {}
 
             function popolaSelect(idSelect, headerRow, defaultIdx) {
                 const select = document.getElementById(idSelect);
@@ -334,7 +331,7 @@
                 }
             }
 
-            // CARICHI (Magazzino) - Usa salvataggi o valori di default
+            // CARICHI (Magazzino) 
             popolaSelect('map_c_store', headerCarichi, savedConfig ? savedConfig.MAP_C.STORE : 8);  
             popolaSelect('map_c_ean', headerCarichi, savedConfig ? savedConfig.MAP_C.EAN : 10);   
             popolaSelect('map_c_cod', headerCarichi, savedConfig ? savedConfig.MAP_C.CODICE : 2);    
@@ -343,7 +340,7 @@
             popolaSelect('map_c_col', headerCarichi, savedConfig ? savedConfig.MAP_C.COLORE : 19);   
             popolaSelect('map_c_qta', headerCarichi, savedConfig ? savedConfig.MAP_C.QTA : 3);    
 
-            // VENDITE - Usa salvataggi o valori di default
+            // VENDITE 
             popolaSelect('map_v_store', headerVendite, savedConfig ? savedConfig.MAP_V.STORE : 16); 
             popolaSelect('map_v_ean', headerVendite, savedConfig ? savedConfig.MAP_V.EAN : 2);    
             popolaSelect('map_v_cod', headerVendite, savedConfig ? savedConfig.MAP_V.CODICE : 3);    
@@ -393,13 +390,10 @@
                 QTA: parseInt(document.getElementById('map_v_qta').value)
             };
 
-            // Salvataggio della configurazione nel LocalStorage
             try {
                 localStorage.setItem('retailBiMappingParams', JSON.stringify({ MAP_C, MAP_V }));
                 document.getElementById('mapping-saved-badge').classList.remove('hidden');
-            } catch (e) {
-                console.warn("Impossibile salvare le impostazioni nel browser.");
-            }
+            } catch (e) {}
 
             let mappaArticoli = new Map();
             let codiceToEan = {}; 
@@ -408,7 +402,6 @@
                 return String(str || '').replace(/["=]/g, '').trim().toUpperCase();
             }
 
-            // PROCESSO CARICHI
             for (let i = 1; i < rawCarichiMatrix.length; i++) {
                 let r = rawCarichiMatrix[i];
                 let storeValRaw = pulisciTesto(r[MAP_C.STORE]);
@@ -441,7 +434,6 @@
                 mappaArticoli.get(chiave).carico += qta;
             }
 
-            // PROCESSO VENDITE
             for (let i = 1; i < rawVenditeMatrix.length; i++) {
                 let r = rawVenditeMatrix[i];
                 let storeValRaw = pulisciTesto(r[MAP_V.STORE]);
@@ -453,7 +445,6 @@
                 let mis = pulisciTesto(r[MAP_V.MISURA]);
                 let col = pulisciTesto(r[MAP_V.COLORE]);
 
-                // Magic Link
                 if (ean === '' && cod !== '' && codiceToEan[cod]) {
                     ean = codiceToEan[cod];
                 }
@@ -705,6 +696,83 @@
             });
         }
 
+        // =====================================================================
+        // NUOVA FUNZIONE: MOSTRA ELENCO DETTAGLIATO INDICATORI (Esaurite, Fermo, Top)
+        // =====================================================================
+        window.mostraDettaglioIndicatore = function(tipo) {
+            let datiFiltrati = [];
+            let titolo = "";
+            let coloreTesto = "";
+            let coloreBordo = "";
+            
+            if (tipo === 'esaurite') {
+                datiFiltrati = filteredData.filter(i => i.giacenza <= 0);
+                titolo = "Dettaglio Varianti Esaurite (Giacenza &le; 0)";
+                coloreTesto = "text-red-800";
+                coloreBordo = "border-red-200";
+            } else if (tipo === 'fermo') {
+                datiFiltrati = filteredData.filter(i => i.venduto === 0 && i.carico > 0);
+                titolo = "Dettaglio Varianti a Stock Fermo (Nessuna Vendita)";
+                coloreTesto = "text-amber-800";
+                coloreBordo = "border-amber-200";
+            } else if (tipo === 'top') {
+                datiFiltrati = filteredData.filter(i => (i.carico > 0 && (i.venduto / i.carico) * 100 >= 70));
+                titolo = "Dettaglio Varianti Top Rotazione (&ge; 70%)";
+                coloreTesto = "text-emerald-800";
+                coloreBordo = "border-emerald-200";
+            }
+
+            let html = `
+                <div class="mb-4 no-print">
+                    <button onclick="generaReportAI()" class="text-xs font-semibold text-gray-600 hover:text-gray-900 border border-gray-300 px-3 py-1.5 rounded hover:bg-gray-100 transition shadow-sm">
+                        <i class="fa-solid fa-arrow-left mr-2"></i> Torna al Sintesi Report
+                    </button>
+                </div>
+                <h3 class="font-bold ${coloreTesto} text-base mb-4 border-b-2 ${coloreBordo} pb-2">${titolo} (${datiFiltrati.length} record trovati)</h3>
+            `;
+
+            if (datiFiltrati.length === 0) {
+                html += `<p class="text-sm text-gray-500">Nessun elemento trovato per questa categoria.</p>`;
+            } else {
+                html += `
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-gray-100 border-b text-gray-600 uppercase">
+                                <th class="p-2">Store</th>
+                                <th class="p-2">Codice</th>
+                                <th class="p-2">Descrizione</th>
+                                <th class="p-2 text-center">Mis/Col</th>
+                                <th class="p-2 text-center">Caricato</th>
+                                <th class="p-2 text-center">Venduto</th>
+                                <th class="p-2 text-center">Giacenza</th>
+                                <th class="p-2 text-center">Rotazione</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                datiFiltrati.forEach(m => {
+                    let tasso = m.carico > 0 ? (m.venduto / m.carico) * 100 : 0;
+                    html += `
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="p-2 text-gray-700">${m.store}</td>
+                            <td class="p-2 font-mono font-bold text-indigo-700">${m.codiceInterno}</td>
+                            <td class="p-2 font-medium">${m.descrizione}</td>
+                            <td class="p-2 text-center text-gray-600">${m.misura} / ${m.colore}</td>
+                            <td class="p-2 text-center">${m.carico}</td>
+                            <td class="p-2 text-center text-emerald-600 font-bold">${m.venduto}</td>
+                            <td class="p-2 text-center font-bold ${coloreTesto}">${m.giacenza}</td>
+                            <td class="p-2 text-center font-bold">${tasso.toFixed(1)}%</td>
+                        </tr>
+                    `;
+                });
+                html += `</tbody></table></div>`;
+            }
+
+            document.getElementById('report-content').innerHTML = html;
+        };
+
         function generaReportAI() {
             document.body.classList.add('modal-open');
             const modal = document.getElementById('report-modal');
@@ -778,16 +846,40 @@
                 });
                 html += `</tbody></table></div>`;
             }
+            
             html += `</div>
             
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="bg-white p-4 rounded-xl border space-y-2">
-                        <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider">Indicatori di Magazzino</h4>
-                        <ul class="text-xs space-y-1.5 text-gray-700">
-                            <li><i class="fa-solid fa-circle-exclamation text-red-500 mr-2"></i> Varianti Esaurite (Giacenza &le; 0): <strong>${esauriti}</strong></li>
-                            <li><i class="fa-solid fa-hourglass-half text-amber-500 mr-2"></i> Varianti a Stock Fermo (Vendite 0): <strong>${fermi}</strong></li>
-                            <li><i class="fa-solid fa-rocket text-emerald-500 mr-2"></i> Varianti Top Rotazione (&ge; 70%): <strong>${topRotazioneCount}</strong></li>
+                        <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider mb-3">Indicatori di Magazzino</h4>
+                        
+                        <ul class="text-xs space-y-2 text-gray-700">
+                            <!-- MODIFICA: GLI INDICATORI ORA SONO PULSANTI CLICCABILI -->
+                            <li onclick="mostraDettaglioIndicatore('esaurite')" class="cursor-pointer hover:bg-red-50 p-2 rounded transition border border-transparent hover:border-red-200 shadow-sm bg-white">
+                                <div class="flex justify-between items-center">
+                                    <span><i class="fa-solid fa-circle-exclamation text-red-500 mr-2"></i> Varianti Esaurite (Giacenza &le; 0)</span>
+                                    <span class="font-bold text-red-600 text-sm bg-red-100 px-2 py-0.5 rounded">${esauriti}</span>
+                                </div>
+                                <div class="text-[10px] text-gray-400 mt-1 pl-6">Clicca per espandere e stampare la lista</div>
+                            </li>
+                            
+                            <li onclick="mostraDettaglioIndicatore('fermo')" class="cursor-pointer hover:bg-amber-50 p-2 rounded transition border border-transparent hover:border-amber-200 shadow-sm bg-white">
+                                <div class="flex justify-between items-center">
+                                    <span><i class="fa-solid fa-hourglass-half text-amber-500 mr-2"></i> Varianti a Stock Fermo (Vendite 0)</span>
+                                    <span class="font-bold text-amber-600 text-sm bg-amber-100 px-2 py-0.5 rounded">${fermi}</span>
+                                </div>
+                                <div class="text-[10px] text-gray-400 mt-1 pl-6">Clicca per espandere e stampare la lista</div>
+                            </li>
+                            
+                            <li onclick="mostraDettaglioIndicatore('top')" class="cursor-pointer hover:bg-emerald-50 p-2 rounded transition border border-transparent hover:border-emerald-200 shadow-sm bg-white">
+                                <div class="flex justify-between items-center">
+                                    <span><i class="fa-solid fa-rocket text-emerald-500 mr-2"></i> Varianti Top Rotazione (&ge; 70%)</span>
+                                    <span class="font-bold text-emerald-600 text-sm bg-emerald-100 px-2 py-0.5 rounded">${topRotazioneCount}</span>
+                                </div>
+                                <div class="text-[10px] text-gray-400 mt-1 pl-6">Clicca per espandere e stampare la lista</div>
+                            </li>
                         </ul>
+
                     </div>
                     <div class="bg-white p-4 rounded-xl border">
                         <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider mb-2">Linee Guida Strategiche</h4>
