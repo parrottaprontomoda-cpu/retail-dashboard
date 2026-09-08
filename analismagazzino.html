@@ -79,15 +79,18 @@
             </div>
         </div>
 
-        <!-- MODULO NASCOSTO: MAPPATURA COLONNE DINAMICA -->
+        <!-- MODULO NASCOSTO: MAPPATURA COLONNE DINAMICA (CON MEMORIA) -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 no-print overflow-hidden">
             <button onclick="toggleMappingPanel()" class="w-full bg-slate-50 hover:bg-slate-100 p-4 flex justify-between items-center text-sm font-bold uppercase text-slate-700 tracking-wider transition">
                 <span><i class="fa-solid fa-cogs mr-2 text-slate-500"></i> Impostazioni Mappatura Colonne CSV</span>
-                <i id="mapping-icon" class="fa-solid fa-chevron-down text-slate-500 transition-transform duration-300"></i>
+                <div class="flex items-center gap-3">
+                    <span id="mapping-saved-badge" class="hidden text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200"><i class="fa-solid fa-check"></i> Salvato nel browser</span>
+                    <i id="mapping-icon" class="fa-solid fa-chevron-down text-slate-500 transition-transform duration-300"></i>
+                </div>
             </button>
             <div id="mapping-panel" class="hidden p-5 border-t border-gray-200 bg-white">
                 <div class="mb-4 text-xs text-amber-800 bg-amber-50 p-3 rounded border border-amber-200">
-                    <i class="fa-solid fa-circle-info mr-1"></i> <strong>Indici Corretti:</strong> Ho rimosso l'errore di slittamento colonne sulle Vendite (EAN assegnato a Data). Ora le associazioni sono corrette di default.
+                    <i class="fa-solid fa-circle-info mr-1"></i> <strong>Risoluzione problemi zeri:</strong> Le impostazioni vengono salvate automaticamente. Controlla e applica la mappatura per ricalcolare i dati.
                 </div>
                 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -122,7 +125,7 @@
                 
                 <div class="mt-6 flex justify-end">
                     <button onclick="applicaMappaturaERicalcola()" class="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2 rounded shadow-sm text-sm font-bold transition flex items-center gap-2">
-                        <i class="fa-solid fa-check-double"></i> Applica Mappatura e Ricalcola
+                        <i class="fa-solid fa-save"></i> Applica e Salva Mappatura
                     </button>
                 </div>
             </div>
@@ -237,7 +240,6 @@
         let rawData = [];
         let filteredData = [];
 
-        // Sistema di priorità per le taglie come da indicazioni
         const sizePriorityMap = {
             'xs': 1, 'extra small': 1, 's': 2, 'small': 2, 'm': 3, 'medium': 3,
             'l': 4, 'large': 4, 'xl': 5, 'extra large': 5, 'xxl': 6, '2xl': 6, '3xl': 7, '4xl': 8
@@ -255,9 +257,6 @@
             }
         }
 
-        // =====================================================================
-        // NORMALIZZAZIONE NOMI STORE (Per raggruppare i negozi ed evitare duplicati)
-        // =====================================================================
         function normalizzaStore(nome) {
             if (!nome) return 'PRINCIPALE';
             let s = String(nome).toUpperCase().trim();
@@ -306,6 +305,18 @@
             const headerCarichi = rawCarichiMatrix[0] || [];
             const headerVendite = rawVenditeMatrix[0] || [];
 
+            // Recupera la configurazione salvata dal localStorage (se esiste)
+            let savedConfig = null;
+            try {
+                const stored = localStorage.getItem('retailBiMappingParams');
+                if (stored) {
+                    savedConfig = JSON.parse(stored);
+                    document.getElementById('mapping-saved-badge').classList.remove('hidden');
+                }
+            } catch (e) {
+                console.warn("Storage non disponibile.");
+            }
+
             function popolaSelect(idSelect, headerRow, defaultIdx) {
                 const select = document.getElementById(idSelect);
                 select.innerHTML = '';
@@ -323,24 +334,23 @@
                 }
             }
 
-            // CARICHI (Magazzino) - Mappatura fissa
-            popolaSelect('map_c_store', headerCarichi, 8);  // Col 9 CLI
-            popolaSelect('map_c_ean', headerCarichi, 10);   // Col 11 LISTATO EAN
-            popolaSelect('map_c_cod', headerCarichi, 2);    // Col 3 COD
-            popolaSelect('map_c_desc', headerCarichi, 4);   // Col 5 DESCRIZIONE
-            popolaSelect('map_c_mis', headerCarichi, 18);   // Col 19 mis
-            popolaSelect('map_c_col', headerCarichi, 19);   // Col 20 col
-            popolaSelect('map_c_qta', headerCarichi, 3);    // Col 4 qta
+            // CARICHI (Magazzino) - Usa salvataggi o valori di default
+            popolaSelect('map_c_store', headerCarichi, savedConfig ? savedConfig.MAP_C.STORE : 8);  
+            popolaSelect('map_c_ean', headerCarichi, savedConfig ? savedConfig.MAP_C.EAN : 10);   
+            popolaSelect('map_c_cod', headerCarichi, savedConfig ? savedConfig.MAP_C.CODICE : 2);    
+            popolaSelect('map_c_desc', headerCarichi, savedConfig ? savedConfig.MAP_C.DESCRIZIONE : 4);   
+            popolaSelect('map_c_mis', headerCarichi, savedConfig ? savedConfig.MAP_C.MISURA : 18);   
+            popolaSelect('map_c_col', headerCarichi, savedConfig ? savedConfig.MAP_C.COLORE : 19);   
+            popolaSelect('map_c_qta', headerCarichi, savedConfig ? savedConfig.MAP_C.QTA : 3);    
 
-            // VENDITE - MAPPATURA CORRETTA DEFINITIVA
-            // Store su col W (22) in base ai gestionali, ma usiamo la 16 o la 22 a seconda di com'è fatto
-            popolaSelect('map_v_store', headerVendite, 16); // [Col 17] STORE
-            popolaSelect('map_v_ean', headerVendite, 2);    // [Col 3] ean
-            popolaSelect('map_v_cod', headerVendite, 3);    // [Col 4] cod int
-            popolaSelect('map_v_desc', headerVendite, 4);   // [Col 5] Nome Articolo
-            popolaSelect('map_v_mis', headerVendite, 5);    // [Col 6] Misura
-            popolaSelect('map_v_col', headerVendite, 6);    // [Col 7] Colore
-            popolaSelect('map_v_qta', headerVendite, 7);    // [Col 8] Quantità
+            // VENDITE - Usa salvataggi o valori di default
+            popolaSelect('map_v_store', headerVendite, savedConfig ? savedConfig.MAP_V.STORE : 16); 
+            popolaSelect('map_v_ean', headerVendite, savedConfig ? savedConfig.MAP_V.EAN : 2);    
+            popolaSelect('map_v_cod', headerVendite, savedConfig ? savedConfig.MAP_V.CODICE : 3);    
+            popolaSelect('map_v_desc', headerVendite, savedConfig ? savedConfig.MAP_V.DESCRIZIONE : 4);   
+            popolaSelect('map_v_mis', headerVendite, savedConfig ? savedConfig.MAP_V.MISURA : 5);    
+            popolaSelect('map_v_col', headerVendite, savedConfig ? savedConfig.MAP_V.COLORE : 6);    
+            popolaSelect('map_v_qta', headerVendite, savedConfig ? savedConfig.MAP_V.QTA : 7);    
         }
 
         function parseNumMigliorato(val) {
@@ -382,6 +392,14 @@
                 COLORE: parseInt(document.getElementById('map_v_col').value),
                 QTA: parseInt(document.getElementById('map_v_qta').value)
             };
+
+            // Salvataggio della configurazione nel LocalStorage
+            try {
+                localStorage.setItem('retailBiMappingParams', JSON.stringify({ MAP_C, MAP_V }));
+                document.getElementById('mapping-saved-badge').classList.remove('hidden');
+            } catch (e) {
+                console.warn("Impossibile salvare le impostazioni nel browser.");
+            }
 
             let mappaArticoli = new Map();
             let codiceToEan = {}; 
