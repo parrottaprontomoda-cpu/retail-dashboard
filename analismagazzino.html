@@ -87,7 +87,7 @@
             </button>
             <div id="mapping-panel" class="hidden p-5 border-t border-gray-200 bg-white">
                 <div class="mb-4 text-xs text-amber-800 bg-amber-50 p-3 rounded border border-amber-200">
-                    <i class="fa-solid fa-circle-info mr-1"></i> <strong>Risoluzione problemi zeri:</strong> I valori predefiniti sono stati impostati in base alla tua ultima configurazione. Controlla e applica la mappatura per ricalcolare i dati.
+                    <i class="fa-solid fa-circle-info mr-1"></i> <strong>Indici Corretti:</strong> Ho rimosso l'errore di slittamento colonne sulle Vendite (EAN assegnato a Data). Ora le associazioni sono corrette di default.
                 </div>
                 
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -237,6 +237,7 @@
         let rawData = [];
         let filteredData = [];
 
+        // Sistema di priorità per le taglie come da indicazioni
         const sizePriorityMap = {
             'xs': 1, 'extra small': 1, 's': 2, 'small': 2, 'm': 3, 'medium': 3,
             'l': 4, 'large': 4, 'xl': 5, 'extra large': 5, 'xxl': 6, '2xl': 6, '3xl': 7, '4xl': 8
@@ -261,14 +262,13 @@
             if (!nome) return 'PRINCIPALE';
             let s = String(nome).toUpperCase().trim();
             
-            // Allinea le diverse varianti dei nomi dello store alla versione "pulita"
             if (s.includes("PEPLO")) return "PEPLO";
             if (s.includes("CARAMELLO")) return "CARAMELLO";
             if (s.includes("CHIARAVALLE")) return "PARROTTA POINT CHIARAVALLE";
             if (s.includes("PRONTO MODA")) return "PARROTTA PRONTO MODA";
             if (s.includes("PARROTTA POINT") && s.includes("LOCRI")) return "PARROTTA POINT LOCRI";
             
-            return s; // Se non rientra nelle casistiche sopra, ritorna il nome pulito
+            return s; 
         }
 
         function avviaSincronizzazione() {
@@ -323,7 +323,7 @@
                 }
             }
 
-            // CARICHI (Magazzino)
+            // CARICHI (Magazzino) - Mappatura fissa
             popolaSelect('map_c_store', headerCarichi, 8);  // Col 9 CLI
             popolaSelect('map_c_ean', headerCarichi, 10);   // Col 11 LISTATO EAN
             popolaSelect('map_c_cod', headerCarichi, 2);    // Col 3 COD
@@ -332,19 +332,19 @@
             popolaSelect('map_c_col', headerCarichi, 19);   // Col 20 col
             popolaSelect('map_c_qta', headerCarichi, 3);    // Col 4 qta
 
-            // VENDITE - Mappatura corretta come da ultimo screenshot
-            popolaSelect('map_v_store', headerVendite, 16); // Col 17 STORE
-            popolaSelect('map_v_ean', headerVendite, 1);    // Col 2 Data
-            popolaSelect('map_v_cod', headerVendite, 2);    // Col 3 ean
-            popolaSelect('map_v_desc', headerVendite, 3);   // Col 4 cod int
-            popolaSelect('map_v_mis', headerVendite, 5);    // Col 6 Misura
-            popolaSelect('map_v_col', headerVendite, 6);    // Col 7 Colore
-            popolaSelect('map_v_qta', headerVendite, 7);    // Col 8 Quantità
+            // VENDITE - MAPPATURA CORRETTA DEFINITIVA
+            // Store su col W (22) in base ai gestionali, ma usiamo la 16 o la 22 a seconda di com'è fatto
+            popolaSelect('map_v_store', headerVendite, 16); // [Col 17] STORE
+            popolaSelect('map_v_ean', headerVendite, 2);    // [Col 3] ean
+            popolaSelect('map_v_cod', headerVendite, 3);    // [Col 4] cod int
+            popolaSelect('map_v_desc', headerVendite, 4);   // [Col 5] Nome Articolo
+            popolaSelect('map_v_mis', headerVendite, 5);    // [Col 6] Misura
+            popolaSelect('map_v_col', headerVendite, 6);    // [Col 7] Colore
+            popolaSelect('map_v_qta', headerVendite, 7);    // [Col 8] Quantità
         }
 
         function parseNumMigliorato(val) {
             if (val === null || val === undefined || val === '') return 0;
-            // Pulisce tutto tranne numeri, virgole, punti e segno meno
             let str = String(val).replace(/[^0-9.,-]/g, ''); 
             
             let valString = String(val).trim();
@@ -395,7 +395,7 @@
                 let r = rawCarichiMatrix[i];
                 let storeValRaw = pulisciTesto(r[MAP_C.STORE]);
                 if (storeValRaw === 'STORE' || storeValRaw === 'NEGOZIO' || storeValRaw === 'CLI') continue; 
-                let storeVal = normalizzaStore(storeValRaw); // Normalizza il nome dello store
+                let storeVal = normalizzaStore(storeValRaw); 
 
                 let ean = pulisciTesto(r[MAP_C.EAN]);
                 let cod = pulisciTesto(r[MAP_C.CODICE]);
@@ -406,7 +406,6 @@
                 if (cod !== '' && ean !== '') codiceToEan[cod] = ean;
 
                 let keyID = ean !== '' ? ean : (cod !== '' ? cod : 'UNKNOWN'); 
-                // Aggiunge lo Store alla chiave per tenere separate le giacenze tra i vari negozi
                 let chiave = `${storeVal}|${keyID}|${mis}|${col}`; 
                 let qta = parseNumMigliorato(r[MAP_C.QTA]); 
 
@@ -429,7 +428,7 @@
                 let r = rawVenditeMatrix[i];
                 let storeValRaw = pulisciTesto(r[MAP_V.STORE]);
                 if (storeValRaw === 'STORE' || storeValRaw === 'NEGOZIO' || storeValRaw === 'CLI') continue;
-                let storeVal = normalizzaStore(storeValRaw); // Normalizza il nome dello store
+                let storeVal = normalizzaStore(storeValRaw); 
 
                 let ean = pulisciTesto(r[MAP_V.EAN]);
                 let cod = pulisciTesto(r[MAP_V.CODICE]);
@@ -442,7 +441,6 @@
                 }
 
                 let keyID = ean !== '' ? ean : (cod !== '' ? cod : 'UNKNOWN');
-                // Usa lo Store normalizzato nella chiave per trovare il carico corrispondente
                 let chiave = `${storeVal}|${keyID}|${mis}|${col}`;
                 
                 let qta = Math.abs(parseNumMigliorato(r[MAP_V.QTA])); 
