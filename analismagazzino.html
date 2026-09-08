@@ -332,6 +332,7 @@
                 }
             }
 
+            // CARICHI (Magazzino) 
             popolaSelect('map_c_store', headerCarichi, savedConfig ? savedConfig.MAP_C.STORE : 8);  
             popolaSelect('map_c_ean', headerCarichi, savedConfig ? savedConfig.MAP_C.EAN : 10);   
             popolaSelect('map_c_cod', headerCarichi, savedConfig ? savedConfig.MAP_C.CODICE : 2);    
@@ -340,6 +341,7 @@
             popolaSelect('map_c_col', headerCarichi, savedConfig ? savedConfig.MAP_C.COLORE : 19);   
             popolaSelect('map_c_qta', headerCarichi, savedConfig ? savedConfig.MAP_C.QTA : 3);    
 
+            // VENDITE 
             popolaSelect('map_v_store', headerVendite, savedConfig ? savedConfig.MAP_V.STORE : 16); 
             popolaSelect('map_v_ean', headerVendite, savedConfig ? savedConfig.MAP_V.EAN : 2);    
             popolaSelect('map_v_cod', headerVendite, savedConfig ? savedConfig.MAP_V.CODICE : 3);    
@@ -758,8 +760,8 @@
                     articoliGroup[cod].matrixData[c][m] = { carico: 0, venduto: 0, giacenza: 0 };
                 }
                 articoliGroup[cod].matrixData[c][m].carico += item.carico;
-                articoliGroup[cod].matrix[c][m].venduto += item.venduto;
-                articoliGroup[cod].matrix[c][m].giacenza += item.giacenza;
+                articoliGroup[cod].matrixData[c][m].venduto += item.venduto;
+                articoliGroup[cod].matrixData[c][m].giacenza += item.giacenza;
             });
 
             // Genera una matrice per ogni articolo
@@ -941,6 +943,7 @@
                         <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider mb-3">Indicatori di Magazzino</h4>
                         
                         <ul class="text-xs space-y-2 text-gray-700">
+                            <!-- MODIFICA: GLI INDICATORI ORA SONO PULSANTI CLICCABILI -->
                             <li onclick="mostraDettaglioIndicatore('esaurite')" class="cursor-pointer hover:bg-red-50 p-2 rounded transition border border-transparent hover:border-red-200 shadow-sm bg-white">
                                 <div class="flex justify-between items-center">
                                     <span><i class="fa-solid fa-circle-exclamation text-red-500 mr-2"></i> Varianti Esaurite (Giacenza &le; 0)</span>
