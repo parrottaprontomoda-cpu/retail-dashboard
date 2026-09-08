@@ -22,6 +22,7 @@
             tr { page-break-inside: avoid !important; page-break-after: auto !important; }
             thead { display: table-header-group !important; }
             #matrice-card, .grid > div { page-break-inside: avoid !important; }
+            .print-avoid-break { page-break-inside: avoid !important; }
         }
     </style>
 </head>
@@ -331,7 +332,6 @@
                 }
             }
 
-            // CARICHI (Magazzino) 
             popolaSelect('map_c_store', headerCarichi, savedConfig ? savedConfig.MAP_C.STORE : 8);  
             popolaSelect('map_c_ean', headerCarichi, savedConfig ? savedConfig.MAP_C.EAN : 10);   
             popolaSelect('map_c_cod', headerCarichi, savedConfig ? savedConfig.MAP_C.CODICE : 2);    
@@ -340,7 +340,6 @@
             popolaSelect('map_c_col', headerCarichi, savedConfig ? savedConfig.MAP_C.COLORE : 19);   
             popolaSelect('map_c_qta', headerCarichi, savedConfig ? savedConfig.MAP_C.QTA : 3);    
 
-            // VENDITE 
             popolaSelect('map_v_store', headerVendite, savedConfig ? savedConfig.MAP_V.STORE : 16); 
             popolaSelect('map_v_ean', headerVendite, savedConfig ? savedConfig.MAP_V.EAN : 2);    
             popolaSelect('map_v_cod', headerVendite, savedConfig ? savedConfig.MAP_V.CODICE : 3);    
@@ -402,6 +401,7 @@
                 return String(str || '').replace(/["=]/g, '').trim().toUpperCase();
             }
 
+            // PROCESSO CARICHI
             for (let i = 1; i < rawCarichiMatrix.length; i++) {
                 let r = rawCarichiMatrix[i];
                 let storeValRaw = pulisciTesto(r[MAP_C.STORE]);
@@ -434,6 +434,7 @@
                 mappaArticoli.get(chiave).carico += qta;
             }
 
+            // PROCESSO VENDITE
             for (let i = 1; i < rawVenditeMatrix.length; i++) {
                 let r = rawVenditeMatrix[i];
                 let storeValRaw = pulisciTesto(r[MAP_V.STORE]);
@@ -697,7 +698,7 @@
         }
 
         // =====================================================================
-        // NUOVA FUNZIONE: MOSTRA ELENCO DETTAGLIATO INDICATORI (Esaurite, Fermo, Top)
+        // NUOVA FUNZIONE: REPORT DETTAGLIATO A MATRICI PER ARTICOLO
         // =====================================================================
         window.mostraDettaglioIndicatore = function(tipo) {
             let datiFiltrati = [];
@@ -728,47 +729,133 @@
                         <i class="fa-solid fa-arrow-left mr-2"></i> Torna al Sintesi Report
                     </button>
                 </div>
-                <h3 class="font-bold ${coloreTesto} text-base mb-4 border-b-2 ${coloreBordo} pb-2">${titolo} (${datiFiltrati.length} record trovati)</h3>
+                <h3 class="font-bold ${coloreTesto} text-base mb-4 border-b-2 ${coloreBordo} pb-2">${titolo}</h3>
             `;
 
             if (datiFiltrati.length === 0) {
                 html += `<p class="text-sm text-gray-500">Nessun elemento trovato per questa categoria.</p>`;
-            } else {
-                html += `
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-xs border-collapse">
-                        <thead>
-                            <tr class="bg-gray-100 border-b text-gray-600 uppercase">
-                                <th class="p-2">Store</th>
-                                <th class="p-2">Codice</th>
-                                <th class="p-2">Descrizione</th>
-                                <th class="p-2 text-center">Mis/Col</th>
-                                <th class="p-2 text-center">Caricato</th>
-                                <th class="p-2 text-center">Venduto</th>
-                                <th class="p-2 text-center">Giacenza</th>
-                                <th class="p-2 text-center">Rotazione</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-                
-                datiFiltrati.forEach(m => {
-                    let tasso = m.carico > 0 ? (m.venduto / m.carico) * 100 : 0;
-                    html += `
-                        <tr class="border-b hover:bg-gray-50">
-                            <td class="p-2 text-gray-700">${m.store}</td>
-                            <td class="p-2 font-mono font-bold text-indigo-700">${m.codiceInterno}</td>
-                            <td class="p-2 font-medium">${m.descrizione}</td>
-                            <td class="p-2 text-center text-gray-600">${m.misura} / ${m.colore}</td>
-                            <td class="p-2 text-center">${m.carico}</td>
-                            <td class="p-2 text-center text-emerald-600 font-bold">${m.venduto}</td>
-                            <td class="p-2 text-center font-bold ${coloreTesto}">${m.giacenza}</td>
-                            <td class="p-2 text-center font-bold">${tasso.toFixed(1)}%</td>
-                        </tr>
-                    `;
-                });
-                html += `</tbody></table></div>`;
+                document.getElementById('report-content').innerHTML = html;
+                return;
             }
+
+            // Raggruppa i dati per Codice Interno
+            let articoliGroup = {};
+            datiFiltrati.forEach(item => {
+                let cod = item.codiceInterno || 'Sconosciuto';
+                if (!articoliGroup[cod]) {
+                    articoliGroup[cod] = {
+                        descrizione: item.descrizione,
+                        matrixData: {}
+                    };
+                }
+                let m = item.misura && item.misura !== '' ? item.misura : 'Unica';
+                let c = item.colore && item.colore !== '' ? item.colore : 'Standard';
+                
+                if (!articoliGroup[cod].matrixData[c]) {
+                    articoliGroup[cod].matrixData[c] = {};
+                }
+                if (!articoliGroup[cod].matrixData[c][m]) {
+                    articoliGroup[cod].matrixData[c][m] = { carico: 0, venduto: 0, giacenza: 0 };
+                }
+                articoliGroup[cod].matrixData[c][m].carico += item.carico;
+                articoliGroup[cod].matrix[c][m].venduto += item.venduto;
+                articoliGroup[cod].matrix[c][m].giacenza += item.giacenza;
+            });
+
+            // Genera una matrice per ogni articolo
+            let codiciSortati = Object.keys(articoliGroup).sort();
+            
+            codiciSortati.forEach(cod => {
+                let art = articoliGroup[cod];
+                let setMisure = new Set();
+                let setColori = new Set();
+                let totCaricoArt = 0, totVendutoArt = 0, totGiacenzaArt = 0;
+
+                for (const c in art.matrixData) {
+                    setColori.add(c);
+                    for (const m in art.matrixData[c]) {
+                        setMisure.add(m);
+                        totCaricoArt += art.matrixData[c][m].carico;
+                        totVendutoArt += art.matrixData[c][m].venduto;
+                        totGiacenzaArt += art.matrixData[c][m].giacenza;
+                    }
+                }
+
+                let arrMisure = Array.from(setMisure).sort((a,b) => getMisuraWeight(a) - getMisuraWeight(b));
+                let arrColori = Array.from(setColori).sort();
+
+                let tableHtml = `
+                <div class="mb-6 border border-gray-200 rounded-lg overflow-hidden print-avoid-break shadow-sm">
+                    <div class="bg-slate-50 px-3 py-2 border-b border-gray-200 flex justify-between items-center">
+                        <div class="font-bold text-indigo-800 text-sm">${cod} <span class="font-medium text-gray-700">- ${art.descrizione}</span></div>
+                        <div class="text-[11px] font-semibold text-gray-500 bg-white px-2 py-1 rounded border">C: ${totCaricoArt} | V: ${totVendutoArt} | G: <span class="${totGiacenzaArt <= 0 ? 'text-red-500' : 'text-gray-800'}">${totGiacenzaArt}</span></div>
+                    </div>
+                    <div class="overflow-x-auto p-3 bg-white">
+                        <table class="w-full text-center border-collapse text-xs">
+                            <thead>
+                                <tr class="bg-gray-100 border-b">
+                                    <th class="p-2 text-left border-r font-bold text-gray-600">Colore \\ Misura</th>`;
+                
+                arrMisure.forEach(m => {
+                    tableHtml += `<th class="p-2 border-r font-bold text-indigo-600 bg-indigo-50/50">${m}</th>`;
+                });
+                tableHtml += `<th class="p-2 font-bold text-gray-700 bg-gray-200">Totale</th></tr></thead><tbody>`;
+
+                arrColori.forEach(c => {
+                    tableHtml += `<tr class="border-b hover:bg-gray-50"><td class="p-2 text-left font-bold border-r text-slate-700 bg-gray-50 whitespace-nowrap">${c}</td>`;
+                    let rigaC = 0, rigaV = 0, rigaG = 0;
+                    
+                    arrMisure.forEach(m => {
+                        let cell = art.matrixData[c]?.[m];
+                        if (cell) {
+                            let gColor = cell.giacenza > 0 ? "text-emerald-600" : (cell.giacenza < 0 ? "text-red-500" : "text-gray-400");
+                            tableHtml += `<td class="p-1 border-r align-middle">
+                                <div class="flex flex-col text-[10px] leading-tight">
+                                    <div class="text-gray-400">V: <span class="font-bold text-gray-700">${cell.venduto}</span>/${cell.carico}</div>
+                                    <div class="font-bold text-sm ${gColor}">${cell.giacenza}</div>
+                                </div>
+                            </td>`;
+                            rigaC += cell.carico; rigaV += cell.venduto; rigaG += cell.giacenza;
+                        } else {
+                            tableHtml += `<td class="p-2 border-r text-gray-300">-</td>`;
+                        }
+                    });
+                    
+                    tableHtml += `<td class="p-1 border-l bg-gray-50 align-middle">
+                        <div class="flex flex-col text-[10px] leading-tight">
+                            <div class="text-gray-500">V: <span class="font-bold text-gray-800">${rigaV}</span>/${rigaC}</div>
+                            <div class="font-bold text-sm text-slate-900">${rigaG}</div>
+                        </div>
+                    </td></tr>`;
+                });
+                
+                tableHtml += `<tr class="bg-gray-100 font-bold"><td class="p-2 text-left border-r text-gray-700">Tot Taglia</td>`;
+                arrMisure.forEach(m => {
+                    let colC = 0, colV = 0, colG = 0;
+                    arrColori.forEach(c => {
+                        if (art.matrixData[c]?.[m]) {
+                            colC += art.matrixData[c][m].carico;
+                            colV += art.matrixData[c][m].venduto;
+                            colG += art.matrixData[c][m].giacenza;
+                        }
+                    });
+                    tableHtml += `<td class="p-1 border-r">
+                        <div class="flex flex-col text-[10px] leading-tight font-normal">
+                            <div class="text-gray-500">V: <span class="font-bold text-gray-700">${colV}</span>/${colC}</div>
+                            <div class="font-bold text-sm text-indigo-700">${colG}</div>
+                        </div>
+                    </td>`;
+                });
+                
+                tableHtml += `<td class="p-1 bg-emerald-50 text-emerald-800 border-l">
+                    <div class="flex flex-col text-[10px] leading-tight font-normal">
+                        <div class="text-gray-600">V: <span class="font-bold text-gray-900">${totVendutoArt}</span>/${totCaricoArt}</div>
+                        <div class="font-bold text-sm text-emerald-700">${totGiacenzaArt}</div>
+                    </div>
+                </td></tr></tbody></table></div></div>`;
+
+                html += tableHtml;
+            });
 
             document.getElementById('report-content').innerHTML = html;
         };
@@ -854,13 +941,12 @@
                         <h4 class="font-bold text-xs uppercase text-gray-500 tracking-wider mb-3">Indicatori di Magazzino</h4>
                         
                         <ul class="text-xs space-y-2 text-gray-700">
-                            <!-- MODIFICA: GLI INDICATORI ORA SONO PULSANTI CLICCABILI -->
                             <li onclick="mostraDettaglioIndicatore('esaurite')" class="cursor-pointer hover:bg-red-50 p-2 rounded transition border border-transparent hover:border-red-200 shadow-sm bg-white">
                                 <div class="flex justify-between items-center">
                                     <span><i class="fa-solid fa-circle-exclamation text-red-500 mr-2"></i> Varianti Esaurite (Giacenza &le; 0)</span>
                                     <span class="font-bold text-red-600 text-sm bg-red-100 px-2 py-0.5 rounded">${esauriti}</span>
                                 </div>
-                                <div class="text-[10px] text-gray-400 mt-1 pl-6">Clicca per espandere e stampare la lista</div>
+                                <div class="text-[10px] text-gray-400 mt-1 pl-6">Clicca per espandere e stampare a matrice</div>
                             </li>
                             
                             <li onclick="mostraDettaglioIndicatore('fermo')" class="cursor-pointer hover:bg-amber-50 p-2 rounded transition border border-transparent hover:border-amber-200 shadow-sm bg-white">
@@ -868,7 +954,7 @@
                                     <span><i class="fa-solid fa-hourglass-half text-amber-500 mr-2"></i> Varianti a Stock Fermo (Vendite 0)</span>
                                     <span class="font-bold text-amber-600 text-sm bg-amber-100 px-2 py-0.5 rounded">${fermi}</span>
                                 </div>
-                                <div class="text-[10px] text-gray-400 mt-1 pl-6">Clicca per espandere e stampare la lista</div>
+                                <div class="text-[10px] text-gray-400 mt-1 pl-6">Clicca per espandere e stampare a matrice</div>
                             </li>
                             
                             <li onclick="mostraDettaglioIndicatore('top')" class="cursor-pointer hover:bg-emerald-50 p-2 rounded transition border border-transparent hover:border-emerald-200 shadow-sm bg-white">
@@ -876,7 +962,7 @@
                                     <span><i class="fa-solid fa-rocket text-emerald-500 mr-2"></i> Varianti Top Rotazione (&ge; 70%)</span>
                                     <span class="font-bold text-emerald-600 text-sm bg-emerald-100 px-2 py-0.5 rounded">${topRotazioneCount}</span>
                                 </div>
-                                <div class="text-[10px] text-gray-400 mt-1 pl-6">Clicca per espandere e stampare la lista</div>
+                                <div class="text-[10px] text-gray-400 mt-1 pl-6">Clicca per espandere e stampare a matrice</div>
                             </li>
                         </ul>
 
