@@ -24,9 +24,9 @@
         .ai-icon { font-size: 1.5rem; margin-right: 10px; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
         
-        /* Stile per il badge della card cliccabile */
-        .card-filter-btn { cursor: pointer; transition: transform 0.2s; }
-        .card-filter-btn:hover { transform: scale(1.05); }
+        /* Stile per i badge cliccabili */
+        .card-filter-btn { cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: inline-block; }
+        .card-filter-btn:hover { transform: scale(1.08); box-shadow: 0 4px 8px rgba(0,0,0,0.15); z-index: 10; position: relative;}
     </style>
 </head>
 <body>
@@ -104,17 +104,19 @@
                 <div class="input-group">
                     <span class="input-group-text"><i class="fas fa-id-card"></i></span>
                     <input type="text" id="filterCard" class="form-control form-control-lg" placeholder="N° Card..." oninput="debounceUpdate()">
-                    <!-- Pulsante per pulire rapidamente il filtro card -->
                     <button class="btn btn-outline-secondary" type="button" onclick="clearCardFilter()" title="Azzera Filtro Card">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
             </div>
             <div class="col-md-4">
-                <label class="form-label fw-bold text-secondary">Ricerca Prodotto:</label>
+                <label class="form-label fw-bold text-secondary">Cerca Articolo (Descrizione/Codice/EAN):</label>
                 <div class="input-group">
                     <span class="input-group-text"><i class="fas fa-search"></i></span>
-                    <input type="text" id="filterDesc" class="form-control form-control-lg" placeholder="Es. Giubbotto blu..." oninput="debounceUpdate()">
+                    <input type="text" id="filterDesc" class="form-control form-control-lg" placeholder="Es. Giubbotto, 805..., SKU..." oninput="debounceUpdate()">
+                    <button class="btn btn-outline-secondary" type="button" onclick="clearProductFilter()" title="Azzera Ricerca">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -125,26 +127,38 @@
                     <div class="accordion-item border-0 bg-transparent">
                         <h2 class="accordion-header" id="headingOne">
                             <button class="accordion-button collapsed py-2 px-3 rounded text-muted bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne" style="font-size: 0.9rem;">
-                                <i class="fas fa-cog me-2"></i> Impostazioni Colonne (Modifica se i dati non corrispondono)
+                                <i class="fas fa-cog me-2"></i> Impostazioni Colonne (Modifica se i dati non corrispondono o i bottoni non funzionano)
                             </button>
                         </h2>
                         <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#accordionSettings">
-                            <div class="accordion-body bg-white border rounded mt-2 row">
-                                <div class="col-md-3 mb-2">
-                                    <label class="form-label small fw-bold text-secondary">Colonna Data:</label>
-                                    <select id="colData" class="form-select form-select-sm" onchange="changeDataColumn()"></select>
+                            <div class="accordion-body bg-white border rounded mt-2">
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label small fw-bold text-secondary">Colonna Data:</label>
+                                        <select id="colData" class="form-select form-select-sm" onchange="changeDataColumn()"></select>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label small fw-bold text-secondary">Colonna Clienti (Scontrino):</label>
+                                        <select id="colTransazione" class="form-select form-select-sm" onchange="updateDashboard()"></select>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label small fw-bold text-secondary">Colonna Card Cliente:</label>
+                                        <select id="colCardCliente" class="form-select form-select-sm" onchange="updateDashboard()"></select>
+                                    </div>
                                 </div>
-                                <div class="col-md-3 mb-2">
-                                    <label class="form-label small fw-bold text-secondary">Colonna Clienti (Scontrino):</label>
-                                    <select id="colTransazione" class="form-select form-select-sm" onchange="updateDashboard()"></select>
-                                </div>
-                                <div class="col-md-3 mb-2">
-                                    <label class="form-label small fw-bold text-secondary">Colonna Descrizione:</label>
-                                    <select id="colDescrizione" class="form-select form-select-sm" onchange="updateDashboard()"></select>
-                                </div>
-                                <div class="col-md-3 mb-2">
-                                    <label class="form-label small fw-bold text-secondary">Colonna Card Cliente:</label>
-                                    <select id="colCardCliente" class="form-select form-select-sm" onchange="updateDashboard()"></select>
+                                <div class="row">
+                                    <div class="col-md-4 mb-2">
+                                        <label class="form-label small fw-bold text-secondary">Colonna Descrizione Prodotto:</label>
+                                        <select id="colDescrizione" class="form-select form-select-sm" onchange="updateDashboard()"></select>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <label class="form-label small fw-bold text-secondary">Colonna Codice Interno / SKU:</label>
+                                        <select id="colCodInt" class="form-select form-select-sm" onchange="updateDashboard()"></select>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <label class="form-label small fw-bold text-secondary">Colonna EAN / Barcode:</label>
+                                        <select id="colEan" class="form-select form-select-sm" onchange="updateDashboard()"></select>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -257,7 +271,7 @@
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title fw-bold"><i class="fas fa-table me-2"></i>Dettaglio Operazioni (Ordinate per Data Decrescente)</h5>
-                <p class="text-muted small">La tabella mostra solo i dati che superano i filtri selezionati in alto. Se è presente una Card Cliente, cliccala per filtrare lo storico del cliente.</p>
+                <p class="text-muted small">Clicca sui pulsanti colorati (Card Cliente, Codice, EAN) nella tabella per filtrare rapidamente lo storico.</p>
                 <div class="table-responsive">
                     <table id="dataTable" class="table table-striped table-hover align-middle w-100">
                         <thead id="dtHead" class="table-dark"></thead>
@@ -285,7 +299,7 @@
     let rawData = [];
     let columns = [];
     
-    // Configurazione Colonne (Indici)
+    // Configurazione Colonne (Indici base/fallback)
     let COL_DATA = null;   
     let COL_QTA = 7;       // H
     let COL_LISTINO = 8;   // I
@@ -293,8 +307,11 @@
     let COL_STORE = 16;    // Q
     let COL_CARD = 15;     // P - Card Cliente
     
-    let COL_TRANS = null;  // Dinamico
-    let COL_DESC = null;   // Dinamico
+    // Colonne Dinamiche
+    let COL_TRANS = null;  
+    let COL_DESC = null;   
+    let COL_COD_INT = null;
+    let COL_EAN = null;
 
     let charts = {};
     let dataTableInstance = null;
@@ -322,7 +339,7 @@
                 rawData = results.data;
                 columns = results.meta.fields;
                 
-                // Imposta Colonna B (indice 1) come Data di default
+                // Assegnazioni di base fisse basate sulla tua struttura nota
                 COL_DATA = columns[1] || columns[0];
                 COL_QTA = columns[7] || columns[0];
                 COL_LISTINO = columns[8] || columns[0];
@@ -344,31 +361,44 @@
     }
 
     function setupFilters() {
-        // Dropdown Colonne
         const selData = document.getElementById('colData');
         const selTrans = document.getElementById('colTransazione');
         const selDesc = document.getElementById('colDescrizione');
         const selCard = document.getElementById('colCardCliente');
-        selData.innerHTML = ''; selTrans.innerHTML = ''; selDesc.innerHTML = ''; selCard.innerHTML = '';
+        const selCodInt = document.getElementById('colCodInt');
+        const selEan = document.getElementById('colEan');
         
-        let guessedTrans = columns[0]; // Visto che la Data è in B, lo Scontrino è probabilmente in A
+        selData.innerHTML = ''; selTrans.innerHTML = ''; selDesc.innerHTML = ''; 
+        selCard.innerHTML = ''; selCodInt.innerHTML = ''; selEan.innerHTML = '';
+        
+        // Guessing dinamico per le altre colonne
+        let guessedTrans = columns[0]; 
         let guessedDesc = columns[3] || columns[0];
+        let guessedCodInt = columns[2] || columns[0];
+        let guessedEan = columns[4] || columns[0];
 
         columns.forEach(col => {
-            let optDate = document.createElement('option'); optDate.value = col; optDate.textContent = col; selData.appendChild(optDate);
-            let optT = document.createElement('option'); optT.value = col; optT.textContent = col; selTrans.appendChild(optT);
-            let optD = document.createElement('option'); optD.value = col; optD.textContent = col; selDesc.appendChild(optD);
-            let optC = document.createElement('option'); optC.value = col; optC.textContent = col; selCard.appendChild(optC);
+            selData.appendChild(new Option(col, col));
+            selTrans.appendChild(new Option(col, col));
+            selDesc.appendChild(new Option(col, col));
+            selCard.appendChild(new Option(col, col));
+            selCodInt.appendChild(new Option(col, col));
+            selEan.appendChild(new Option(col, col));
             
             const low = col.toLowerCase();
             if (low.includes('scontrin') || low.includes('transaz') || low.includes('ticket')) guessedTrans = col;
             if (low.includes('descriz') || low.includes('articol') || low.includes('prodotto')) guessedDesc = col;
+            if (low.includes('interno') || low.includes('sku') || low.includes('codice')) guessedCodInt = col;
+            if (low.includes('ean') || low.includes('barcode') || low.includes('a barre')) guessedEan = col;
         });
         
         selData.value = COL_DATA;
+        selCard.value = COL_CARD;
+        
         selTrans.value = guessedTrans; COL_TRANS = guessedTrans;
         selDesc.value = guessedDesc; COL_DESC = guessedDesc;
-        selCard.value = COL_CARD;
+        selCodInt.value = guessedCodInt; COL_COD_INT = guessedCodInt;
+        selEan.value = guessedEan; COL_EAN = guessedEan;
 
         extractMonthsAndStores();
 
@@ -378,6 +408,8 @@
         selTrans.addEventListener('change', function() { COL_TRANS = this.value; updateDashboard(); updateDailySummary(); });
         selDesc.addEventListener('change', function() { COL_DESC = this.value; updateDashboard(); });
         selCard.addEventListener('change', function() { COL_CARD = this.value; updateDashboard(); });
+        selCodInt.addEventListener('change', function() { COL_COD_INT = this.value; updateDashboard(); });
+        selEan.addEventListener('change', function() { COL_EAN = this.value; updateDashboard(); });
     }
     
     function changeDataColumn() {
@@ -402,14 +434,12 @@
             }
         });
 
-        // Popola Store
         const selStore = document.getElementById('filterStore');
         const currStore = selStore.value;
         selStore.innerHTML = '<option value="ALL">Tutti</option>';
         Array.from(stores).sort().forEach(s => { selStore.insertAdjacentHTML('beforeend', `<option value="${s}">${s}</option>`); });
         if (currStore && Array.from(stores).includes(currStore)) selStore.value = currStore;
 
-        // Popola Mesi
         const selMonth = document.getElementById('filterMonth');
         const currMonth = selMonth.value;
         selMonth.innerHTML = '<option value="ALL">Tutti</option>';
@@ -419,7 +449,6 @@
         });
         if (currMonth && Array.from(months).includes(currMonth)) selMonth.value = currMonth;
 
-        // Popola Giorni specifici Filtro Globale
         const selDay = document.getElementById('filterDay');
         const currDay = selDay.value;
         selDay.innerHTML = '<option value="ALL">Tutte</option>';
@@ -429,7 +458,6 @@
         });
         if (currDay && Array.from(days).includes(currDay)) selDay.value = currDay;
 
-        // Popola Giorni specifici per il Riepilogo Giornaliero Indipendente
         const selDailyDate = document.getElementById('dailySummaryDate');
         const currDailyDate = selDailyDate.value;
         selDailyDate.innerHTML = '';
@@ -525,17 +553,26 @@
         debounceTimer = setTimeout(() => { updateDashboard(); }, 400);
     }
     
-    // Funzione per impostare il filtro della card e ricaricare la dashboard
+    // Funzioni per cliccare e impostare filtri da tabella
     function filterByCard(cardCode) {
         document.getElementById('filterCard').value = cardCode;
         updateDashboard();
-        // Scorriamo la pagina verso l'alto per mostrare i risultati ai filtri
         document.getElementById('filterSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
     
-    // Funzione per pulire rapidamente la card
+    function filterByProduct(code) {
+        document.getElementById('filterDesc').value = code;
+        updateDashboard();
+        document.getElementById('filterSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     function clearCardFilter() {
         document.getElementById('filterCard').value = '';
+        updateDashboard();
+    }
+    
+    function clearProductFilter() {
+        document.getElementById('filterDesc').value = '';
         updateDashboard();
     }
 
@@ -573,9 +610,12 @@
             let mDate = moment(dateVal, ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
             let monthVal = mDate.isValid() ? mDate.format("YYYY-MM") : 'Sconosciuto';
             let dayVal = mDate.isValid() ? mDate.format("YYYY-MM-DD") : 'Sconosciuto';
+            
             let cardVal = (row[COL_CARD] || '').trim().toLowerCase();
             let descVal = (row[COL_DESC] || '').trim();
             let descLower = descVal.toLowerCase();
+            let codIntVal = (row[COL_COD_INT] || '').trim().toLowerCase();
+            let eanVal = (row[COL_EAN] || '').trim().toLowerCase();
             
             if (selStore !== 'ALL' && storeVal !== selStore) return;
             if (selMonth !== 'ALL' && monthVal !== selMonth) return;
@@ -584,7 +624,10 @@
             // Filtro per la Card Cliente
             if (searchCard !== '' && !cardVal.includes(searchCard)) return;
             
-            if (searchTerms.length > 0 && !searchTerms.every(term => descLower.includes(term))) return;
+            // Filtro unificato per Descrizione / Codice Interno / EAN
+            if (searchTerms.length > 0 && !searchTerms.every(term => 
+                descLower.includes(term) || codIntVal.includes(term) || eanVal.includes(term)
+            )) return;
             
             filteredData.push(row);
 
@@ -601,6 +644,7 @@
             let transId = (row[COL_TRANS] || '').trim();
             if(transId) transazioniSet.add(`${storeVal}_${dateVal}_${transId}`);
 
+            // Statistiche prodotti (basate sulla descrizione)
             if(descVal) {
                 if(!productStats[descVal]) productStats[descVal] = { qta: 0, incasso: 0 };
                 productStats[descVal].qta += qta;
@@ -754,17 +798,35 @@
                 let td = document.createElement('td');
                 let cellVal = row[col] !== null ? row[col] : '';
                 
-                // Se la colonna corrente è la Card Cliente e ha un valore
-                if (col === COL_CARD && cellVal.trim() !== '') {
-                    // Creiamo il pulsantino cliccabile (badge)
-                    let badge = document.createElement('span');
-                    badge.className = 'badge bg-primary card-filter-btn px-2 py-1';
-                    badge.innerHTML = `<i class="fas fa-filter me-1"></i>${cellVal}`;
-                    badge.title = 'Filtra tutto lo storico di questo cliente';
-                    badge.onclick = function() {
-                        filterByCard(cellVal.trim());
-                    };
-                    td.appendChild(badge);
+                // Formattazione Badge e Click per Card, Codice Interno e EAN
+                if (cellVal.trim() !== '') {
+                    if (col === COL_CARD) {
+                        let badge = document.createElement('span');
+                        badge.className = 'badge bg-primary card-filter-btn px-2 py-1';
+                        badge.innerHTML = `<i class="fas fa-id-card me-1"></i>${cellVal}`;
+                        badge.title = 'Filtra lo storico di questa Card';
+                        badge.onclick = function() { filterByCard(cellVal.trim()); };
+                        td.appendChild(badge);
+                    } 
+                    else if (col === COL_EAN) {
+                        let badge = document.createElement('span');
+                        badge.className = 'badge bg-success card-filter-btn px-2 py-1';
+                        badge.innerHTML = `<i class="fas fa-barcode me-1"></i>${cellVal}`;
+                        badge.title = 'Filtra per questo EAN';
+                        badge.onclick = function() { filterByProduct(cellVal.trim()); };
+                        td.appendChild(badge);
+                    }
+                    else if (col === COL_COD_INT) {
+                        let badge = document.createElement('span');
+                        badge.className = 'badge bg-secondary card-filter-btn px-2 py-1';
+                        badge.innerHTML = `<i class="fas fa-hashtag me-1"></i>${cellVal}`;
+                        badge.title = 'Filtra per questo Codice Interno';
+                        badge.onclick = function() { filterByProduct(cellVal.trim()); };
+                        td.appendChild(badge);
+                    }
+                    else {
+                        td.textContent = cellVal;
+                    }
                 } else {
                     td.textContent = cellVal;
                 }
