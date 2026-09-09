@@ -100,10 +100,10 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <label class="form-label fw-bold text-secondary">Filtra Card:</label>
+                <label class="form-label fw-bold text-secondary">Filtra Card / CF:</label>
                 <div class="input-group">
                     <span class="input-group-text"><i class="fas fa-id-card"></i></span>
-                    <input type="text" id="filterCard" class="form-control form-control-lg" placeholder="N° Card..." oninput="debounceUpdate()">
+                    <input type="text" id="filterCard" class="form-control form-control-lg" placeholder="N° Card o CF..." oninput="debounceUpdate()">
                     <button class="btn btn-outline-secondary" type="button" onclick="clearCardFilter()" title="Azzera Filtro Card">
                         <i class="fas fa-times"></i>
                     </button>
@@ -142,7 +142,7 @@
                                         <select id="colTransazione" class="form-select form-select-sm" onchange="updateDashboard()"></select>
                                     </div>
                                     <div class="col-md-4 mb-3">
-                                        <label class="form-label small fw-bold text-secondary">Colonna Card Cliente (Badge Blu):</label>
+                                        <label class="form-label small fw-bold text-secondary">Colonna Card Cliente / CF (Badge Blu):</label>
                                         <select id="colCardCliente" class="form-select form-select-sm" onchange="updateDashboard()"></select>
                                     </div>
                                 </div>
@@ -337,12 +337,10 @@
                 rawData = results.data;
                 columns = results.meta.fields;
                 
-                // MAPPATURA FISSA RIGOROSA: 
-                // Assicura che le colonne chiave usino l'indice corretto del tuo tracciato, 
-                // scavalcando problemi di nomi simili.
+                // MAPPATURA FISSA RIGOROSA
                 COL_TRANS   = columns[0];
                 COL_DATA    = columns[1] || columns[0];
-                COL_COD_INT = columns[2] || columns[0]; // C - Codice Interno / Articolo
+                COL_COD_INT = columns[2] || columns[0]; // C - Codice Interno
                 COL_DESC    = columns[3] || columns[0]; // D - Descrizione
                 COL_EAN     = columns[4] || columns[0]; // E - EAN
                 COL_QTA     = columns[7] || columns[0]; // H - Quantità
@@ -384,7 +382,6 @@
             selEan.appendChild(new Option(col, col));
         });
         
-        // Imposta i valori nei dropdown basati sulla mappatura fissa fatta prima
         selData.value = COL_DATA;
         selTrans.value = COL_TRANS;
         selDesc.value = COL_DESC;
@@ -545,7 +542,6 @@
         debounceTimer = setTimeout(() => { updateDashboard(); }, 400);
     }
     
-    // Funzioni per cliccare e impostare filtri da tabella
     function filterByCard(cardCode) {
         document.getElementById('filterCard').value = cardCode;
         updateDashboard();
@@ -594,6 +590,7 @@
         let dataDow = { 'Lunedì':0, 'Martedì':0, 'Mercoledì':0, 'Giovedì':0, 'Venerdì':0, 'Sabato':0, 'Domenica':0 };
         
         let productStats = {}; 
+        let clientStats = {}; // Nuovo contenitore per le statistiche dei clienti
         let filteredData = [];
 
         rawData.forEach(row => {
@@ -603,7 +600,8 @@
             let monthVal = mDate.isValid() ? mDate.format("YYYY-MM") : 'Sconosciuto';
             let dayVal = mDate.isValid() ? mDate.format("YYYY-MM-DD") : 'Sconosciuto';
             
-            let cardVal = (row[COL_CARD] || '').trim().toLowerCase();
+            let cardValRaw = (row[COL_CARD] || '').trim();
+            let cardValLower = cardValRaw.toLowerCase();
             let descVal = (row[COL_DESC] || '').trim();
             let descLower = descVal.toLowerCase();
             let codIntVal = (row[COL_COD_INT] || '').trim().toLowerCase();
@@ -614,7 +612,7 @@
             if (selDay !== 'ALL' && dayVal !== selDay) return;
             
             // Filtro per la Card Cliente
-            if (searchCard !== '' && !cardVal.includes(searchCard)) return;
+            if (searchCard !== '' && !cardValLower.includes(searchCard)) return;
             
             // Filtro unificato per Descrizione / Codice Interno / EAN
             if (searchTerms.length > 0 && !searchTerms.every(term => 
@@ -630,17 +628,31 @@
             let pNettoUnit = parseEuro(row[COL_NETTO]);
             let rigaNetto = pNettoUnit * qta;
             let rigaListino = pListinoUnit * qta;
+            
+            // Calcolo sconto della singola riga
+            let scontoRiga = rigaListino - rigaNetto;
+            if(scontoRiga < 0) scontoRiga = 0;
 
             totIncasso += rigaNetto; totListino += rigaListino; totCapi += qta;
 
             let transId = (row[COL_TRANS] || '').trim();
             if(transId) transazioniSet.add(`${storeVal}_${dateVal}_${transId}`);
 
-            // Statistiche prodotti (basate sulla descrizione)
+            // Statistiche prodotti
             if(descVal) {
                 if(!productStats[descVal]) productStats[descVal] = { qta: 0, incasso: 0 };
                 productStats[descVal].qta += qta;
                 productStats[descVal].incasso += rigaNetto;
+            }
+            
+            // Statistiche Clienti per Top 3
+            if (cardValRaw !== '') {
+                let cardUpper = cardValRaw.toUpperCase();
+                if(!clientStats[cardUpper]) clientStats[cardUpper] = { incasso: 0, capi: 0, sconto: 0, listino: 0 };
+                clientStats[cardUpper].incasso += rigaNetto;
+                clientStats[cardUpper].capi += qta;
+                clientStats[cardUpper].sconto += scontoRiga;
+                clientStats[cardUpper].listino += rigaListino;
             }
 
             if(!dataStore[storeVal]) dataStore[storeVal] = 0;
@@ -679,11 +691,12 @@
         renderChart('monthChart', 'line', finalMonthData, 'Incasso Mensile (€)', '#198754');
         renderChart('dowChart', 'bar', dataDow, 'Incasso per Giorno (€)', '#ffc107');
 
-        generateAiReport(filteredData.length, totIncasso, scontoPerc, dataStore, dataDow, productStats);
+        // Passiamo clientStats alla funzione di AI
+        generateAiReport(filteredData.length, totIncasso, scontoPerc, dataStore, dataDow, productStats, clientStats);
         updateTable(filteredData);
     }
 
-    function generateAiReport(rowCount, totIncasso, scontoPerc, dataStore, dataDow, productStats) {
+    function generateAiReport(rowCount, totIncasso, scontoPerc, dataStore, dataDow, productStats, clientStats) {
         const reportDiv = document.getElementById('aiReport');
         if (rowCount === 0) {
             reportDiv.innerHTML = "<em>I filtri correnti non hanno prodotto alcun risultato. Modifica i parametri di ricerca.</em>";
@@ -707,7 +720,7 @@
         let bestDay = Object.keys(dataDow).reduce((a, b) => dataDow[a] > dataDow[b] ? a : b);
         let maxDayVal = dataDow[bestDay];
         if(maxDayVal > 0) {
-            reportHtml += `<li><strong>Giorno di Picco:</strong> Storicamente (sulla base dei filtri), il momento di maggiore affluenza e conversioni risulta essere il <strong>${bestDay}</strong>, indicando dove concentrare il personale o le azioni di marketing locali.</li>`;
+            reportHtml += `<li><strong>Giorno di Picco:</strong> Storicamente (sulla base dei filtri), il momento di maggiore affluenza e conversioni risulta essere il <strong>${bestDay}</strong>.</li>`;
         }
 
         let prodNames = Object.keys(productStats);
@@ -716,10 +729,31 @@
             let topQtaProd = prodNames.reduce((a, b) => productStats[a].qta > productStats[b].qta ? a : b);
             
             if (topRevProd === topQtaProd) {
-                reportHtml += `<li><strong>Campione di Vendita:</strong> <strong>${topRevProd}</strong> è il prodotto leader assoluto, generando contemporaneamente sia i volumi più alti (${productStats[topRevProd].qta} pezzi) che l'incasso maggiore (${formatEur(productStats[topRevProd].incasso)}).</li>`;
+                reportHtml += `<li><strong>Campione di Vendita:</strong> <strong>${topRevProd}</strong> è il prodotto leader assoluto, con i volumi più alti (${productStats[topRevProd].qta} pezzi) e l'incasso maggiore (${formatEur(productStats[topRevProd].incasso)}).</li>`;
             } else {
-                reportHtml += `<li><strong>Analisi Prodotto:</strong> L'articolo che ha portato maggiore cassa è <strong>${topRevProd}</strong> (${formatEur(productStats[topRevProd].incasso)}), mentre il prodotto che muove più pezzi fisici in negozio è <strong>${topQtaProd}</strong> (${productStats[topQtaProd].qta} capi venduti).</li>`;
+                reportHtml += `<li><strong>Analisi Prodotto:</strong> L'articolo con maggiore cassa è <strong>${topRevProd}</strong> (${formatEur(productStats[topRevProd].incasso)}), quello che muove più pezzi è <strong>${topQtaProd}</strong> (${productStats[topQtaProd].qta} capi).</li>`;
             }
+        }
+        
+        // INTEGRAZIONE TOP 3 CLIENTI
+        let clients = Object.keys(clientStats);
+        if (clients.length > 0) {
+            // Ordina i clienti per incasso decrescente
+            clients.sort((a, b) => clientStats[b].incasso - clientStats[a].incasso);
+            
+            // Prendi i primi 3
+            let topClients = clients.slice(0, 3);
+            
+            reportHtml += `<li class="mt-2"><strong>Top Clienti (CF / Card):</strong> I 3 clienti che hanno generato più valore nella selezione attuale sono:`;
+            reportHtml += `<ul class="mb-0 mt-1" style="list-style-type: none; padding-left: 10px;">`;
+            
+            topClients.forEach((c, index) => {
+                let st = clientStats[c];
+                let scontoMedio = st.listino > 0 ? (st.sconto / st.listino) * 100 : 0;
+                let medaglia = index === 0 ? "🥇" : (index === 1 ? "🥈" : "🥉");
+                reportHtml += `<li class="mt-1">${medaglia} <strong>${c}</strong>: <strong>${formatEur(st.incasso)}</strong> incassati su <strong>${st.capi} capi</strong> (Sconto applicato: ${scontoMedio.toFixed(1)}%)</li>`;
+            });
+            reportHtml += `</ul></li>`;
         }
 
         reportHtml += "</ul>";
