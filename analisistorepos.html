@@ -23,6 +23,10 @@
         .ai-insight strong { color: #2c3e50; }
         .ai-icon { font-size: 1.5rem; margin-right: 10px; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        
+        /* Stile per il badge della card cliccabile */
+        .card-filter-btn { cursor: pointer; transition: transform 0.2s; }
+        .card-filter-btn:hover { transform: scale(1.05); }
     </style>
 </head>
 <body>
@@ -77,23 +81,34 @@
     <!-- Filters -->
     <div class="filter-section d-none" id="filterSection">
         <div class="row g-3 align-items-end mb-3">
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label fw-bold text-secondary">Filtra Negozio:</label>
                 <select id="filterStore" class="form-select form-select-lg" onchange="updateDashboard()">
-                    <option value="ALL">Tutti i Negozi</option>
+                    <option value="ALL">Tutti</option>
                 </select>
             </div>
             <div class="col-md-2">
                 <label class="form-label fw-bold text-secondary">Filtra Mese:</label>
                 <select id="filterMonth" class="form-select form-select-lg" onchange="updateDashboard()">
-                    <option value="ALL">Tutti i Mesi</option>
+                    <option value="ALL">Tutti</option>
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label fw-bold text-secondary">Data Specifica:</label>
                 <select id="filterDay" class="form-select form-select-lg" onchange="updateDashboard()">
-                    <option value="ALL">Tutte le Date</option>
+                    <option value="ALL">Tutte</option>
                 </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-bold text-secondary">Filtra Card:</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="fas fa-id-card"></i></span>
+                    <input type="text" id="filterCard" class="form-control form-control-lg" placeholder="N° Card..." oninput="debounceUpdate()">
+                    <!-- Pulsante per pulire rapidamente il filtro card -->
+                    <button class="btn btn-outline-secondary" type="button" onclick="clearCardFilter()" title="Azzera Filtro Card">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
             </div>
             <div class="col-md-4">
                 <label class="form-label fw-bold text-secondary">Ricerca Prodotto:</label>
@@ -105,7 +120,7 @@
         </div>
         
         <div class="row g-3 align-items-end">
-            <div class="col-md-8">
+            <div class="col-md-12">
                 <div class="accordion" id="accordionSettings">
                     <div class="accordion-item border-0 bg-transparent">
                         <h2 class="accordion-header" id="headingOne">
@@ -115,17 +130,21 @@
                         </h2>
                         <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#accordionSettings">
                             <div class="accordion-body bg-white border rounded mt-2 row">
-                                <div class="col-md-4 mb-2">
+                                <div class="col-md-3 mb-2">
                                     <label class="form-label small fw-bold text-secondary">Colonna Data:</label>
                                     <select id="colData" class="form-select form-select-sm" onchange="changeDataColumn()"></select>
                                 </div>
-                                <div class="col-md-4 mb-2">
+                                <div class="col-md-3 mb-2">
                                     <label class="form-label small fw-bold text-secondary">Colonna Clienti (Scontrino):</label>
                                     <select id="colTransazione" class="form-select form-select-sm" onchange="updateDashboard()"></select>
                                 </div>
-                                <div class="col-md-4 mb-2">
+                                <div class="col-md-3 mb-2">
                                     <label class="form-label small fw-bold text-secondary">Colonna Descrizione:</label>
                                     <select id="colDescrizione" class="form-select form-select-sm" onchange="updateDashboard()"></select>
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="form-label small fw-bold text-secondary">Colonna Card Cliente:</label>
+                                    <select id="colCardCliente" class="form-select form-select-sm" onchange="updateDashboard()"></select>
                                 </div>
                             </div>
                         </div>
@@ -238,7 +257,7 @@
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title fw-bold"><i class="fas fa-table me-2"></i>Dettaglio Operazioni (Ordinate per Data Decrescente)</h5>
-                <p class="text-muted small">La tabella mostra solo i dati che superano i filtri selezionati in alto.</p>
+                <p class="text-muted small">La tabella mostra solo i dati che superano i filtri selezionati in alto. Se è presente una Card Cliente, cliccala per filtrare lo storico del cliente.</p>
                 <div class="table-responsive">
                     <table id="dataTable" class="table table-striped table-hover align-middle w-100">
                         <thead id="dtHead" class="table-dark"></thead>
@@ -251,7 +270,6 @@
 </div>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<!-- Aggiunta script Bootstrap necessario per il collapse -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -268,11 +286,12 @@
     let columns = [];
     
     // Configurazione Colonne (Indici)
-    let COL_DATA = null;   // Dinamico, default a colonna B
+    let COL_DATA = null;   
     let COL_QTA = 7;       // H
     let COL_LISTINO = 8;   // I
     let COL_NETTO = 9;     // J
     let COL_STORE = 16;    // Q
+    let COL_CARD = 15;     // P - Card Cliente
     
     let COL_TRANS = null;  // Dinamico
     let COL_DESC = null;   // Dinamico
@@ -308,6 +327,7 @@
                 COL_QTA = columns[7] || columns[0];
                 COL_LISTINO = columns[8] || columns[0];
                 COL_NETTO = columns[9] || columns[0];
+                COL_CARD = columns[15] || columns[0]; // Colonna P
                 COL_STORE = columns[16] || columns[0];
                 
                 setupFilters();
@@ -328,7 +348,8 @@
         const selData = document.getElementById('colData');
         const selTrans = document.getElementById('colTransazione');
         const selDesc = document.getElementById('colDescrizione');
-        selData.innerHTML = ''; selTrans.innerHTML = ''; selDesc.innerHTML = '';
+        const selCard = document.getElementById('colCardCliente');
+        selData.innerHTML = ''; selTrans.innerHTML = ''; selDesc.innerHTML = ''; selCard.innerHTML = '';
         
         let guessedTrans = columns[0]; // Visto che la Data è in B, lo Scontrino è probabilmente in A
         let guessedDesc = columns[3] || columns[0];
@@ -337,6 +358,7 @@
             let optDate = document.createElement('option'); optDate.value = col; optDate.textContent = col; selData.appendChild(optDate);
             let optT = document.createElement('option'); optT.value = col; optT.textContent = col; selTrans.appendChild(optT);
             let optD = document.createElement('option'); optD.value = col; optD.textContent = col; selDesc.appendChild(optD);
+            let optC = document.createElement('option'); optC.value = col; optC.textContent = col; selCard.appendChild(optC);
             
             const low = col.toLowerCase();
             if (low.includes('scontrin') || low.includes('transaz') || low.includes('ticket')) guessedTrans = col;
@@ -346,6 +368,7 @@
         selData.value = COL_DATA;
         selTrans.value = guessedTrans; COL_TRANS = guessedTrans;
         selDesc.value = guessedDesc; COL_DESC = guessedDesc;
+        selCard.value = COL_CARD;
 
         extractMonthsAndStores();
 
@@ -354,6 +377,7 @@
         
         selTrans.addEventListener('change', function() { COL_TRANS = this.value; updateDashboard(); updateDailySummary(); });
         selDesc.addEventListener('change', function() { COL_DESC = this.value; updateDashboard(); });
+        selCard.addEventListener('change', function() { COL_CARD = this.value; updateDashboard(); });
     }
     
     function changeDataColumn() {
@@ -381,14 +405,14 @@
         // Popola Store
         const selStore = document.getElementById('filterStore');
         const currStore = selStore.value;
-        selStore.innerHTML = '<option value="ALL">Tutti i Negozi</option>';
+        selStore.innerHTML = '<option value="ALL">Tutti</option>';
         Array.from(stores).sort().forEach(s => { selStore.insertAdjacentHTML('beforeend', `<option value="${s}">${s}</option>`); });
         if (currStore && Array.from(stores).includes(currStore)) selStore.value = currStore;
 
         // Popola Mesi
         const selMonth = document.getElementById('filterMonth');
         const currMonth = selMonth.value;
-        selMonth.innerHTML = '<option value="ALL">Tutti i Mesi</option>';
+        selMonth.innerHTML = '<option value="ALL">Tutti</option>';
         Array.from(months).sort().reverse().forEach(m => {
             let label = moment(m, "YYYY-MM").format("MMMM YYYY").toUpperCase();
             selMonth.insertAdjacentHTML('beforeend', `<option value="${m}">${label}</option>`);
@@ -398,7 +422,7 @@
         // Popola Giorni specifici Filtro Globale
         const selDay = document.getElementById('filterDay');
         const currDay = selDay.value;
-        selDay.innerHTML = '<option value="ALL">Tutte le Date</option>';
+        selDay.innerHTML = '<option value="ALL">Tutte</option>';
         Array.from(days).sort().reverse().forEach(d => {
             let label = moment(d, "YYYY-MM-DD").format("DD/MM/YYYY");
             selDay.insertAdjacentHTML('beforeend', `<option value="${d}">${label}</option>`);
@@ -500,6 +524,20 @@
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => { updateDashboard(); }, 400);
     }
+    
+    // Funzione per impostare il filtro della card e ricaricare la dashboard
+    function filterByCard(cardCode) {
+        document.getElementById('filterCard').value = cardCode;
+        updateDashboard();
+        // Scorriamo la pagina verso l'alto per mostrare i risultati ai filtri
+        document.getElementById('filterSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    
+    // Funzione per pulire rapidamente la card
+    function clearCardFilter() {
+        document.getElementById('filterCard').value = '';
+        updateDashboard();
+    }
 
     function parseEuro(valString) {
         if(!valString) return 0;
@@ -517,6 +555,7 @@
         const selMonth = document.getElementById('filterMonth').value;
         const selDay = document.getElementById('filterDay').value;
         
+        const searchCard = document.getElementById('filterCard').value.toLowerCase().trim();
         const searchTerms = document.getElementById('filterDesc').value.toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
 
         let totIncasso = 0; let totListino = 0; let totCapi = 0;
@@ -534,12 +573,16 @@
             let mDate = moment(dateVal, ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
             let monthVal = mDate.isValid() ? mDate.format("YYYY-MM") : 'Sconosciuto';
             let dayVal = mDate.isValid() ? mDate.format("YYYY-MM-DD") : 'Sconosciuto';
+            let cardVal = (row[COL_CARD] || '').trim().toLowerCase();
             let descVal = (row[COL_DESC] || '').trim();
             let descLower = descVal.toLowerCase();
             
             if (selStore !== 'ALL' && storeVal !== selStore) return;
             if (selMonth !== 'ALL' && monthVal !== selMonth) return;
             if (selDay !== 'ALL' && dayVal !== selDay) return;
+            
+            // Filtro per la Card Cliente
+            if (searchCard !== '' && !cardVal.includes(searchCard)) return;
             
             if (searchTerms.length > 0 && !searchTerms.every(term => descLower.includes(term))) return;
             
@@ -710,7 +753,21 @@
             columns.forEach(col => {
                 let td = document.createElement('td');
                 let cellVal = row[col] !== null ? row[col] : '';
-                td.textContent = cellVal;
+                
+                // Se la colonna corrente è la Card Cliente e ha un valore
+                if (col === COL_CARD && cellVal.trim() !== '') {
+                    // Creiamo il pulsantino cliccabile (badge)
+                    let badge = document.createElement('span');
+                    badge.className = 'badge bg-primary card-filter-btn px-2 py-1';
+                    badge.innerHTML = `<i class="fas fa-filter me-1"></i>${cellVal}`;
+                    badge.title = 'Filtra tutto lo storico di questo cliente';
+                    badge.onclick = function() {
+                        filterByCard(cellVal.trim());
+                    };
+                    td.appendChild(badge);
+                } else {
+                    td.textContent = cellVal;
+                }
                 
                 if (col === COL_DATA) {
                     let m = moment(cellVal.trim(), ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
