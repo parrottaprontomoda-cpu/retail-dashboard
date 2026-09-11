@@ -68,7 +68,8 @@
                             <tr>
                                 <th class="text-start ps-4">Punto Vendita (Filtra)</th>
                                 <th>Incasso Totale</th>
-                                <th class="text-success fw-bold"><i class="fas fa-cash-register me-1"></i>Saldo Cassa (Contante)</th>
+                                <th>Contante (Giorno)</th>
+                                <th class="text-success fw-bold"><i class="fas fa-cash-register me-1"></i>Saldo Cassa (Totale)</th>
                                 <th>POS</th>
                                 <th>Credito</th>
                                 <th>Capi Venduti</th>
@@ -77,7 +78,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td colspan="8" class="text-muted py-4">Seleziona una data per visualizzare il riepilogo</td></tr>
+                            <tr><td colspan="9" class="text-muted py-4">Seleziona una data per visualizzare il riepilogo</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -519,37 +520,42 @@
         const tbody = document.querySelector('#dailySummaryTable tbody');
         
         if(!dateVal) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-muted py-4">Nessuna data disponibile</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-muted py-4">Nessuna data disponibile</td></tr>';
             return;
         }
 
         let storeStats = {};
-        let totalIncasso = 0, totalContante = 0, totalPos = 0, totalCredito = 0;
+        let storeTotalCash = {};
+        let totalIncasso = 0, totalContanteGiorno = 0, totalSaldoCassaRete = 0, totalPos = 0, totalCredito = 0;
         let totalCapi = 0, totalSconto = 0, totalTrans = 0;
 
         rawData.forEach(row => {
+            let store = (row[COL_STORE] || 'Sconosciuto').trim();
+            let contante = parseEuro(row[COL_CONTANTE]);
+            
+            // Calcola il Saldo Cassa totale assoluto (su tutte le date nel DB)
+            if(!storeTotalCash[store]) storeTotalCash[store] = 0;
+            storeTotalCash[store] += contante;
+            
             let rDate = moment((row[COL_DATA] || '').trim(), ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
             if(!rDate.isValid() || rDate.format("YYYY-MM-DD") !== dateVal) return;
 
-            let store = (row[COL_STORE] || 'Sconosciuto').trim();
-            
             let qta = parseEuro(row[COL_QTA]); if(qta === 0) qta = 1;
             let listino = parseEuro(row[COL_LISTINO]);
             let netto = parseEuro(row[COL_NETTO]);
             let incasso = netto * qta;
             let sconto = (listino * qta) - incasso; if(sconto < 0) sconto = 0;
             
-            let contante = parseEuro(row[COL_CONTANTE]);
             let pos = parseEuro(row[COL_POS]);
             let credito = parseEuro(row[COL_CREDITO]);
 
             let transId = (row[COL_TRANS] || '').trim();
 
             if(!storeStats[store]) {
-                storeStats[store] = { incasso: 0, contante: 0, pos: 0, credito: 0, capi: 0, sconto: 0, transSet: new Set() };
+                storeStats[store] = { incasso: 0, contanteGiorno: 0, pos: 0, credito: 0, capi: 0, sconto: 0, transSet: new Set() };
             }
             storeStats[store].incasso += incasso;
-            storeStats[store].contante += contante;
+            storeStats[store].contanteGiorno += contante;
             storeStats[store].pos += pos;
             storeStats[store].credito += credito;
             storeStats[store].capi += qta;
@@ -561,16 +567,17 @@
         let stores = Object.keys(storeStats).sort((a,b) => storeStats[b].incasso - storeStats[a].incasso);
         
         if(stores.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-muted py-4">Nessuna operazione in questa data</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-muted py-4">Nessuna operazione in questa data</td></tr>';
             return;
         }
 
         stores.forEach(s => {
             let st = storeStats[s];
             let numTrans = st.transSet.size > 0 ? st.transSet.size : "-";
+            let saldoCassaStore = storeTotalCash[s] || 0;
             
             totalIncasso += st.incasso;
-            totalContante += st.contante;
+            totalContanteGiorno += st.contanteGiorno;
             totalPos += st.pos;
             totalCredito += st.credito;
             totalCapi += st.capi;
@@ -584,7 +591,8 @@
                 <tr>
                     <td class="text-start ps-4">${storeLink}</td>
                     <td class="text-primary fw-bold" style="font-size: 1.1rem;">${formatEur(st.incasso)}</td>
-                    <td class="text-success fw-bold bg-success bg-opacity-10" style="font-size: 1.2rem;">${formatEur(st.contante)}</td>
+                    <td class="text-secondary">${formatEur(st.contanteGiorno)}</td>
+                    <td class="text-success fw-bold bg-success bg-opacity-10" style="font-size: 1.2rem;">${formatEur(saldoCassaStore)}</td>
                     <td class="text-info">${formatEur(st.pos)}</td>
                     <td class="text-warning">${formatEur(st.credito)}</td>
                     <td class="fw-semibold">${st.capi}</td>
@@ -594,11 +602,17 @@
             `);
         });
 
+        // Somma globale cassa di tutta la rete su tutte le date
+        for(let k in storeTotalCash) {
+            totalSaldoCassaRete += storeTotalCash[k];
+        }
+
         tbody.insertAdjacentHTML('beforeend', `
             <tr class="table-info border-info fw-bold" style="font-size: 1.1rem;">
                 <td class="text-start ps-4">TOTALE RETE</td>
                 <td class="text-primary">${formatEur(totalIncasso)}</td>
-                <td class="text-success fw-bold bg-success bg-opacity-25" style="font-size: 1.2rem;">${formatEur(totalContante)}</td>
+                <td class="text-secondary">${formatEur(totalContanteGiorno)}</td>
+                <td class="text-success fw-bold bg-success bg-opacity-25" style="font-size: 1.2rem;" title="Somma totale della cassa nel DB">${formatEur(totalSaldoCassaRete)}</td>
                 <td class="text-info">${formatEur(totalPos)}</td>
                 <td class="text-warning">${formatEur(totalCredito)}</td>
                 <td>${totalCapi}</td>
