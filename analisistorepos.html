@@ -396,10 +396,11 @@
     
     // Default URLs
     const DEFAULT_VENDITE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRSwk2BhmMriyZotR2gLYtOkHic0lM3-0efkhaKhJ7gxDyQyqbGF0noTp9RV9GQgEHWTeuSskT57sVI/pub?gid=1352769388&single=true&output=csv";
+    const DEFAULT_CLIENTI_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1650500047&single=true&output=csv";
     
     // Inizializza URL da LocalStorage o Default
     document.getElementById('urlVenditeInput').value = localStorage.getItem('urlVendite') || DEFAULT_VENDITE_URL;
-    document.getElementById('urlClientiInput').value = localStorage.getItem('urlClienti') || "";
+    document.getElementById('urlClientiInput').value = localStorage.getItem('urlClienti') || DEFAULT_CLIENTI_URL;
     document.getElementById('maskCfSwitch').checked = localStorage.getItem('maskCf') === 'true';
     
     let rawData = [];
