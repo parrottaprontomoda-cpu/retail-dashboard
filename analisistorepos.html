@@ -68,7 +68,7 @@
                             <tr>
                                 <th class="text-start ps-4">Punto Vendita (Filtra)</th>
                                 <th>Incasso Totale</th>
-                                <th>Contante</th>
+                                <th class="text-success fw-bold"><i class="fas fa-cash-register me-1"></i>Saldo Cassa (Contante)</th>
                                 <th>POS</th>
                                 <th>Credito</th>
                                 <th>Capi Venduti</th>
@@ -584,7 +584,7 @@
                 <tr>
                     <td class="text-start ps-4">${storeLink}</td>
                     <td class="text-primary fw-bold" style="font-size: 1.1rem;">${formatEur(st.incasso)}</td>
-                    <td class="text-success">${formatEur(st.contante)}</td>
+                    <td class="text-success fw-bold bg-success bg-opacity-10" style="font-size: 1.2rem;">${formatEur(st.contante)}</td>
                     <td class="text-info">${formatEur(st.pos)}</td>
                     <td class="text-warning">${formatEur(st.credito)}</td>
                     <td class="fw-semibold">${st.capi}</td>
@@ -598,7 +598,7 @@
             <tr class="table-info border-info fw-bold" style="font-size: 1.1rem;">
                 <td class="text-start ps-4">TOTALE RETE</td>
                 <td class="text-primary">${formatEur(totalIncasso)}</td>
-                <td class="text-success">${formatEur(totalContante)}</td>
+                <td class="text-success fw-bold bg-success bg-opacity-25" style="font-size: 1.2rem;">${formatEur(totalContante)}</td>
                 <td class="text-info">${formatEur(totalPos)}</td>
                 <td class="text-warning">${formatEur(totalCredito)}</td>
                 <td>${totalCapi}</td>
