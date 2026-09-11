@@ -122,6 +122,22 @@
         </div>
     </div>
 
+    <!-- RICERCA CLIENTE CRM -->
+    <div class="filter-section d-none" id="crmSearchSection">
+        <label class="form-label fw-bold text-primary"><i class="fas fa-user-friends me-1"></i>Cerca Cliente in Anagrafica (Nome, Cognome, Card o CF)</label>
+        <div class="position-relative">
+            <div class="input-group input-group-lg">
+                <span class="input-group-text bg-primary text-white"><i class="fas fa-search"></i></span>
+                <input type="text" id="crmSearchInput" class="form-control" placeholder="Es. Rossi, Mario, 00123, RSSMRA80A01H501U..." autocomplete="off" oninput="onCrmSearchInput()" onfocus="onCrmSearchInput()">
+                <button class="btn btn-outline-secondary" type="button" onclick="clearCrmSearch()" title="Azzera Ricerca Cliente">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="crmSearchResults" class="list-group position-absolute w-100 shadow-lg d-none" style="z-index: 1050; max-height: 320px; overflow-y: auto; top: 100%;"></div>
+        </div>
+        <small class="text-muted d-block mt-1">Seleziona un cliente dalla lista per filtrare automaticamente lo storico acquisti e confrontare i negozi in cui ha fatto acquisti.</small>
+    </div>
+
     <!-- Filters -->
     <div class="filter-section d-none" id="filterSection">
         <div class="row g-3 align-items-end mb-3">
@@ -263,6 +279,22 @@
                             <div class="col-md-4 mb-2"><strong><i class="fas fa-calendar-alt fa-fw text-secondary"></i> Data (Nasc./Iscr.):</strong> <span id="cpData" class="ms-1"></span></div>
                             <div class="col-md-4 mb-2"><strong><i class="fas fa-store fa-fw text-secondary"></i> Negozio Reg.:</strong> <span id="cpStore" class="ms-1"></span></div>
                             <div class="col-md-4 mb-2"><strong><i class="fas fa-star fa-fw text-warning"></i> Saldo Punti:</strong> <span id="cpPunti" class="ms-1 fs-5 fw-bold text-success"></span></div>
+                        </div>
+                        <hr>
+                        <h6 class="fw-bold text-primary mb-2"><i class="fas fa-store-alt me-1"></i>Confronto Punti Vendita frequentati da questo cliente</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0" id="cpStoreCompareTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Negozio</th>
+                                        <th>Incasso</th>
+                                        <th>% sul Totale Cliente</th>
+                                        <th>Capi</th>
+                                        <th>Transazioni</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cpStoreCompareBody"></tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -406,6 +438,7 @@
     let rawData = [];
     let columns = [];
     let clientDict = {}; // Mappa Card/CF -> Dati Anagrafici
+    let clientList = []; // Lista univoca clienti (un record per cliente) per la ricerca CRM
     let clientColumns = []; // Colonne del foglio DBCLI, per il selettore chiave
     let lastClientsCsv = ""; // Cache CSV clienti per poter ricostruire il dizionario cambiando colonna chiave
     
@@ -494,7 +527,9 @@
                 });
             } else {
                 clientColumns = [];
+                clientList = [];
                 document.getElementById('colClientCard').innerHTML = '<option value="">(Nessun foglio clienti collegato)</option>';
+                document.getElementById('crmSearchSection').classList.add('d-none');
             }
 
             // Parsing Vendite
@@ -581,7 +616,11 @@
 
     function buildClientDict(res) {
         let cols = res.meta.fields;
-        if(!cols || cols.length === 0) return;
+        clientList = [];
+        if(!cols || cols.length === 0) {
+            document.getElementById('crmSearchSection').classList.add('d-none');
+            return;
+        }
         
         // Colonna chiave presa dal selettore (configurabile), con fallback alla prima colonna
         let c_card = COL_CLIENT_CARD && cols.includes(COL_CLIENT_CARD) ? COL_CLIENT_CARD : cols[0];
@@ -615,8 +654,77 @@
 
             if (cardVal) clientDict[cardVal] = obj;
             if (cfVal) clientDict[cfVal] = obj;
+            if (cardVal || (obj.nome || obj.cognome)) clientList.push(obj);
         });
+
+        const crmSection = document.getElementById('crmSearchSection');
+        if (clientList.length > 0) crmSection.classList.remove('d-none');
+        else crmSection.classList.add('d-none');
     }
+
+    // Ricerca CRM: autocomplete su Nome, Cognome, Card e CF
+    function onCrmSearchInput() {
+        const q = document.getElementById('crmSearchInput').value.trim().toLowerCase();
+        const resultsBox = document.getElementById('crmSearchResults');
+        
+        if (q.length < 2) {
+            resultsBox.classList.add('d-none');
+            resultsBox.innerHTML = '';
+            return;
+        }
+
+        const terms = q.split(/\s+/).filter(t => t.length > 0);
+        const matches = clientList.filter(c => {
+            let haystack = `${c.nome} ${c.cognome} ${c.card} ${c.cf}`.toLowerCase();
+            return terms.every(t => haystack.includes(t));
+        }).slice(0, 8);
+
+        if (matches.length === 0) {
+            resultsBox.innerHTML = '<div class="list-group-item text-muted small">Nessun cliente trovato.</div>';
+            resultsBox.classList.remove('d-none');
+            return;
+        }
+
+        resultsBox.innerHTML = '';
+        matches.forEach(c => {
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'list-group-item list-group-item-action';
+            const fullName = `${c.nome} ${c.cognome}`.trim() || '(Nome non disponibile)';
+            item.innerHTML = `<div class="d-flex justify-content-between align-items-center">
+                <span><strong>${escapeHtml(fullName)}</strong> <span class="text-muted small">${escapeHtml(c.citta || '')}</span></span>
+                <span class="badge bg-primary"><i class="fas fa-id-card me-1"></i>${escapeHtml(c.card)}</span>
+            </div>`;
+            item.addEventListener('click', function() {
+                selectCrmClient(c.card);
+            });
+            resultsBox.appendChild(item);
+        });
+        resultsBox.classList.remove('d-none');
+    }
+
+    function selectCrmClient(cardVal) {
+        const cli = clientDict[cardVal];
+        const fullName = cli ? `${cli.nome} ${cli.cognome}`.trim() : cardVal;
+        document.getElementById('crmSearchInput').value = fullName || cardVal;
+        document.getElementById('crmSearchResults').classList.add('d-none');
+        filterByCard(cardVal);
+    }
+
+    function clearCrmSearch() {
+        document.getElementById('crmSearchInput').value = '';
+        document.getElementById('crmSearchResults').classList.add('d-none');
+        document.getElementById('crmSearchResults').innerHTML = '';
+        clearCardFilter();
+    }
+
+    // Chiude il menu a tendina se si clicca fuori
+    document.addEventListener('click', function(e) {
+        const box = document.getElementById('crmSearchSection');
+        if (box && !box.contains(e.target)) {
+            document.getElementById('crmSearchResults').classList.add('d-none');
+        }
+    });
 
     function setupFilters() {
         const selData = document.getElementById('colData');
@@ -942,6 +1050,7 @@
         
         let productStats = {}; 
         let clientStats = {}; 
+        let clientStoreBreakdown = {}; // Negozio -> {incasso, capi, transSet} SOLO per il cliente filtrato
         let filteredData = [];
 
         rawData.forEach(row => {
@@ -1000,6 +1109,15 @@
                 clientStats[cardValUpper].listino += rigaListino;
             }
 
+            // Se è attivo un filtro su un singolo cliente, accumula la ripartizione per negozio
+            if (searchCard !== '') {
+                if(!clientStoreBreakdown[storeVal]) clientStoreBreakdown[storeVal] = { incasso: 0, capi: 0, transSet: new Set() };
+                clientStoreBreakdown[storeVal].incasso += rigaNetto;
+                clientStoreBreakdown[storeVal].capi += qta;
+                let localTransId = (row[COL_TRANS] || '').trim();
+                if(localTransId) clientStoreBreakdown[storeVal].transSet.add(`${storeVal}_${dateVal}_${localTransId}`);
+            }
+
             if(!dataStore[storeVal]) dataStore[storeVal] = 0;
             dataStore[storeVal] += rigaNetto;
 
@@ -1039,8 +1157,48 @@
         renderChart('monthChart', 'line', finalMonthData, 'Incasso Mensile (€)', '#198754');
         renderChart('dowChart', 'bar', dataDow, 'Incasso per Giorno (€)', '#ffc107');
 
+        renderClientStoreCompare(clientStoreBreakdown, totIncasso);
+
         generateAiReport(filteredData.length, totIncasso, scontoPerc, dataStore, dataDow, productStats, clientStats);
         updateTable(filteredData);
+    }
+
+    function renderClientStoreCompare(breakdown, totIncassoCliente) {
+        const tbody = document.getElementById('cpStoreCompareBody');
+        const stores = Object.keys(breakdown);
+        
+        if (stores.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-center py-2">Nessun acquisto trovato per questo cliente.</td></tr>';
+            return;
+        }
+
+        stores.sort((a, b) => breakdown[b].incasso - breakdown[a].incasso);
+        tbody.innerHTML = '';
+        stores.forEach(s => {
+            const st = breakdown[s];
+            const perc = totIncassoCliente > 0 ? (st.incasso / totIncassoCliente) * 100 : 0;
+            const numTrans = st.transSet.size > 0 ? st.transSet.size : '-';
+            tbody.insertAdjacentHTML('beforeend', `
+                <tr>
+                    <td class="fw-bold">${escapeHtml(s)}</td>
+                    <td class="text-primary">${formatEur(st.incasso)}</td>
+                    <td>${perc.toFixed(1)}%</td>
+                    <td>${st.capi}</td>
+                    <td>${numTrans}</td>
+                </tr>
+            `);
+        });
+
+        if (stores.length > 1) {
+            const topStore = stores[0];
+            tbody.insertAdjacentHTML('beforeend', `
+                <tr class="table-light">
+                    <td colspan="5" class="small text-muted fst-italic">
+                        <i class="fas fa-lightbulb me-1 text-warning"></i>Cliente multi-negozio: acquista in ${stores.length} punti vendita diversi, prevalentemente in <strong>${escapeHtml(topStore)}</strong>.
+                    </td>
+                </tr>
+            `);
+        }
     }
 
     function generateAiReport(rowCount, totIncasso, scontoPerc, dataStore, dataDow, productStats, clientStats) {
