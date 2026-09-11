@@ -1565,10 +1565,68 @@ Analizza questi dati tenendo conto della stagione e degli eventi commerciali ita
             box.innerHTML = text || '<p class="text-muted mb-0">Nessuna risposta ricevuta dal servizio AI.</p>';
 
         } catch (err) {
-            box.innerHTML = `<p class="text-danger mb-0"><i class="fas fa-triangle-exclamation me-1"></i>Errore durante la generazione dell'analisi AI: ${err.message}</p>`;
+            // Il servizio AI cloud non è raggiungibile (es. pagina aperta fuori dall'ambiente Claude,
+            // nessuna connessione, blocco CORS). Generiamo comunque un'analisi utile con logica locale.
+            box.innerHTML = generateLocalAiFallback(stats) +
+                `<p class="text-muted small mt-3 mb-0"><i class="fas fa-circle-info me-1"></i>Nota: il servizio AI cloud non è raggiungibile da questo ambiente (dettaglio tecnico: ${err.message}). L'analisi sopra è stata generata con la logica statistica integrata, non dal modello AI.</p>`;
         } finally {
             btn.disabled = false;
         }
+    }
+
+    // Analisi di riserva generata interamente in locale (nessuna chiamata di rete),
+    // usata quando l'API Anthropic non è raggiungibile. Combina calendario commerciale
+    // italiano stagionale con le statistiche del filtro corrente.
+    function generateLocalAiFallback(stats) {
+        const seasonalContext = {
+            1: "Siamo in pieno periodo di saldi invernali: buon momento per smaltire il magazzino di fine stagione senza svalutare troppo i capi cardine.",
+            2: "Coda dei saldi invernali e primi arrivi di primavera: è il momento di iniziare a comunicare le nuove collezioni.",
+            3: "Cambio di stagione verso la primavera: allestisci vetrine a tema e valorizza i nuovi arrivi a prezzo pieno.",
+            4: "Piena primavera: focus su capi leggeri e collezioni a margine pieno, bassa pressione promozionale.",
+            5: "Pre-estate: buon momento per iniziare a preparare la comunicazione sui saldi estivi e le collezioni mare.",
+            6: "Avvio dei saldi estivi: periodo cruciale per il traffico in negozio, servono comunicazione e stock pronti.",
+            7: "Saldi estivi in pieno svolgimento: priorità alla rotazione veloce del magazzino e alla riattivazione dei clienti dormienti.",
+            8: "Bassa stagione/periodo ferie: minore pressione sulle vendite, ottimo momento per attività di CRM e fidelizzazione.",
+            9: "Rientro dalle vacanze e cambio di stagione autunno-inverno: lancio delle nuove collezioni e riattivazione della clientela abituale.",
+            10: "Consolidamento della collezione autunno-inverno: è il momento di iniziare a pianificare le attività di anteprima per il Black Friday.",
+            11: "Periodo di Black Friday e Cyber Monday: massima pressione promozionale e traffico, curare la comunicazione multicanale.",
+            12: "Periodo natalizio: picco di acquisti regalo, puntare su servizio in negozio, cross-selling e gestione delle liste regalo."
+        };
+        const monthNum = moment().month() + 1;
+        const contestoStagionale = seasonalContext[monthNum] || "Analizza l'andamento corrente rispetto allo stesso periodo dell'anno precedente per calibrare le prossime azioni.";
+
+        let scontoPerc = stats.totListino > 0 ? (stats.totSconto / stats.totListino * 100) : 0;
+        let storesArr = Object.keys(stats.dataStore);
+        let bestStore = storesArr.length ? storesArr.reduce((a, b) => stats.dataStore[a] > stats.dataStore[b] ? a : b) : null;
+        let bestDay = Object.keys(stats.dataDow).reduce((a, b) => stats.dataDow[a] > stats.dataDow[b] ? a : b);
+        let prodNames = Object.keys(stats.productStats);
+        let topProd = prodNames.length ? prodNames.reduce((a, b) => stats.productStats[a].incasso > stats.productStats[b].incasso ? a : b) : null;
+
+        let clientEntries = Object.keys(stats.clientStatsCurrentFilter).map(card => ({ card, ...stats.clientStatsCurrentFilter[card] }));
+        let atRiskCount = 0;
+        clientEntries.forEach(c => {
+            let g = clientSalesStats[c.card];
+            if (g && g.lastDateMoment && moment().diff(g.lastDateMoment, 'days') > 90) atRiskCount++;
+        });
+
+        let html = `<p><strong>Sintesi del periodo:</strong> incasso di ${formatEur(stats.totIncasso)} su ${stats.totCapi} capi venduti, con uno sconto medio del ${scontoPerc.toFixed(1)}%. ${contestoStagionale}</p>`;
+
+        html += "<ul>";
+        html += `<li>Coerentemente con il periodo dell'anno: ${contestoStagionale.charAt(0).toLowerCase() + contestoStagionale.slice(1)}</li>`;
+        if (bestStore) html += `<li>Il negozio <strong>${bestStore}</strong> è il più performante nel gruppo filtrato: valuta di replicarne le buone pratiche (visual, formazione, orari) sugli altri punti vendita.</li>`;
+        html += `<li>Il giorno di picco storico è <strong>${bestDay}</strong>: concentra su questo giorno eventuali attività promozionali o rinforzo del personale in negozio.</li>`;
+        if (topProd) html += `<li>L'articolo più venduto è <em>"${topProd}"</em>: proponi varianti, accessori abbinati o articoli simili in cross-selling.</li>`;
+        if (scontoPerc > 35) html += `<li>Lo sconto medio è elevato (${scontoPerc.toFixed(1)}%): verifica che non stia eccessivamente comprimendo il margine e valuta di riservarlo a fine serie o stock in esubero.</li>`;
+        else if (scontoPerc < 10) html += `<li>Lo sconto medio è contenuto (${scontoPerc.toFixed(1)}%): buon segnale di salute del margine, mantieni la disciplina sui prezzi pieni.</li>`;
+        html += "</ul>";
+
+        if (atRiskCount > 0) {
+            html += `<p><strong>Clienti a rischio abbandono:</strong> ${atRiskCount} clienti su ${clientEntries.length} nel gruppo filtrato non acquistano da oltre 90 giorni. Consiglio: contattali con una comunicazione mirata (WhatsApp o email) che richiami il periodo stagionale in corso, eventualmente con un incentivo dedicato al loro rientro in negozio.</p>`;
+        } else {
+            html += `<p><strong>Clienti a rischio abbandono:</strong> nessun cliente critico rilevato nel gruppo filtrato al momento.</p>`;
+        }
+
+        return html;
     }
 
     // Esporta in CSV l'elenco clienti (anagrafica + statistiche) risultante dai filtri correnti
