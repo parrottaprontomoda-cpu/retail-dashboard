@@ -14,7 +14,7 @@
         .kpi-value { font-size: 1.8rem; font-weight: 700; color: #2c3e50; }
         .kpi-sub { font-size: 0.85rem; color: #198754; font-weight: 500; }
         .kpi-sub.danger { color: #dc3545; }
-        #chart-container-store, #chart-container-month, #chart-container-dow { position: relative; height: 300px; width: 100%; }
+        #chart-container { position: relative; height: 300px; width: 100%; }
         .header-title { background: linear-gradient(135deg, #0d6efd, #8a2be2); color: white; padding: 25px 0; border-radius: 12px; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(13,110,253,0.3); }
         .filter-section { background: white; padding: 20px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         .ai-box { background: linear-gradient(to right, #f8f9fa, #e9ecef); border-left: 5px solid #8a2be2; padding: 20px; border-radius: 8px; }
@@ -26,9 +26,12 @@
         
         .card-filter-btn { cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; display: inline-block; font-weight: normal; }
         .card-filter-btn:hover { transform: scale(1.08); box-shadow: 0 4px 8px rgba(0,0,0,0.15); z-index: 10; position: relative;}
-        
         .store-link { cursor: pointer; color: #0d6efd; text-decoration: none; transition: color 0.2s; }
         .store-link:hover { color: #0a58ca; text-decoration: underline; }
+        
+        .crm-stat-box { background: #f8f9fa; border: 1px solid #e9ecef; padding: 12px; border-radius: 8px; text-align: center; height: 100%; }
+        .crm-stat-val { font-size: 1.4rem; font-weight: bold; color: #0d6efd; }
+        .crm-stat-lbl { font-size: 0.8rem; color: #6c757d; text-transform: uppercase; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -62,17 +65,7 @@
                                 <input type="text" id="urlClientiInput" class="form-control border-success" placeholder="Inserisci link CSV dbcli...">
                                 <button class="btn btn-success" type="button" onclick="updateUrls()"><i class="fas fa-save me-1"></i> Salva e Connetti</button>
                             </div>
-                            <small class="text-muted mt-1 d-block"><i class="fas fa-info-circle"></i> Dal tuo file, vai su <em>File > Condividi > Pubblica sul web</em>. Seleziona <strong>dbcli</strong> e <strong>Valori separati da virgola (.csv)</strong>. Copia il link e incollalo qui.</small>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-12">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="maskCfSwitch" onchange="onMaskToggle()">
-                                <label class="form-check-label small fw-bold text-secondary" for="maskCfSwitch">
-                                    <i class="fas fa-user-shield me-1"></i>Maschera Codice Fiscale nella scheda cliente (mostra solo gli ultimi 4 caratteri)
-                                </label>
-                            </div>
+                            <small class="text-muted mt-1 d-block"><i class="fas fa-info-circle"></i> URL di default preimpostato. Modifica solo se il foglio cambia.</small>
                         </div>
                     </div>
                 </div>
@@ -120,22 +113,6 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <!-- RICERCA CLIENTE CRM -->
-    <div class="filter-section d-none" id="crmSearchSection">
-        <label class="form-label fw-bold text-primary"><i class="fas fa-user-friends me-1"></i>Cerca Cliente in Anagrafica (Nome, Cognome, Card o CF)</label>
-        <div class="position-relative">
-            <div class="input-group input-group-lg">
-                <span class="input-group-text bg-primary text-white"><i class="fas fa-search"></i></span>
-                <input type="text" id="crmSearchInput" class="form-control" placeholder="Es. Rossi, Mario, 00123, RSSMRA80A01H501U..." autocomplete="off" oninput="onCrmSearchInput()" onfocus="onCrmSearchInput()">
-                <button class="btn btn-outline-secondary" type="button" onclick="clearCrmSearch()" title="Azzera Ricerca Cliente">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div id="crmSearchResults" class="list-group position-absolute w-100 shadow-lg d-none" style="z-index: 1050; max-height: 320px; overflow-y: auto; top: 100%;"></div>
-        </div>
-        <small class="text-muted d-block mt-1">Seleziona un cliente dalla lista per filtrare automaticamente lo storico acquisti e confrontare i negozi in cui ha fatto acquisti.</small>
     </div>
 
     <!-- Filters -->
@@ -187,7 +164,7 @@
                     <div class="accordion-item border-0 bg-transparent">
                         <h2 class="accordion-header" id="headingOne">
                             <button class="accordion-button collapsed py-2 px-3 rounded text-muted bg-light" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne" style="font-size: 0.9rem;">
-                                <i class="fas fa-cog me-2"></i> Impostazioni Colonne (Modifica mappa dati Vendite/Clienti)
+                                <i class="fas fa-cog me-2"></i> Impostazioni Colonne (Modifica mappa dati Vendite)
                             </button>
                         </h2>
                         <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#accordionSettings">
@@ -239,14 +216,6 @@
                                         <select id="colCredito" class="form-select form-select-sm" onchange="updateDailySummary()"></select>
                                     </div>
                                 </div>
-                                <hr>
-                                <div class="row">
-                                    <div class="col-md-4 mb-2">
-                                        <label class="form-label small fw-bold text-secondary">DBCLI - Colonna Card/Chiave:</label>
-                                        <select id="colClientCard" class="form-select form-select-sm" onchange="onClientColumnChange()"></select>
-                                        <small class="text-muted">Colonna del foglio Clienti usata come chiave di collegamento (Card o CF).</small>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -260,52 +229,57 @@
         <!-- CLIENT PROFILE BOX (Dinamico da DBCLI) -->
         <div id="clientProfileBox" class="card border-primary shadow-sm mb-4 d-none">
             <div class="card-header bg-primary text-white fw-bold d-flex justify-content-between align-items-center">
-                <span class="fs-5"><i class="fas fa-user-check me-2"></i>Scheda Anagrafica Cliente Selezionato</span>
+                <span class="fs-5"><i class="fas fa-id-card me-2"></i>CRM: Analisi & Anagrafica Cliente</span>
                 <span id="cpBadgeCard" class="badge bg-light text-primary fs-6"></span>
             </div>
             <div class="card-body bg-white">
-                <div class="row text-dark align-items-center">
+                <!-- Sezione Anagrafica -->
+                <div class="row text-dark align-items-center mb-4 pb-3 border-bottom">
                     <div class="col-lg-2 text-center mb-3 mb-lg-0">
-                        <div class="display-1 text-primary opacity-25"><i class="fas fa-id-badge"></i></div>
+                        <div class="display-1 text-primary opacity-25"><i class="fas fa-user-circle"></i></div>
                     </div>
                     <div class="col-lg-10">
                         <div class="row">
-                            <div class="col-md-4 mb-2"><strong><i class="fas fa-user fa-fw text-secondary"></i> Nome:</strong> <span id="cpNome" class="ms-1"></span></div>
-                            <div class="col-md-4 mb-2"><strong><i class="fas fa-user fa-fw text-secondary"></i> Cognome:</strong> <span id="cpCognome" class="ms-1"></span></div>
+                            <div class="col-md-4 mb-2"><strong><i class="fas fa-user fa-fw text-secondary"></i> Nome:</strong> <span id="cpNome" class="ms-1 text-capitalize"></span></div>
+                            <div class="col-md-4 mb-2"><strong><i class="fas fa-user fa-fw text-secondary"></i> Cognome:</strong> <span id="cpCognome" class="ms-1 text-capitalize"></span></div>
                             <div class="col-md-4 mb-2"><strong><i class="fas fa-id-card fa-fw text-secondary"></i> Cod. Fisc:</strong> <span id="cpCf" class="ms-1 text-uppercase"></span></div>
                             <div class="col-md-4 mb-2"><strong><i class="fas fa-map-marker-alt fa-fw text-secondary"></i> Città:</strong> <span id="cpCitta" class="ms-1 text-capitalize"></span></div>
                             <div class="col-md-4 mb-2"><strong><i class="fas fa-phone fa-fw text-secondary"></i> Telefono:</strong> <span id="cpTel" class="ms-1"></span></div>
                             <div class="col-md-4 mb-2"><strong><i class="fas fa-envelope fa-fw text-secondary"></i> Email:</strong> <span id="cpMail" class="ms-1"></span></div>
-                            <div class="col-md-4 mb-2"><strong><i class="fas fa-calendar-alt fa-fw text-secondary"></i> Data (Nasc./Iscr.):</strong> <span id="cpData" class="ms-1"></span></div>
-                            <div class="col-md-4 mb-2"><strong><i class="fas fa-store fa-fw text-secondary"></i> Negozio Reg.:</strong> <span id="cpStore" class="ms-1"></span></div>
+                            <div class="col-md-4 mb-2"><strong><i class="fas fa-calendar-alt fa-fw text-secondary"></i> Reg. il:</strong> <span id="cpData" class="ms-1"></span></div>
+                            <div class="col-md-4 mb-2"><strong><i class="fas fa-store fa-fw text-secondary"></i> Store Reg:</strong> <span id="cpStore" class="ms-1"></span></div>
                             <div class="col-md-4 mb-2"><strong><i class="fas fa-star fa-fw text-warning"></i> Saldo Punti:</strong> <span id="cpPunti" class="ms-1 fs-5 fw-bold text-success"></span></div>
                         </div>
-                        <hr>
-                        <h6 class="fw-bold text-primary mb-2"><i class="fas fa-store-alt me-1"></i>Confronto Punti Vendita frequentati da questo cliente</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-bordered mb-0" id="cpStoreCompareTable">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Negozio</th>
-                                        <th>Incasso</th>
-                                        <th>% sul Totale Cliente</th>
-                                        <th>Capi</th>
-                                        <th>Transazioni</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="cpStoreCompareBody"></tbody>
-                            </table>
-                        </div>
+                    </div>
+                </div>
+
+                <!-- Sezione Statistiche di Vendita Cliente (RFM) -->
+                <h6 class="fw-bold text-secondary mb-3"><i class="fas fa-chart-pie me-2"></i>Statistiche di Acquisto (Modello RFM)</h6>
+                <div class="row g-2 mb-4">
+                    <div class="col-md-2 col-6"><div class="crm-stat-box"><div class="crm-stat-lbl">Ultima Visita</div><div class="crm-stat-val text-primary" id="crmRecency">-</div></div></div>
+                    <div class="col-md-2 col-6"><div class="crm-stat-box"><div class="crm-stat-lbl">Giorni Acquisto</div><div class="crm-stat-val text-info" id="crmFrequency">-</div></div></div>
+                    <div class="col-md-2 col-6"><div class="crm-stat-box"><div class="crm-stat-lbl">Spesa Totale</div><div class="crm-stat-val text-success" id="crmMonetary">-</div></div></div>
+                    <div class="col-md-2 col-6"><div class="crm-stat-box"><div class="crm-stat-lbl">Capi Totali</div><div class="crm-stat-val text-dark" id="crmItems">-</div></div></div>
+                    <div class="col-md-2 col-6"><div class="crm-stat-box"><div class="crm-stat-lbl">Sconto Medio</div><div class="crm-stat-val text-danger" id="crmDiscount">-</div></div></div>
+                    <div class="col-md-2 col-6"><div class="crm-stat-box"><div class="crm-stat-lbl">Store Preferito</div><div class="crm-stat-val text-secondary" id="crmFavStore" style="font-size: 1rem; padding-top:5px;">-</div></div></div>
+                </div>
+
+                <!-- Box AI Consigli Operativi CRM -->
+                <div class="alert alert-info border-0 bg-info bg-opacity-10 d-flex align-items-center mb-0">
+                    <i class="fas fa-lightbulb fa-2x text-info me-3"></i>
+                    <div>
+                        <strong class="text-dark">Azione Consigliata AI:</strong><br>
+                        <span id="crmAiAction" class="text-secondary"></span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- AI Analysis Box -->
-        <div class="card border-0 shadow-sm mb-4">
+        <!-- AI Analysis Box Globale -->
+        <div class="card border-0 shadow-sm mb-4" id="globalAiBox">
             <div class="ai-box">
                 <div class="ai-title">
-                    <i class="fas fa-robot ai-icon"></i> Analisi Automatica (Basata sui filtri attuali)
+                    <i class="fas fa-robot ai-icon"></i> Analisi Smart AI (Trend di Rete/Store)
                 </div>
                 <div class="ai-insight" id="aiReport">
                     <!-- Report will be generated here -->
@@ -343,7 +317,7 @@
             <div class="col-xl-2 col-md-4 col-6 mb-3">
                 <div class="card h-100 text-center">
                     <div class="card-body d-flex flex-column justify-content-center">
-                        <div class="kpi-title" id="kpiClientiLabel">Clienti (Transaz.)</div>
+                        <div class="kpi-title">Clienti (Transaz.)</div>
                         <div class="kpi-value text-info" id="kpiClienti">0</div>
                     </div>
                 </div>
@@ -372,7 +346,7 @@
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title fw-bold"><i class="fas fa-store me-2 text-primary"></i>Incassi per Negozio</h5>
-                        <div id="chart-container-store"><canvas id="storeChart"></canvas></div>
+                        <div id="chart-container"><canvas id="storeChart"></canvas></div>
                     </div>
                 </div>
             </div>
@@ -380,7 +354,7 @@
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title fw-bold"><i class="fas fa-calendar-alt me-2 text-success"></i>Incassi per Mese</h5>
-                        <div id="chart-container-month"><canvas id="monthChart"></canvas></div>
+                        <div id="chart-container"><canvas id="monthChart"></canvas></div>
                     </div>
                 </div>
             </div>
@@ -392,7 +366,7 @@
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title fw-bold"><i class="fas fa-calendar-day me-2 text-warning"></i>Incassi per Giorno della Settimana</h5>
-                        <div id="chart-container-dow"><canvas id="dowChart"></canvas></div>
+                        <div id="chart-container"><canvas id="dowChart"></canvas></div>
                     </div>
                 </div>
             </div>
@@ -433,14 +407,11 @@
     // Inizializza URL da LocalStorage o Default
     document.getElementById('urlVenditeInput').value = localStorage.getItem('urlVendite') || DEFAULT_VENDITE_URL;
     document.getElementById('urlClientiInput').value = localStorage.getItem('urlClienti') || DEFAULT_CLIENTI_URL;
-    document.getElementById('maskCfSwitch').checked = localStorage.getItem('maskCf') === 'true';
     
     let rawData = [];
     let columns = [];
     let clientDict = {}; // Mappa Card/CF -> Dati Anagrafici
-    let clientList = []; // Lista univoca clienti (un record per cliente) per la ricerca CRM
-    let clientColumns = []; // Colonne del foglio DBCLI, per il selettore chiave
-    let lastClientsCsv = ""; // Cache CSV clienti per poter ricostruire il dizionario cambiando colonna chiave
+    let clientSalesStats = {}; // Cache Globale CRM per AI indipendente dai filtri temporali
     
     // Configurazione Colonne Vendite
     let COL_DATA = null;   
@@ -456,7 +427,6 @@
     let COL_CONTANTE = null;
     let COL_POS = null;
     let COL_CREDITO = null;
-    let COL_CLIENT_CARD = null; // Colonna chiave nel foglio DBCLI (configurabile, non più hardcoded)
 
     let charts = {};
     let dataTableInstance = null;
@@ -464,26 +434,12 @@
 
     window.onload = () => loadData();
 
-    function onMaskToggle() {
-        localStorage.setItem('maskCf', document.getElementById('maskCfSwitch').checked);
-        updateDashboard();
-    }
-
-    function maskCf(cf) {
-        if (!cf) return '-';
-        const shouldMask = document.getElementById('maskCfSwitch').checked;
-        if (!shouldMask || cf.length <= 4) return cf;
-        return '••••••••'.slice(0, cf.length - 4) + cf.slice(-4);
-    }
-
     function updateUrls() {
         localStorage.setItem('urlVendite', document.getElementById('urlVenditeInput').value.trim());
         localStorage.setItem('urlClienti', document.getElementById('urlClientiInput').value.trim());
-        // Chiudi l'accordion e ricarica
         let collapseEl = document.getElementById('collapseSources');
         let bsCollapse = bootstrap.Collapse.getInstance(collapseEl);
         if(bsCollapse) bsCollapse.hide();
-        
         loadData();
     }
 
@@ -516,20 +472,13 @@
 
             // Parsing Clienti (se presente)
             clientDict = {};
-            lastClientsCsv = clientsCsv;
             if (clientsCsv) {
                 Papa.parse(clientsCsv, {
                     header: true, skipEmptyLines: true,
                     complete: function(cRes) {
-                        setupClientColumnSelector(cRes.meta.fields);
                         buildClientDict(cRes);
                     }
                 });
-            } else {
-                clientColumns = [];
-                clientList = [];
-                document.getElementById('colClientCard').innerHTML = '<option value="">(Nessun foglio clienti collegato)</option>';
-                document.getElementById('crmSearchSection').classList.add('d-none');
             }
 
             // Parsing Vendite
@@ -554,12 +503,13 @@
                     COL_QTA     = columns[7] || columns[0]; 
                     COL_LISTINO = columns[8] || columns[0]; 
                     COL_NETTO   = columns[9] || columns[0]; 
-                    COL_CONTANTE= columns[12] || columns[0]; // M
-                    COL_POS     = columns[13] || columns[0]; // N
-                    COL_CREDITO = columns[14] || columns[0]; // O
-                    COL_CARD    = columns[15] || columns[0]; // P
-                    COL_STORE   = columns[16] || columns[0]; // Q
+                    COL_CONTANTE= columns[12] || columns[0]; 
+                    COL_POS     = columns[13] || columns[0]; 
+                    COL_CREDITO = columns[14] || columns[0]; 
+                    COL_CARD    = columns[15] || columns[0]; 
+                    COL_STORE   = columns[16] || columns[0]; 
                     
+                    buildGlobalCRMStats(); // Pre-calcola le stat storiche di tutti i clienti
                     setupFilters();
                     updateDashboard();
                     
@@ -574,7 +524,6 @@
         });
     }
 
-    // Funzione ausiliaria per indovinare colonne DB Clienti
     function guessCol(cols, keywords) {
         for(let c of cols) {
             let low = c.toLowerCase();
@@ -585,46 +534,11 @@
         return null;
     }
 
-    // Popola il selettore della colonna chiave del foglio Clienti (non più un indice fisso hardcoded)
-    function setupClientColumnSelector(cols) {
-        clientColumns = cols || [];
-        const sel = document.getElementById('colClientCard');
-        sel.innerHTML = '';
-        if (clientColumns.length === 0) {
-            sel.innerHTML = '<option value="">(Nessun foglio clienti collegato)</option>';
-            return;
-        }
-        clientColumns.forEach(c => sel.appendChild(new Option(c, c)));
-
-        // Prova a indovinare una colonna Card/Tessera, altrimenti Codice Fiscale, altrimenti la prima
-        let guessed = guessCol(clientColumns, ['card', 'tessera']) 
-                   || guessCol(clientColumns, ['codice fisc', 'cf', 'fiscale']) 
-                   || clientColumns[0];
-        COL_CLIENT_CARD = guessed;
-        sel.value = guessed;
-    }
-
-    function onClientColumnChange() {
-        COL_CLIENT_CARD = document.getElementById('colClientCard').value;
-        if (lastClientsCsv) {
-            Papa.parse(lastClientsCsv, {
-                header: true, skipEmptyLines: true,
-                complete: function(cRes) { buildClientDict(cRes); updateDashboard(); }
-            });
-        }
-    }
-
     function buildClientDict(res) {
         let cols = res.meta.fields;
-        clientList = [];
-        if(!cols || cols.length === 0) {
-            document.getElementById('crmSearchSection').classList.add('d-none');
-            return;
-        }
+        if(!cols || cols.length === 0) return;
         
-        // Colonna chiave presa dal selettore (configurabile), con fallback alla prima colonna
-        let c_card = COL_CLIENT_CARD && cols.includes(COL_CLIENT_CARD) ? COL_CLIENT_CARD : cols[0];
-        
+        let c_card = cols.length > 6 ? cols[6] : cols[0]; 
         let c_nome = guessCol(cols, ['nome']);
         let c_cognome = guessCol(cols, ['cognom']);
         let c_citta = guessCol(cols, ['citt']);
@@ -654,77 +568,61 @@
 
             if (cardVal) clientDict[cardVal] = obj;
             if (cfVal) clientDict[cfVal] = obj;
-            if (cardVal || (obj.nome || obj.cognome)) clientList.push(obj);
         });
-
-        const crmSection = document.getElementById('crmSearchSection');
-        if (clientList.length > 0) crmSection.classList.remove('d-none');
-        else crmSection.classList.add('d-none');
     }
 
-    // Ricerca CRM: autocomplete su Nome, Cognome, Card e CF
-    function onCrmSearchInput() {
-        const q = document.getElementById('crmSearchInput').value.trim().toLowerCase();
-        const resultsBox = document.getElementById('crmSearchResults');
-        
-        if (q.length < 2) {
-            resultsBox.classList.add('d-none');
-            resultsBox.innerHTML = '';
-            return;
-        }
+    // Costruisce statistiche fisse (storico completo) per ogni cliente senza considerare i filtri temporali
+    function buildGlobalCRMStats() {
+        clientSalesStats = {};
+        rawData.forEach(row => {
+            let cardValRaw = (row[COL_CARD] || '').trim();
+            if(!cardValRaw) return;
+            
+            let cardUpper = cardValRaw.toUpperCase();
+            let dateVal = (row[COL_DATA] || '').trim();
+            let mDate = moment(dateVal, ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
+            let storeVal = (row[COL_STORE] || 'Sconosciuto').trim();
+            let descVal = (row[COL_DESC] || '').trim();
+            
+            let qta = parseEuro(row[COL_QTA]); if(qta === 0) qta = 1; 
+            let pListinoUnit = parseEuro(row[COL_LISTINO]);
+            let pNettoUnit = parseEuro(row[COL_NETTO]);
+            let rigaNetto = pNettoUnit * qta;
+            let rigaListino = pListinoUnit * qta;
+            let scontoRiga = rigaListino - rigaNetto; if(scontoRiga < 0) scontoRiga = 0;
 
-        const terms = q.split(/\s+/).filter(t => t.length > 0);
-        const matches = clientList.filter(c => {
-            let haystack = `${c.nome} ${c.cognome} ${c.card} ${c.cf}`.toLowerCase();
-            return terms.every(t => haystack.includes(t));
-        }).slice(0, 8);
+            if(!clientSalesStats[cardUpper]) {
+                clientSalesStats[cardUpper] = {
+                    incasso: 0, capi: 0, sconto: 0, listino: 0,
+                    dateSet: new Set(),
+                    stores: {},
+                    products: {},
+                    lastDateMoment: null
+                };
+            }
+            
+            let cst = clientSalesStats[cardUpper];
+            cst.incasso += rigaNetto;
+            cst.capi += qta;
+            cst.sconto += scontoRiga;
+            cst.listino += rigaListino;
+            
+            if(mDate.isValid()) {
+                cst.dateSet.add(mDate.format("YYYY-MM-DD"));
+                if(!cst.lastDateMoment || mDate.isAfter(cst.lastDateMoment)) {
+                    cst.lastDateMoment = mDate;
+                }
+            }
+            
+            if(!cst.stores[storeVal]) cst.stores[storeVal] = 0;
+            cst.stores[storeVal] += rigaNetto;
 
-        if (matches.length === 0) {
-            resultsBox.innerHTML = '<div class="list-group-item text-muted small">Nessun cliente trovato.</div>';
-            resultsBox.classList.remove('d-none');
-            return;
-        }
-
-        resultsBox.innerHTML = '';
-        matches.forEach(c => {
-            const item = document.createElement('button');
-            item.type = 'button';
-            item.className = 'list-group-item list-group-item-action';
-            const fullName = `${c.nome} ${c.cognome}`.trim() || '(Nome non disponibile)';
-            item.innerHTML = `<div class="d-flex justify-content-between align-items-center">
-                <span><strong>${escapeHtml(fullName)}</strong> <span class="text-muted small">${escapeHtml(c.citta || '')}</span></span>
-                <span class="badge bg-primary"><i class="fas fa-id-card me-1"></i>${escapeHtml(c.card)}</span>
-            </div>`;
-            item.addEventListener('click', function() {
-                selectCrmClient(c.card);
-            });
-            resultsBox.appendChild(item);
+            if(descVal) {
+                if(!cst.products[descVal]) cst.products[descVal] = 0;
+                cst.products[descVal] += qta;
+            }
         });
-        resultsBox.classList.remove('d-none');
     }
-
-    function selectCrmClient(cardVal) {
-        const cli = clientDict[cardVal];
-        const fullName = cli ? `${cli.nome} ${cli.cognome}`.trim() : cardVal;
-        document.getElementById('crmSearchInput').value = fullName || cardVal;
-        document.getElementById('crmSearchResults').classList.add('d-none');
-        filterByCard(cardVal);
-    }
-
-    function clearCrmSearch() {
-        document.getElementById('crmSearchInput').value = '';
-        document.getElementById('crmSearchResults').classList.add('d-none');
-        document.getElementById('crmSearchResults').innerHTML = '';
-        clearCardFilter();
-    }
-
-    // Chiude il menu a tendina se si clicca fuori
-    document.addEventListener('click', function(e) {
-        const box = document.getElementById('crmSearchSection');
-        if (box && !box.contains(e.target)) {
-            document.getElementById('crmSearchResults').classList.add('d-none');
-        }
-    });
 
     function setupFilters() {
         const selData = document.getElementById('colData');
@@ -771,12 +669,12 @@
         document.getElementById('filterSection').classList.remove('d-none');
         document.getElementById('summaryToggleWrapper').classList.remove('d-none');
         
-        selTrans.addEventListener('change', function() { COL_TRANS = this.value; updateDashboard(); updateDailySummary(); });
-        selDesc.addEventListener('change', function() { COL_DESC = this.value; updateDashboard(); });
-        selCard.addEventListener('change', function() { COL_CARD = this.value; updateDashboard(); });
+        selTrans.addEventListener('change', function() { COL_TRANS = this.value; buildGlobalCRMStats(); updateDashboard(); updateDailySummary(); });
+        selDesc.addEventListener('change', function() { COL_DESC = this.value; buildGlobalCRMStats(); updateDashboard(); });
+        selCard.addEventListener('change', function() { COL_CARD = this.value; buildGlobalCRMStats(); updateDashboard(); });
         selCodInt.addEventListener('change', function() { COL_COD_INT = this.value; updateDashboard(); });
         selEan.addEventListener('change', function() { COL_EAN = this.value; updateDashboard(); });
-        selStore.addEventListener('change', function() { COL_STORE = this.value; updateDashboard(); extractMonthsAndStores(); });
+        selStore.addEventListener('change', function() { COL_STORE = this.value; buildGlobalCRMStats(); updateDashboard(); extractMonthsAndStores(); });
         
         selContante.addEventListener('change', function() { COL_CONTANTE = this.value; updateDailySummary(); });
         selPos.addEventListener('change', function() { COL_POS = this.value; updateDailySummary(); });
@@ -785,6 +683,7 @@
     
     function changeDataColumn() {
         COL_DATA = document.getElementById('colData').value;
+        buildGlobalCRMStats();
         extractMonthsAndStores(); 
         updateDashboard();
     }
@@ -808,7 +707,7 @@
         const selStore = document.getElementById('filterStore');
         const currStore = selStore.value;
         selStore.innerHTML = '<option value="ALL">Tutti</option>';
-        Array.from(stores).sort().forEach(s => { selStore.insertAdjacentHTML('beforeend', `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`); });
+        Array.from(stores).sort().forEach(s => { selStore.insertAdjacentHTML('beforeend', `<option value="${s}">${s}</option>`); });
         if (currStore && Array.from(stores).includes(currStore)) selStore.value = currStore;
 
         const selMonth = document.getElementById('filterMonth');
@@ -847,16 +746,6 @@
         updateDailySummary();
     }
 
-    function escapeHtml(str) {
-        if (str === null || str === undefined) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;');
-    }
-
     function updateDailySummary() {
         const dateVal = document.getElementById('dailySummaryDate').value;
         const tbody = document.querySelector('#dailySummaryTable tbody');
@@ -889,7 +778,6 @@
             
             let pos = parseEuro(row[COL_POS]);
             let credito = parseEuro(row[COL_CREDITO]);
-
             let transId = (row[COL_TRANS] || '').trim();
 
             if(!storeStats[store]) {
@@ -925,8 +813,8 @@
             totalSconto += st.sconto;
             if(st.transSet.size > 0) totalTrans += st.transSet.size;
 
-            let safeStore = escapeHtml(s).replace(/'/g, "\\'");
-            let storeLink = `<span class="fw-bold store-link" title="Applica filtro e analizza questo punto vendita" onclick="filterDashboardByStoreAndDate('${safeStore}', '${dateVal}')"><i class="fas fa-filter me-1 small"></i>${escapeHtml(s)}</span>`;
+            let safeStore = s.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            let storeLink = `<span class="fw-bold store-link" title="Applica filtro e analizza questo punto vendita" onclick="filterDashboardByStoreAndDate('${safeStore}', '${dateVal}')"><i class="fas fa-filter me-1 small"></i>${s}</span>`;
 
             tbody.insertAdjacentHTML('beforeend', `
                 <tr>
@@ -965,13 +853,10 @@
     function filterDashboardByStoreAndDate(storeName, dateVal) {
         document.getElementById('filterStore').value = storeName;
         document.getElementById('filterDay').value = dateVal;
-        
         document.getElementById('filterMonth').value = 'ALL';
         document.getElementById('filterCard').value = '';
         document.getElementById('filterDesc').value = '';
-        
         updateDashboard();
-        
         document.getElementById('dashboardSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
@@ -1011,6 +896,93 @@
         return isNaN(f) ? 0 : f;
     }
 
+    function renderClientCrmProfile(searchCard) {
+        let profileBox = document.getElementById('clientProfileBox');
+        let globalAiBox = document.getElementById('globalAiBox');
+        
+        if (!searchCard || !clientSalesStats[searchCard]) {
+            profileBox.classList.add('d-none');
+            globalAiBox.classList.remove('d-none');
+            return;
+        }
+
+        // 1. Dati Anagrafici da DBCLI (se esistenti)
+        if (clientDict[searchCard]) {
+            let cli = clientDict[searchCard];
+            document.getElementById('cpNome').textContent = cli.nome || '-';
+            document.getElementById('cpCognome').textContent = cli.cognome || '-';
+            document.getElementById('cpCf').textContent = cli.cf || '-';
+            document.getElementById('cpCitta').textContent = cli.citta || '-';
+            document.getElementById('cpTel').textContent = cli.tel || '-';
+            document.getElementById('cpMail').textContent = cli.mail || '-';
+            document.getElementById('cpData').textContent = cli.data || '-';
+            document.getElementById('cpStore').textContent = cli.store || '-';
+            document.getElementById('cpPunti').textContent = cli.punti || '0';
+        } else {
+            // Svuota se non ho l'anagrafica ma ho le vendite
+            ['cpNome','cpCognome','cpCf','cpCitta','cpTel','cpMail','cpData','cpStore','cpPunti'].forEach(id => document.getElementById(id).textContent = '-');
+        }
+
+        // 2. Calcolo Statistiche RFM dalla History Completa
+        let cst = clientSalesStats[searchCard];
+        document.getElementById('cpBadgeCard').textContent = `Card/CF: ${searchCard}`;
+        
+        // Recency
+        let recencyDays = "-";
+        if(cst.lastDateMoment) {
+            recencyDays = moment().diff(cst.lastDateMoment, 'days');
+        }
+        
+        // Sconto Medio
+        let scontoMedio = cst.listino > 0 ? (cst.sconto / cst.listino) * 100 : 0;
+        
+        // Negozio Preferito
+        let favStore = "-";
+        let stores = Object.keys(cst.stores);
+        if(stores.length > 0) {
+            favStore = stores.reduce((a, b) => cst.stores[a] > cst.stores[b] ? a : b);
+        }
+        
+        // Prodotto più acquistato
+        let favProd = "-";
+        let prods = Object.keys(cst.products);
+        if(prods.length > 0) {
+            favProd = prods.reduce((a, b) => cst.products[a] > cst.products[b] ? a : b);
+        }
+
+        document.getElementById('crmRecency').textContent = recencyDays !== "-" ? `${recencyDays} gg` : "-";
+        document.getElementById('crmFrequency').textContent = cst.dateSet.size;
+        document.getElementById('crmMonetary').textContent = formatEur(cst.incasso);
+        document.getElementById('crmItems').textContent = cst.capi;
+        document.getElementById('crmDiscount').textContent = `${scontoMedio.toFixed(1)}%`;
+        document.getElementById('crmFavStore').textContent = favStore;
+
+        // 3. Generazione Consigli AI per il Cliente
+        let aiAdvice = "";
+        
+        // Churn / Recency Analysis
+        if (recencyDays !== "-") {
+            if (recencyDays > 180) aiAdvice += "🚨 <strong>Cliente Perso/Dormiente:</strong> Non acquista da oltre 6 mesi. Necessaria campagna di re-engagement aggressiva (es. Sconto altissimo o Regalo su rientro).<br>";
+            else if (recencyDays > 90) aiAdvice += "⚠️ <strong>Rischio Abbandono:</strong> Assente da oltre 3 mesi. Inviare un messaggio WhatsApp invitandolo a scoprire la nuova collezione.<br>";
+            else if (recencyDays < 30 && cst.dateSet.size > 2) aiAdvice += "🌟 <strong>Cliente VIP Caldo:</strong> Molto attivo di recente. Ottimo target per anteprime o articoli a margine pieno.<br>";
+        }
+
+        // Price Sensitivity
+        if (scontoMedio > 40) aiAdvice += "🏷️ <strong>Cacciatore di Sconti (Price-Sensitive):</strong> Compra quasi esclusivamente in forte saldo. Inutile proporre merce a prezzo pieno; contattalo per smaltimento stock o fine serie.<br>";
+        else if (scontoMedio < 10 && cst.incasso > 100) aiAdvice += "💎 <strong>Cliente Premium:</strong> Bassa sensibilità al prezzo. Punta sul valore, qualità, e servizio dedicato.<br>";
+
+        // Cross/Up Selling
+        if (favProd !== "-") {
+            aiAdvice += `🎯 <strong>Azione Diretta:</strong> Il suo articolo preferito storico è <em>"${favProd}"</em>. Proponi varianti colore, accessori abbinabili (Cross-Selling) o l'evoluzione di questo prodotto.`;
+        }
+
+        if(aiAdvice === "") aiAdvice = "Dati insufficienti per generare un pattern. Incoraggiare ulteriori visite in store.";
+        document.getElementById('crmAiAction').innerHTML = aiAdvice;
+
+        profileBox.classList.remove('d-none');
+        globalAiBox.classList.add('d-none'); // Nascondo l'AI di rete se sto guardando un singolo cliente
+    }
+
     function updateDashboard() {
         document.getElementById('dashboardSection').classList.remove('d-none');
 
@@ -1022,35 +994,17 @@
         const searchCard = searchCardRaw.toUpperCase();
         const searchTerms = document.getElementById('filterDesc').value.toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
 
-        // GESTIONE BOX CLIENTE (se cerco una card specifica e ho caricato il DB Clienti)
-        let profileBox = document.getElementById('clientProfileBox');
-        if (searchCard !== '' && clientDict[searchCard]) {
-            let cli = clientDict[searchCard];
-            document.getElementById('cpBadgeCard').textContent = `Filtro Attivo: ${searchCard}`;
-            document.getElementById('cpNome').textContent = cli.nome || '-';
-            document.getElementById('cpCognome').textContent = cli.cognome || '-';
-            document.getElementById('cpCf').textContent = maskCf(cli.cf);
-            document.getElementById('cpCitta').textContent = cli.citta || '-';
-            document.getElementById('cpTel').textContent = cli.tel || '-';
-            document.getElementById('cpMail').textContent = cli.mail || '-';
-            document.getElementById('cpData').textContent = cli.data || '-';
-            document.getElementById('cpStore').textContent = cli.store || '-';
-            document.getElementById('cpPunti').textContent = cli.punti || '0';
-            profileBox.classList.remove('d-none');
-        } else {
-            profileBox.classList.add('d-none');
-        }
+        // Aggiorna Pannello CRM
+        renderClientCrmProfile(searchCard);
 
         let totIncasso = 0; let totListino = 0; let totCapi = 0;
         let transazioniSet = new Set();
-        let hasTransId = COL_TRANS && rawData.length > 0 && rawData.some(r => (r[COL_TRANS] || '').trim() !== '');
         
         let dataStore = {}; let dataMonth = {};
         let dataDow = { 'Lunedì':0, 'Martedì':0, 'Mercoledì':0, 'Giovedì':0, 'Venerdì':0, 'Sabato':0, 'Domenica':0 };
         
         let productStats = {}; 
-        let clientStats = {}; 
-        let clientStoreBreakdown = {}; // Negozio -> {incasso, capi, transSet} SOLO per il cliente filtrato
+        let clientStatsCurrentFilter = {}; 
         let filteredData = [];
 
         rawData.forEach(row => {
@@ -1067,10 +1021,10 @@
             let codIntVal = (row[COL_COD_INT] || '').trim().toLowerCase();
             let eanVal = (row[COL_EAN] || '').trim().toLowerCase();
             
+            // Applica Filtri
             if (selStore !== 'ALL' && storeVal !== selStore) return;
             if (selMonth !== 'ALL' && monthVal !== selMonth) return;
             if (selDay !== 'ALL' && dayVal !== selDay) return;
-            
             if (searchCard !== '' && !cardValUpper.includes(searchCard)) return;
             
             if (searchTerms.length > 0 && !searchTerms.every(term => 
@@ -1079,16 +1033,12 @@
             
             filteredData.push(row);
 
-            let qta = parseEuro(row[COL_QTA]);
-            if(qta === 0) qta = 1; 
-            
+            let qta = parseEuro(row[COL_QTA]); if(qta === 0) qta = 1; 
             let pListinoUnit = parseEuro(row[COL_LISTINO]);
             let pNettoUnit = parseEuro(row[COL_NETTO]);
             let rigaNetto = pNettoUnit * qta;
             let rigaListino = pListinoUnit * qta;
-            
-            let scontoRiga = rigaListino - rigaNetto;
-            if(scontoRiga < 0) scontoRiga = 0;
+            let scontoRiga = rigaListino - rigaNetto; if(scontoRiga < 0) scontoRiga = 0;
 
             totIncasso += rigaNetto; totListino += rigaListino; totCapi += qta;
 
@@ -1102,20 +1052,11 @@
             }
             
             if (cardValRaw !== '') {
-                if(!clientStats[cardValUpper]) clientStats[cardValUpper] = { incasso: 0, capi: 0, sconto: 0, listino: 0 };
-                clientStats[cardValUpper].incasso += rigaNetto;
-                clientStats[cardValUpper].capi += qta;
-                clientStats[cardValUpper].sconto += scontoRiga;
-                clientStats[cardValUpper].listino += rigaListino;
-            }
-
-            // Se è attivo un filtro su un singolo cliente, accumula la ripartizione per negozio
-            if (searchCard !== '') {
-                if(!clientStoreBreakdown[storeVal]) clientStoreBreakdown[storeVal] = { incasso: 0, capi: 0, transSet: new Set() };
-                clientStoreBreakdown[storeVal].incasso += rigaNetto;
-                clientStoreBreakdown[storeVal].capi += qta;
-                let localTransId = (row[COL_TRANS] || '').trim();
-                if(localTransId) clientStoreBreakdown[storeVal].transSet.add(`${storeVal}_${dateVal}_${localTransId}`);
+                if(!clientStatsCurrentFilter[cardValUpper]) clientStatsCurrentFilter[cardValUpper] = { incasso: 0, capi: 0, sconto: 0, listino: 0 };
+                clientStatsCurrentFilter[cardValUpper].incasso += rigaNetto;
+                clientStatsCurrentFilter[cardValUpper].capi += qta;
+                clientStatsCurrentFilter[cardValUpper].sconto += scontoRiga;
+                clientStatsCurrentFilter[cardValUpper].listino += rigaListino;
             }
 
             if(!dataStore[storeVal]) dataStore[storeVal] = 0;
@@ -1134,10 +1075,7 @@
         });
 
         let totSconto = totListino - totIncasso; if(totSconto < 0) totSconto = 0;
-        // Se non esiste una colonna scontrino valorizzata, il conteggio "clienti" è in realtà
-        // un conteggio di righe/articoli: lo segnaliamo chiaramente nell'etichetta.
-        let numClienti = hasTransId ? transazioniSet.size : filteredData.length;
-        document.getElementById('kpiClientiLabel').textContent = hasTransId ? 'Clienti (Transaz.)' : 'Righe Articolo (no scontrino)';
+        let numClienti = transazioniSet.size > 0 ? transazioniSet.size : filteredData.length;
         let pmCapo = totCapi > 0 ? (totIncasso / totCapi) : 0;
         let pmCliente = numClienti > 0 ? (totIncasso / numClienti) : 0;
         let scontoPerc = totListino > 0 ? (totSconto / totListino) * 100 : 0;
@@ -1157,51 +1095,14 @@
         renderChart('monthChart', 'line', finalMonthData, 'Incasso Mensile (€)', '#198754');
         renderChart('dowChart', 'bar', dataDow, 'Incasso per Giorno (€)', '#ffc107');
 
-        renderClientStoreCompare(clientStoreBreakdown, totIncasso);
+        if(searchCard === '') {
+            generateGlobalAiReport(filteredData.length, totIncasso, scontoPerc, dataStore, dataDow, productStats, clientStatsCurrentFilter);
+        }
 
-        generateAiReport(filteredData.length, totIncasso, scontoPerc, dataStore, dataDow, productStats, clientStats);
         updateTable(filteredData);
     }
 
-    function renderClientStoreCompare(breakdown, totIncassoCliente) {
-        const tbody = document.getElementById('cpStoreCompareBody');
-        const stores = Object.keys(breakdown);
-        
-        if (stores.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-muted text-center py-2">Nessun acquisto trovato per questo cliente.</td></tr>';
-            return;
-        }
-
-        stores.sort((a, b) => breakdown[b].incasso - breakdown[a].incasso);
-        tbody.innerHTML = '';
-        stores.forEach(s => {
-            const st = breakdown[s];
-            const perc = totIncassoCliente > 0 ? (st.incasso / totIncassoCliente) * 100 : 0;
-            const numTrans = st.transSet.size > 0 ? st.transSet.size : '-';
-            tbody.insertAdjacentHTML('beforeend', `
-                <tr>
-                    <td class="fw-bold">${escapeHtml(s)}</td>
-                    <td class="text-primary">${formatEur(st.incasso)}</td>
-                    <td>${perc.toFixed(1)}%</td>
-                    <td>${st.capi}</td>
-                    <td>${numTrans}</td>
-                </tr>
-            `);
-        });
-
-        if (stores.length > 1) {
-            const topStore = stores[0];
-            tbody.insertAdjacentHTML('beforeend', `
-                <tr class="table-light">
-                    <td colspan="5" class="small text-muted fst-italic">
-                        <i class="fas fa-lightbulb me-1 text-warning"></i>Cliente multi-negozio: acquista in ${stores.length} punti vendita diversi, prevalentemente in <strong>${escapeHtml(topStore)}</strong>.
-                    </td>
-                </tr>
-            `);
-        }
-    }
-
-    function generateAiReport(rowCount, totIncasso, scontoPerc, dataStore, dataDow, productStats, clientStats) {
+    function generateGlobalAiReport(rowCount, totIncasso, scontoPerc, dataStore, dataDow, productStats, clientStats) {
         const reportDiv = document.getElementById('aiReport');
         if (rowCount === 0) {
             reportDiv.innerHTML = "<em>I filtri correnti non hanno prodotto alcun risultato. Modifica i parametri di ricerca.</em>";
@@ -1213,19 +1114,19 @@
         let valSconto = "Il margine è solido, la leva promozionale applicata è bassa.";
         if (scontoPerc > 15 && scontoPerc <= 35) valSconto = "È in atto una strategia di sconti media per spingere i volumi.";
         else if (scontoPerc > 35) valSconto = "Forte incidenza promozionale (presumibilmente periodo di saldi o liquidazione). Margini compressi per massimizzare il volume d'uscita.";
-        reportHtml += `<li><strong>Strategia Prezzi:</strong> Lo sconto medio si attesta al <strong>${scontoPerc.toFixed(1)}%</strong>. ${escapeHtml(valSconto)}</li>`;
+        reportHtml += `<li><strong>Strategia Prezzi:</strong> Lo sconto medio si attesta al <strong>${scontoPerc.toFixed(1)}%</strong>. ${valSconto}</li>`;
 
         let stores = Object.keys(dataStore);
         if (stores.length > 1) {
             let bestStore = stores.reduce((a, b) => dataStore[a] > dataStore[b] ? a : b);
             let percBest = ((dataStore[bestStore] / totIncasso) * 100).toFixed(1);
-            reportHtml += `<li><strong>Performance Negozi:</strong> Il punto vendita trainante in questa selezione è <strong>${escapeHtml(bestStore)}</strong>, che da solo genera il <strong>${percBest}%</strong> del fatturato totale filtrato.</li>`;
+            reportHtml += `<li><strong>Performance Negozi:</strong> Il punto vendita trainante in questa selezione è <strong>${bestStore}</strong>, che da solo genera il <strong>${percBest}%</strong> del fatturato totale filtrato.</li>`;
         }
 
         let bestDay = Object.keys(dataDow).reduce((a, b) => dataDow[a] > dataDow[b] ? a : b);
         let maxDayVal = dataDow[bestDay];
         if(maxDayVal > 0) {
-            reportHtml += `<li><strong>Giorno di Picco:</strong> Storicamente (sulla base dei filtri), il momento di maggiore affluenza e conversioni risulta essere il <strong>${escapeHtml(bestDay)}</strong>.</li>`;
+            reportHtml += `<li><strong>Giorno di Picco:</strong> Storicamente, il momento di maggiore affluenza e conversioni risulta essere il <strong>${bestDay}</strong>.</li>`;
         }
 
         let prodNames = Object.keys(productStats);
@@ -1234,9 +1135,9 @@
             let topQtaProd = prodNames.reduce((a, b) => productStats[a].qta > productStats[b].qta ? a : b);
             
             if (topRevProd === topQtaProd) {
-                reportHtml += `<li><strong>Campione di Vendita:</strong> <strong>${escapeHtml(topRevProd)}</strong> è il prodotto leader assoluto, con i volumi più alti (${productStats[topRevProd].qta} pezzi) e l'incasso maggiore (${formatEur(productStats[topRevProd].incasso)}).</li>`;
+                reportHtml += `<li><strong>Campione di Vendita:</strong> <strong>${topRevProd}</strong> è il prodotto leader assoluto, con i volumi più alti (${productStats[topRevProd].qta} pezzi) e l'incasso maggiore (${formatEur(productStats[topRevProd].incasso)}).</li>`;
             } else {
-                reportHtml += `<li><strong>Analisi Prodotto:</strong> L'articolo con maggiore cassa è <strong>${escapeHtml(topRevProd)}</strong> (${formatEur(productStats[topRevProd].incasso)}), quello che muove più pezzi è <strong>${escapeHtml(topQtaProd)}</strong> (${productStats[topQtaProd].qta} capi).</li>`;
+                reportHtml += `<li><strong>Analisi Prodotto:</strong> L'articolo con maggiore cassa è <strong>${topRevProd}</strong> (${formatEur(productStats[topRevProd].incasso)}), quello che muove più pezzi è <strong>${topQtaProd}</strong> (${productStats[topQtaProd].qta} capi).</li>`;
             }
         }
         
@@ -1245,7 +1146,7 @@
             clients.sort((a, b) => clientStats[b].incasso - clientStats[a].incasso);
             let topClients = clients.slice(0, 3);
             
-            reportHtml += `<li class="mt-3"><strong>Top Clienti (CF / Card):</strong> I 3 clienti che hanno generato più valore nella selezione attuale sono:`;
+            reportHtml += `<li class="mt-3"><strong>Top Clienti (CF / Card):</strong> I 3 clienti che hanno generato più valore in questa vista sono:`;
             reportHtml += `<ul class="mb-0 mt-2" style="list-style-type: none; padding-left: 10px;">`;
             
             topClients.forEach((c, index) => {
@@ -1253,16 +1154,15 @@
                 let scontoMedio = st.listino > 0 ? (st.sconto / st.listino) * 100 : 0;
                 let medaglia = index === 0 ? "🥇" : (index === 1 ? "🥈" : "🥉");
                 
-                let safeCard = escapeHtml(c);
-                let badgeHtml = `<span class="badge bg-primary card-filter-btn ai-client-badge px-2 py-1 mx-1" title="Filtra questo cliente" data-card="${safeCard}"><i class="fas fa-id-card me-1"></i>${safeCard}</span>`;
+                let safeCard = c.replace(/"/g, '&quot;');
+                let badgeHtml = `<span class="badge bg-primary card-filter-btn ai-client-badge px-2 py-1 mx-1" title="Apri scheda cliente" data-card="${safeCard}"><i class="fas fa-id-card me-1"></i>${c}</span>`;
                 
-                // Mettiamo il nome se lo abbiamo in anagrafica
                 let extraName = "";
                 if(clientDict[c] && clientDict[c].nome) {
-                    extraName = ` - ${escapeHtml(clientDict[c].nome)} ${escapeHtml(clientDict[c].cognome)}`;
+                    extraName = ` - ${clientDict[c].nome} ${clientDict[c].cognome}`;
                 }
                 
-                reportHtml += `<li class="mt-2 mb-2">${medaglia} ${badgeHtml} ${extraName}: <strong>${formatEur(st.incasso)}</strong> incassati su <strong>${st.capi} capi</strong> (Sconto medio applicato: ${scontoMedio.toFixed(1)}%)</li>`;
+                reportHtml += `<li class="mt-2 mb-2">${medaglia} ${badgeHtml} ${extraName}: <strong>${formatEur(st.incasso)}</strong> su <strong>${st.capi} capi</strong> (Sconto medio: ${scontoMedio.toFixed(1)}%)</li>`;
             });
             reportHtml += `</ul></li>`;
         }
@@ -1346,8 +1246,7 @@
                     if (col === COL_CARD) {
                         let badge = document.createElement('span');
                         badge.className = 'badge bg-primary card-filter-btn px-2 py-1';
-                        badge.innerHTML = `<i class="fas fa-id-card me-1"></i>`;
-                        badge.appendChild(document.createTextNode(cellVal));
+                        badge.innerHTML = `<i class="fas fa-id-card me-1"></i>${cellVal}`;
                         badge.title = 'Filtra lo storico di questa Card';
                         badge.onclick = function() { filterByCard(cellVal.trim()); };
                         td.appendChild(badge);
@@ -1355,8 +1254,7 @@
                     else if (col === COL_EAN) {
                         let badge = document.createElement('span');
                         badge.className = 'badge bg-success card-filter-btn px-2 py-1';
-                        badge.innerHTML = `<i class="fas fa-barcode me-1"></i>`;
-                        badge.appendChild(document.createTextNode(cellVal));
+                        badge.innerHTML = `<i class="fas fa-barcode me-1"></i>${cellVal}`;
                         badge.title = 'Filtra per questo EAN';
                         badge.onclick = function() { filterByProduct(cellVal.trim()); };
                         td.appendChild(badge);
@@ -1364,8 +1262,7 @@
                     else if (col === COL_COD_INT) {
                         let badge = document.createElement('span');
                         badge.className = 'badge bg-secondary card-filter-btn px-2 py-1 text-white';
-                        badge.innerHTML = `<i class="fas fa-hashtag me-1"></i>`;
-                        badge.appendChild(document.createTextNode(cellVal));
+                        badge.innerHTML = `<i class="fas fa-hashtag me-1"></i>${cellVal}`;
                         badge.title = 'Filtra per questo Codice Interno';
                         badge.onclick = function() { filterByProduct(cellVal.trim()); };
                         td.appendChild(badge);
