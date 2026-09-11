@@ -42,6 +42,43 @@
         <button id="btnRefresh" class="btn btn-light fw-bold mt-2 text-primary" onclick="loadData()">
             <i class="fas fa-sync-alt me-2"></i>Aggiorna Dati
         </button>
+        <button id="btnReportAI" class="btn btn-warning fw-bold mt-2 text-dark ms-2" data-bs-toggle="modal" data-bs-target="#reportModal">
+            <i class="fas fa-brain me-2"></i>Report & Analisi AI
+        </button>
+    </div>
+
+    <!-- MODALE REPORT STATISTICO + ANALISI AI + EXPORT -->
+    <div class="modal fade" id="reportModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, #0d6efd, #8a2be2); color: white;">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-chart-pie me-2"></i>Report Statistico & Analisi AI</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="reportFilterInfo" class="alert alert-secondary small mb-3"></div>
+
+                    <h6 class="fw-bold text-primary mb-3"><i class="fas fa-list-ol me-2"></i>Riepilogo Statistico (dati filtrati correnti)</h6>
+                    <div class="row g-2 mb-4" id="reportStatsRow"></div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                        <h6 class="fw-bold text-primary mb-0"><i class="fas fa-robot me-2"></i>Analisi & Consigli Operativi AI</h6>
+                        <button class="btn btn-sm btn-outline-primary" id="btnGenAi" onclick="generateAiAnalysis()">
+                            <i class="fas fa-magic me-1"></i>Genera Analisi AI del Periodo
+                        </button>
+                    </div>
+                    <div id="aiReportModalBox" class="ai-box mb-4">
+                        <div class="ai-insight text-muted"><em>Premi "Genera Analisi AI del Periodo" per ottenere consigli operativi basati sul periodo attuale, la stagionalità e gli eventi commerciali del momento.</em></div>
+                    </div>
+
+                    <h6 class="fw-bold text-success mb-2"><i class="fas fa-file-export me-2"></i>Esportazione Elenco Clienti Filtrato</h6>
+                    <p class="text-muted small mb-2">Esporta in CSV l'elenco dei clienti (con anagrafica e statistiche) che rientrano nei filtri attualmente applicati alla dashboard.</p>
+                    <button class="btn btn-success" onclick="exportFilteredClients()">
+                        <i class="fas fa-download me-2"></i>Esporta CSV Clienti Filtrati (<span id="exportCount">0</span>)
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- IMPOSTAZIONI SORGENTI DATI -->
@@ -1290,6 +1327,287 @@
             autoWidth: false,
             order: dateColIdx >= 0 ? [[ dateColIdx, 'desc' ]] : [] 
         });
+    }
+
+    // ==========================================================
+    // REPORT MODALE: statistiche riepilogo + analisi AI + export
+    // ==========================================================
+
+    // Ricalcola le stesse aggregazioni di updateDashboard() in base ai filtri correnti,
+    // ma restituendole invece di scriverle direttamente nel DOM della dashboard principale.
+    function computeFilteredStats() {
+        const selStore = document.getElementById('filterStore').value;
+        const selMonth = document.getElementById('filterMonth').value;
+        const selDay = document.getElementById('filterDay').value;
+        const searchCardRaw = document.getElementById('filterCard').value.trim();
+        const searchCard = searchCardRaw.toUpperCase();
+        const searchTerms = document.getElementById('filterDesc').value.toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
+
+        let totIncasso = 0, totListino = 0, totCapi = 0;
+        let transazioniSet = new Set();
+        let dataStore = {}, dataMonth = {};
+        let dataDow = { 'Lunedì':0, 'Martedì':0, 'Mercoledì':0, 'Giovedì':0, 'Venerdì':0, 'Sabato':0, 'Domenica':0 };
+        let productStats = {};
+        let clientStatsCurrentFilter = {};
+        let filteredData = [];
+
+        rawData.forEach(row => {
+            let storeVal = (row[COL_STORE] || 'Sconosciuto').trim();
+            let dateVal = (row[COL_DATA] || '').trim();
+            let mDate = moment(dateVal, ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
+            let monthVal = mDate.isValid() ? mDate.format("YYYY-MM") : 'Sconosciuto';
+            let dayVal = mDate.isValid() ? mDate.format("YYYY-MM-DD") : 'Sconosciuto';
+
+            let cardValRaw = (row[COL_CARD] || '').trim();
+            let cardValUpper = cardValRaw.toUpperCase();
+            let descVal = (row[COL_DESC] || '').trim();
+            let descLower = descVal.toLowerCase();
+            let codIntVal = (row[COL_COD_INT] || '').trim().toLowerCase();
+            let eanVal = (row[COL_EAN] || '').trim().toLowerCase();
+
+            if (selStore !== 'ALL' && storeVal !== selStore) return;
+            if (selMonth !== 'ALL' && monthVal !== selMonth) return;
+            if (selDay !== 'ALL' && dayVal !== selDay) return;
+            if (searchCard !== '' && !cardValUpper.includes(searchCard)) return;
+            if (searchTerms.length > 0 && !searchTerms.every(term =>
+                descLower.includes(term) || codIntVal.includes(term) || eanVal.includes(term)
+            )) return;
+
+            filteredData.push(row);
+
+            let qta = parseEuro(row[COL_QTA]); if(qta === 0) qta = 1;
+            let pListinoUnit = parseEuro(row[COL_LISTINO]);
+            let pNettoUnit = parseEuro(row[COL_NETTO]);
+            let rigaNetto = pNettoUnit * qta;
+            let rigaListino = pListinoUnit * qta;
+            let scontoRiga = rigaListino - rigaNetto; if(scontoRiga < 0) scontoRiga = 0;
+
+            totIncasso += rigaNetto; totListino += rigaListino; totCapi += qta;
+
+            let transId = (row[COL_TRANS] || '').trim();
+            if(transId) transazioniSet.add(`${storeVal}_${dateVal}_${transId}`);
+
+            if(descVal) {
+                if(!productStats[descVal]) productStats[descVal] = { qta: 0, incasso: 0 };
+                productStats[descVal].qta += qta;
+                productStats[descVal].incasso += rigaNetto;
+            }
+
+            if (cardValRaw !== '') {
+                if(!clientStatsCurrentFilter[cardValUpper]) clientStatsCurrentFilter[cardValUpper] = { incasso: 0, capi: 0, sconto: 0, listino: 0 };
+                clientStatsCurrentFilter[cardValUpper].incasso += rigaNetto;
+                clientStatsCurrentFilter[cardValUpper].capi += qta;
+                clientStatsCurrentFilter[cardValUpper].sconto += scontoRiga;
+                clientStatsCurrentFilter[cardValUpper].listino += rigaListino;
+            }
+
+            if(!dataStore[storeVal]) dataStore[storeVal] = 0;
+            dataStore[storeVal] += rigaNetto;
+
+            let sortMonth = mDate.isValid() ? mDate.format("YYYY-MM") : '0000-00';
+            let displayMonth = mDate.isValid() ? mDate.format("MMM YYYY") : 'Sconosciuto';
+            if(!dataMonth[sortMonth]) dataMonth[sortMonth] = { label: displayMonth, val: 0 };
+            dataMonth[sortMonth].val += rigaNetto;
+
+            if(mDate.isValid()) {
+                let dow = mDate.format('dddd');
+                dow = dow.charAt(0).toUpperCase() + dow.slice(1);
+                if(dataDow[dow] !== undefined) dataDow[dow] += rigaNetto;
+            }
+        });
+
+        let totSconto = totListino - totIncasso; if(totSconto < 0) totSconto = 0;
+        let numClienti = transazioniSet.size > 0 ? transazioniSet.size : filteredData.length;
+
+        return {
+            selStore, selMonth, selDay, searchCard, searchTerms,
+            filteredData, totIncasso, totListino, totCapi, totSconto, numClienti,
+            dataStore, dataMonth, dataDow, productStats, clientStatsCurrentFilter
+        };
+    }
+
+    // Popola la modale con il riepilogo statistico non appena viene aperta
+    function prepareReportModal() {
+        if (rawData.length === 0) {
+            document.getElementById('reportFilterInfo').innerHTML = '<span class="text-danger">Carica prima i dati con "Aggiorna Dati".</span>';
+            document.getElementById('reportStatsRow').innerHTML = '';
+            document.getElementById('exportCount').textContent = '0';
+            return;
+        }
+
+        const stats = computeFilteredStats();
+        window._lastReportStats = stats; // cache per generateAiAnalysis() / exportFilteredClients()
+
+        let filterParts = [];
+        if(stats.selStore !== 'ALL') filterParts.push(`Negozio: <strong>${stats.selStore}</strong>`);
+        if(stats.selMonth !== 'ALL') filterParts.push(`Mese: <strong>${moment(stats.selMonth, "YYYY-MM").format("MMMM YYYY")}</strong>`);
+        if(stats.selDay !== 'ALL') filterParts.push(`Giorno: <strong>${moment(stats.selDay, "YYYY-MM-DD").format("DD/MM/YYYY")}</strong>`);
+        if(stats.searchCard) filterParts.push(`Card/CF: <strong>${stats.searchCard}</strong>`);
+        if(stats.searchTerms.length) filterParts.push(`Ricerca articolo: <strong>${stats.searchTerms.join(' ')}</strong>`);
+        document.getElementById('reportFilterInfo').innerHTML = filterParts.length
+            ? ('<i class="fas fa-filter me-1"></i>Filtri attivi &rarr; ' + filterParts.join(' &nbsp;|&nbsp; '))
+            : '<i class="fas fa-globe me-1"></i>Nessun filtro attivo: il riepilogo copre tutta la rete e tutto lo storico caricato.';
+
+        let scontoPerc = stats.totListino > 0 ? (stats.totSconto / stats.totListino * 100) : 0;
+        let pmCapo = stats.totCapi > 0 ? stats.totIncasso / stats.totCapi : 0;
+        let pmCliente = stats.numClienti > 0 ? stats.totIncasso / stats.numClienti : 0;
+        let clientCards = Object.keys(stats.clientStatsCurrentFilter);
+
+        let atRiskCount = 0;
+        clientCards.forEach(card => {
+            let g = clientSalesStats[card];
+            if(g && g.lastDateMoment && moment().diff(g.lastDateMoment, 'days') > 90) atRiskCount++;
+        });
+
+        const cards = [
+            { label: 'Incasso Totale', val: formatEur(stats.totIncasso), color: 'text-primary' },
+            { label: 'Sconto Medio', val: scontoPerc.toFixed(1) + '%', color: 'text-danger' },
+            { label: 'Capi Venduti', val: stats.totCapi.toLocaleString('it-IT'), color: 'text-success' },
+            { label: 'Clienti/Transaz.', val: stats.numClienti.toLocaleString('it-IT'), color: 'text-info' },
+            { label: 'Prezzo Medio Capo', val: formatEur(pmCapo), color: 'text-warning' },
+            { label: 'Spesa Media Cliente', val: formatEur(pmCliente), color: 'text-secondary' },
+            { label: 'Clienti Unici nel Filtro', val: clientCards.length, color: 'text-dark' },
+            { label: 'Clienti a Rischio (>90gg)', val: atRiskCount, color: 'text-danger' }
+        ];
+
+        let html = '';
+        cards.forEach(c => {
+            html += `<div class="col-md-3 col-6"><div class="crm-stat-box"><div class="crm-stat-lbl">${c.label}</div><div class="crm-stat-val ${c.color}">${c.val}</div></div></div>`;
+        });
+        document.getElementById('reportStatsRow').innerHTML = html;
+
+        document.getElementById('exportCount').textContent = clientCards.length;
+        document.getElementById('aiReportModalBox').innerHTML = '<div class="ai-insight text-muted"><em>Premi "Genera Analisi AI del Periodo" per ottenere consigli operativi basati sul periodo attuale, la stagionalità e gli eventi commerciali del momento.</em></div>';
+    }
+    document.getElementById('reportModal').addEventListener('show.bs.modal', prepareReportModal);
+
+    // Chiama l'API Anthropic (Claude) per generare consigli operativi contestualizzati
+    // rispetto alla data odierna, alla stagione ed agli eventi commerciali italiani.
+    async function generateAiAnalysis() {
+        const stats = window._lastReportStats || computeFilteredStats();
+        const box = document.getElementById('aiReportModalBox');
+        const btn = document.getElementById('btnGenAi');
+
+        if (stats.filteredData.length === 0) {
+            box.innerHTML = '<p class="text-muted mb-0"><em>Nessun dato nel filtro corrente: modifica i parametri di ricerca prima di generare l\'analisi.</em></p>';
+            return;
+        }
+
+        btn.disabled = true;
+        box.innerHTML = '<div class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin fa-2x mb-2"></i><br>Analisi AI in corso, un momento...</div>';
+
+        try {
+            let scontoPerc = stats.totListino > 0 ? (stats.totSconto / stats.totListino * 100) : 0;
+            let storesArr = Object.keys(stats.dataStore);
+            let bestStore = storesArr.length ? storesArr.reduce((a, b) => stats.dataStore[a] > stats.dataStore[b] ? a : b) : '-';
+            let percBest = (storesArr.length && stats.totIncasso > 0) ? ((stats.dataStore[bestStore] / stats.totIncasso) * 100).toFixed(1) : '0';
+            let bestDay = Object.keys(stats.dataDow).reduce((a, b) => stats.dataDow[a] > stats.dataDow[b] ? a : b);
+            let prodNames = Object.keys(stats.productStats);
+            let topProd = prodNames.length ? prodNames.reduce((a, b) => stats.productStats[a].incasso > stats.productStats[b].incasso ? a : b) : '-';
+
+            let clientEntries = Object.keys(stats.clientStatsCurrentFilter).map(card => ({ card, ...stats.clientStatsCurrentFilter[card] }));
+            let atRiskCount = 0;
+            clientEntries.forEach(c => {
+                let g = clientSalesStats[c.card];
+                if(g && g.lastDateMoment && moment().diff(g.lastDateMoment, 'days') > 90) atRiskCount++;
+            });
+            clientEntries.sort((a, b) => b.incasso - a.incasso);
+            let topClientsText = clientEntries.slice(0, 3).map(c => {
+                let anag = clientDict[c.card];
+                let name = (anag && anag.nome) ? `${anag.nome} ${anag.cognome}`.trim() : c.card;
+                return `${name} (${formatEur(c.incasso)})`;
+            }).join(', ') || 'Nessuno';
+
+            const today = moment().format('DD/MM/YYYY');
+            const monthName = moment().format('MMMM YYYY');
+
+            let filterDescr = 'tutta la rete e tutto lo storico';
+            let parts = [];
+            if(stats.selStore !== 'ALL') parts.push(`negozio ${stats.selStore}`);
+            if(stats.selMonth !== 'ALL') parts.push(`mese ${moment(stats.selMonth, "YYYY-MM").format("MMMM YYYY")}`);
+            if(stats.selDay !== 'ALL') parts.push(`giorno ${moment(stats.selDay, "YYYY-MM-DD").format("DD/MM/YYYY")}`);
+            if(stats.searchCard) parts.push(`cliente ${stats.searchCard}`);
+            if(parts.length) filterDescr = parts.join(', ');
+
+            const prompt = `Sei un consulente retail esperto per una catena italiana di negozi di abbigliamento. Oggi è il ${today} (${monthName}).
+
+Dati del periodo attualmente filtrato nella dashboard (filtro: ${filterDescr}):
+- Incasso totale: ${formatEur(stats.totIncasso)}
+- Capi venduti: ${stats.totCapi}
+- Sconto medio applicato: ${scontoPerc.toFixed(1)}%
+- Numero clienti/transazioni: ${stats.numClienti}
+- Negozio più performante nel gruppo filtrato: ${bestStore} (${percBest}% del fatturato del gruppo filtrato)
+- Giorno della settimana di picco storico: ${bestDay}
+- Prodotto più venduto: ${topProd}
+- Clienti a rischio abbandono (senza acquisti da oltre 90 giorni) nel gruppo filtrato: ${atRiskCount} su ${clientEntries.length}
+- Top 3 clienti per valore nel gruppo filtrato: ${topClientsText}
+
+Analizza questi dati tenendo conto della stagione e degli eventi commerciali italiani vicini alla data odierna (cambio di stagione, periodo di saldi, festività, ricorrenze, rientro dalle vacanze, ecc.). Rispondi in italiano, in HTML semplice (solo tag <p> e <ul><li>, niente markdown né intestazioni h1-h3, pronto per essere inserito in una pagina web), strutturato così:
+1. Una sintesi di massimo 3 righe sull'andamento del periodo analizzato.
+2. Un elenco puntato di 4-5 azioni operative concrete da intraprendere nei prossimi giorni, coerenti con il periodo dell'anno attuale.
+3. Un consiglio specifico su come recuperare i clienti a rischio abbandono individuati.`;
+
+            const response = await fetch("https://api.anthropic.com/v1/messages", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    model: "claude-sonnet-4-6",
+                    max_tokens: 1000,
+                    messages: [{ role: "user", content: prompt }]
+                })
+            });
+
+            if (!response.ok) throw new Error("Risposta del servizio AI non valida (" + response.status + ")");
+
+            const data = await response.json();
+            const text = (data.content || []).map(b => b.text || '').join('\n').trim();
+
+            box.innerHTML = text || '<p class="text-muted mb-0">Nessuna risposta ricevuta dal servizio AI.</p>';
+
+        } catch (err) {
+            box.innerHTML = `<p class="text-danger mb-0"><i class="fas fa-triangle-exclamation me-1"></i>Errore durante la generazione dell'analisi AI: ${err.message}</p>`;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // Esporta in CSV l'elenco clienti (anagrafica + statistiche) risultante dai filtri correnti
+    function exportFilteredClients() {
+        const stats = window._lastReportStats || computeFilteredStats();
+        const cards = Object.keys(stats.clientStatsCurrentFilter);
+
+        if (cards.length === 0) {
+            alert("Nessun cliente trovato con i filtri correnti.");
+            return;
+        }
+
+        let rows = [["Card/CF", "Nome", "Cognome", "Città", "Telefono", "Email", "Incasso Periodo", "Capi Periodo", "Sconto Medio Periodo %", "Ultima Visita (storico)", "Store Preferito (storico)"]];
+
+        cards.forEach(card => {
+            let cf = stats.clientStatsCurrentFilter[card];
+            let anag = clientDict[card] || {};
+            let global = clientSalesStats[card];
+            let scontoMedio = cf.listino > 0 ? ((cf.sconto / cf.listino) * 100).toFixed(1) : "0";
+            let recency = (global && global.lastDateMoment) ? (moment().diff(global.lastDateMoment, 'days') + " gg") : "-";
+            let favStore = "-";
+            if (global && Object.keys(global.stores).length > 0) {
+                favStore = Object.keys(global.stores).reduce((a, b) => global.stores[a] > global.stores[b] ? a : b);
+            }
+            rows.push([
+                card, anag.nome || "", anag.cognome || "", anag.citta || "", anag.tel || "", anag.mail || "",
+                cf.incasso.toFixed(2).replace('.', ','), cf.capi, scontoMedio, recency, favStore
+            ]);
+        });
+
+        let csvContent = rows.map(r => r.map(field => `"${String(field).replace(/"/g, '""')}"`).join(";")).join("\n");
+        let blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        let link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `clienti_export_${moment().format('YYYYMMDD_HHmmss')}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
     }
 </script>
 </body>
