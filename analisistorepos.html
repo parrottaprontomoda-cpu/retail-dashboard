@@ -61,6 +61,15 @@
                     <h6 class="fw-bold text-primary mb-3"><i class="fas fa-list-ol me-2"></i>Riepilogo Statistico (dati filtrati correnti)</h6>
                     <div class="row g-2 mb-4" id="reportStatsRow"></div>
 
+                    <div class="mb-3 p-2 bg-light rounded border">
+                        <label class="form-label small fw-bold text-secondary mb-1"><i class="fas fa-key me-1"></i>Chiave API Google Gemini (opzionale)</label>
+                        <div class="input-group input-group-sm">
+                            <input type="password" id="geminiApiKeyInput" class="form-control" placeholder="Incolla qui la tua Gemini API Key...">
+                            <button class="btn btn-outline-secondary" type="button" onclick="saveGeminiKey()" title="Salva chiave"><i class="fas fa-save"></i></button>
+                        </div>
+                        <small class="text-muted d-block mt-1">Se impostata, l'Analisi AI userà Google Gemini (funziona anche fuori da claude.ai). Se vuota o non raggiungibile, viene generata un'analisi con la logica stagionale integrata. La chiave resta salvata solo nel tuo browser.</small>
+                    </div>
+
                     <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                         <h6 class="fw-bold text-primary mb-0"><i class="fas fa-robot me-2"></i>Analisi & Consigli Operativi AI</h6>
                         <button class="btn btn-sm btn-outline-primary" id="btnGenAi" onclick="generateAiAnalysis()">
@@ -312,6 +321,18 @@
             </div>
         </div>
 
+        <!-- AI Analysis Box Globale -->
+        <div class="card border-0 shadow-sm mb-4" id="globalAiBox">
+            <div class="ai-box">
+                <div class="ai-title">
+                    <i class="fas fa-robot ai-icon"></i> Analisi Smart AI (Trend di Rete/Store)
+                </div>
+                <div class="ai-insight" id="aiReport">
+                    <!-- Report will be generated here -->
+                </div>
+            </div>
+        </div>
+
         <!-- KPIs -->
         <div class="row mb-3">
             <div class="col-xl-2 col-md-4 col-6 mb-3">
@@ -423,44 +444,20 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/locale/it.min.js"></script>
 
 <script>
-    // Inizializzazione Moment e Funzioni di formattazione GLOBALI
     moment.locale('it');
     
-    function formatEur(val) {
-        return '€ ' + (Number(val) || 0).toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    }
-
-    function parseEuro(valString) {
-        if(!valString) return 0;
-        let s = String(valString).replace('€', '').trim();
-        if(s.includes(',') && s.includes('.')) { s = s.replace(/\./g, '').replace(',', '.'); } 
-        else if (s.includes(',')) { s = s.replace(',', '.'); }
-        let f = parseFloat(s);
-        return isNaN(f) ? 0 : f;
-    }
-
-    function guessCol(cols, keywords) {
-        for(let c of cols) {
-            let low = c.toLowerCase();
-            for(let kw of keywords) {
-                if(low.includes(kw)) return c;
-            }
-        }
-        return null;
-    }
-
     // Default URLs
     const DEFAULT_VENDITE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRSwk2BhmMriyZotR2gLYtOkHic0lM3-0efkhaKhJ7gxDyQyqbGF0noTp9RV9GQgEHWTeuSskT57sVI/pub?gid=1352769388&single=true&output=csv";
     const DEFAULT_CLIENTI_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1650500047&single=true&output=csv";
     
+    // Inizializza URL da LocalStorage o Default
     document.getElementById('urlVenditeInput').value = localStorage.getItem('urlVendite') || DEFAULT_VENDITE_URL;
     document.getElementById('urlClientiInput').value = localStorage.getItem('urlClienti') || DEFAULT_CLIENTI_URL;
     
     let rawData = [];
     let columns = [];
-    let clientDict = {}; 
-    let clientSalesStats = {}; 
-    let clientStatsCurrentFilter = {};
+    let clientDict = {}; // Mappa Card/CF -> Dati Anagrafici
+    let clientSalesStats = {}; // Cache Globale CRM per AI indipendente dai filtri temporali
     
     // Configurazione Colonne Vendite
     let COL_DATA = null;   
@@ -519,6 +516,7 @@
                 return;
             }
 
+            // Parsing Clienti (se presente)
             clientDict = {};
             if (clientsCsv) {
                 Papa.parse(clientsCsv, {
@@ -529,6 +527,7 @@
                 });
             }
 
+            // Parsing Vendite
             Papa.parse(salesCsv, {
                 header: true,
                 skipEmptyLines: true,
@@ -541,6 +540,7 @@
                     rawData = results.data;
                     columns = results.meta.fields;
                     
+                    // Mappatura Default
                     COL_TRANS   = columns[0];
                     COL_DATA    = columns[1] || columns[0];
                     COL_COD_INT = columns[2] || columns[0]; 
@@ -555,7 +555,7 @@
                     COL_CARD    = columns[15] || columns[0]; 
                     COL_STORE   = columns[16] || columns[0]; 
                     
-                    buildGlobalCRMStats(); 
+                    buildGlobalCRMStats(); // Pre-calcola le stat storiche di tutti i clienti
                     setupFilters();
                     updateDashboard();
                     
@@ -568,6 +568,16 @@
             alert("Errore di connessione. Dettaglio: " + err.message);
             btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Riprova';
         });
+    }
+
+    function guessCol(cols, keywords) {
+        for(let c of cols) {
+            let low = c.toLowerCase();
+            for(let kw of keywords) {
+                if(low.includes(kw)) return c;
+            }
+        }
+        return null;
     }
 
     function buildClientDict(res) {
@@ -607,6 +617,7 @@
         });
     }
 
+    // Costruisce statistiche fisse (storico completo) per ogni cliente senza considerare i filtri temporali
     function buildGlobalCRMStats() {
         clientSalesStats = {};
         rawData.forEach(row => {
@@ -629,16 +640,24 @@
             if(!clientSalesStats[cardUpper]) {
                 clientSalesStats[cardUpper] = {
                     incasso: 0, capi: 0, sconto: 0, listino: 0,
-                    dateSet: new Set(), stores: {}, products: {}, lastDateMoment: null
+                    dateSet: new Set(),
+                    stores: {},
+                    products: {},
+                    lastDateMoment: null
                 };
             }
             
             let cst = clientSalesStats[cardUpper];
-            cst.incasso += rigaNetto; cst.capi += qta; cst.sconto += scontoRiga; cst.listino += rigaListino;
+            cst.incasso += rigaNetto;
+            cst.capi += qta;
+            cst.sconto += scontoRiga;
+            cst.listino += rigaListino;
             
             if(mDate.isValid()) {
                 cst.dateSet.add(mDate.format("YYYY-MM-DD"));
-                if(!cst.lastDateMoment || mDate.isAfter(cst.lastDateMoment)) cst.lastDateMoment = mDate;
+                if(!cst.lastDateMoment || mDate.isAfter(cst.lastDateMoment)) {
+                    cst.lastDateMoment = mDate;
+                }
             }
             
             if(!cst.stores[storeVal]) cst.stores[storeVal] = 0;
@@ -680,11 +699,19 @@
             selCredito.appendChild(new Option(col, col));
         });
         
-        selData.value = COL_DATA; selTrans.value = COL_TRANS; selDesc.value = COL_DESC;
-        selCard.value = COL_CARD; selCodInt.value = COL_COD_INT; selEan.value = COL_EAN;
-        selStore.value = COL_STORE; selContante.value = COL_CONTANTE; selPos.value = COL_POS; selCredito.value = COL_CREDITO;
+        selData.value = COL_DATA;
+        selTrans.value = COL_TRANS;
+        selDesc.value = COL_DESC;
+        selCard.value = COL_CARD;
+        selCodInt.value = COL_COD_INT;
+        selEan.value = COL_EAN;
+        selStore.value = COL_STORE;
+        selContante.value = COL_CONTANTE;
+        selPos.value = COL_POS;
+        selCredito.value = COL_CREDITO;
 
         extractMonthsAndStores();
+
         document.getElementById('filterSection').classList.remove('d-none');
         document.getElementById('summaryToggleWrapper').classList.remove('d-none');
         
@@ -694,6 +721,7 @@
         selCodInt.addEventListener('change', function() { COL_COD_INT = this.value; updateDashboard(); });
         selEan.addEventListener('change', function() { COL_EAN = this.value; updateDashboard(); });
         selStore.addEventListener('change', function() { COL_STORE = this.value; buildGlobalCRMStats(); updateDashboard(); extractMonthsAndStores(); });
+        
         selContante.addEventListener('change', function() { COL_CONTANTE = this.value; updateDailySummary(); });
         selPos.addEventListener('change', function() { COL_POS = this.value; updateDailySummary(); });
         selCredito.addEventListener('change', function() { COL_CREDITO = this.value; updateDailySummary(); });
@@ -701,47 +729,65 @@
     
     function changeDataColumn() {
         COL_DATA = document.getElementById('colData').value;
-        buildGlobalCRMStats(); extractMonthsAndStores(); updateDashboard();
+        buildGlobalCRMStats();
+        extractMonthsAndStores(); 
+        updateDashboard();
     }
 
     function extractMonthsAndStores() {
-        let stores = new Set(), months = new Set(), days = new Set();
+        let stores = new Set();
+        let months = new Set();
+        let days = new Set();
+
         rawData.forEach(row => {
             if(row[COL_STORE]) stores.add(row[COL_STORE].trim());
             if(row[COL_DATA]) {
                 let d = moment(row[COL_DATA].trim(), ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
-                if(d.isValid()) { months.add(d.format("YYYY-MM")); days.add(d.format("YYYY-MM-DD")); }
+                if(d.isValid()) {
+                    months.add(d.format("YYYY-MM"));
+                    days.add(d.format("YYYY-MM-DD"));
+                }
             }
         });
 
-        const selStore = document.getElementById('filterStore'); const currStore = selStore.value;
+        const selStore = document.getElementById('filterStore');
+        const currStore = selStore.value;
         selStore.innerHTML = '<option value="ALL">Tutti</option>';
         Array.from(stores).sort().forEach(s => { selStore.insertAdjacentHTML('beforeend', `<option value="${s}">${s}</option>`); });
         if (currStore && Array.from(stores).includes(currStore)) selStore.value = currStore;
 
-        const selMonth = document.getElementById('filterMonth'); const currMonth = selMonth.value;
+        const selMonth = document.getElementById('filterMonth');
+        const currMonth = selMonth.value;
         selMonth.innerHTML = '<option value="ALL">Tutti</option>';
         Array.from(months).sort().reverse().forEach(m => {
-            selMonth.insertAdjacentHTML('beforeend', `<option value="${m}">${moment(m, "YYYY-MM").format("MMMM YYYY").toUpperCase()}</option>`);
+            let label = moment(m, "YYYY-MM").format("MMMM YYYY").toUpperCase();
+            selMonth.insertAdjacentHTML('beforeend', `<option value="${m}">${label}</option>`);
         });
         if (currMonth && Array.from(months).includes(currMonth)) selMonth.value = currMonth;
 
-        const selDay = document.getElementById('filterDay'); const currDay = selDay.value;
+        const selDay = document.getElementById('filterDay');
+        const currDay = selDay.value;
         selDay.innerHTML = '<option value="ALL">Tutte</option>';
         Array.from(days).sort().reverse().forEach(d => {
-            selDay.insertAdjacentHTML('beforeend', `<option value="${d}">${moment(d, "YYYY-MM-DD").format("DD/MM/YYYY")}</option>`);
+            let label = moment(d, "YYYY-MM-DD").format("DD/MM/YYYY");
+            selDay.insertAdjacentHTML('beforeend', `<option value="${d}">${label}</option>`);
         });
         if (currDay && Array.from(days).includes(currDay)) selDay.value = currDay;
 
-        const selDailyDate = document.getElementById('dailySummaryDate'); const currDailyDate = selDailyDate.value;
+        const selDailyDate = document.getElementById('dailySummaryDate');
+        const currDailyDate = selDailyDate.value;
         selDailyDate.innerHTML = '';
         let sortedDays = Array.from(days).sort().reverse();
         if(sortedDays.length > 0) {
             sortedDays.forEach(d => {
-                selDailyDate.insertAdjacentHTML('beforeend', `<option value="${d}">${moment(d, "YYYY-MM-DD").format("DD/MM/YYYY")}</option>`);
+                let label = moment(d, "YYYY-MM-DD").format("DD/MM/YYYY");
+                selDailyDate.insertAdjacentHTML('beforeend', `<option value="${d}">${label}</option>`);
             });
-            if (currDailyDate && Array.from(days).includes(currDailyDate)) selDailyDate.value = currDailyDate;
-            else selDailyDate.value = sortedDays[0];
+            if (currDailyDate && Array.from(days).includes(currDailyDate)) {
+                selDailyDate.value = currDailyDate;
+            } else {
+                selDailyDate.value = sortedDays[0];
+            }
         }
         updateDailySummary();
     }
@@ -751,10 +797,12 @@
         const tbody = document.querySelector('#dailySummaryTable tbody');
         
         if(!dateVal) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-muted py-4">Nessuna data disponibile</td></tr>'; return;
+            tbody.innerHTML = '<tr><td colspan="9" class="text-muted py-4">Nessuna data disponibile</td></tr>';
+            return;
         }
 
-        let storeStats = {}; let storeTotalCash = {};
+        let storeStats = {};
+        let storeTotalCash = {};
         let totalIncasso = 0, totalContanteGiorno = 0, totalSaldoCassaRete = 0, totalPos = 0, totalCredito = 0;
         let totalCapi = 0, totalSconto = 0, totalTrans = 0;
 
@@ -769,15 +817,24 @@
             if(!rDate.isValid() || rDate.format("YYYY-MM-DD") !== dateVal) return;
 
             let qta = parseEuro(row[COL_QTA]); if(qta === 0) qta = 1;
-            let listino = parseEuro(row[COL_LISTINO]); let netto = parseEuro(row[COL_NETTO]);
-            let incasso = netto * qta; let sconto = (listino * qta) - incasso; if(sconto < 0) sconto = 0;
-            let pos = parseEuro(row[COL_POS]); let credito = parseEuro(row[COL_CREDITO]);
+            let listino = parseEuro(row[COL_LISTINO]);
+            let netto = parseEuro(row[COL_NETTO]);
+            let incasso = netto * qta;
+            let sconto = (listino * qta) - incasso; if(sconto < 0) sconto = 0;
+            
+            let pos = parseEuro(row[COL_POS]);
+            let credito = parseEuro(row[COL_CREDITO]);
             let transId = (row[COL_TRANS] || '').trim();
 
-            if(!storeStats[store]) storeStats[store] = { incasso: 0, contanteGiorno: 0, pos: 0, credito: 0, capi: 0, sconto: 0, transSet: new Set() };
-            storeStats[store].incasso += incasso; storeStats[store].contanteGiorno += contante;
-            storeStats[store].pos += pos; storeStats[store].credito += credito;
-            storeStats[store].capi += qta; storeStats[store].sconto += sconto;
+            if(!storeStats[store]) {
+                storeStats[store] = { incasso: 0, contanteGiorno: 0, pos: 0, credito: 0, capi: 0, sconto: 0, transSet: new Set() };
+            }
+            storeStats[store].incasso += incasso;
+            storeStats[store].contanteGiorno += contante;
+            storeStats[store].pos += pos;
+            storeStats[store].credito += credito;
+            storeStats[store].capi += qta;
+            storeStats[store].sconto += sconto;
             if(transId) storeStats[store].transSet.add(transId);
         });
 
@@ -785,7 +842,8 @@
         let stores = Object.keys(storeStats).sort((a,b) => storeStats[b].incasso - storeStats[a].incasso);
         
         if(stores.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-muted py-4">Nessuna operazione in questa data</td></tr>'; return;
+            tbody.innerHTML = '<tr><td colspan="9" class="text-muted py-4">Nessuna operazione in questa data</td></tr>';
+            return;
         }
 
         stores.forEach(s => {
@@ -793,321 +851,49 @@
             let numTrans = st.transSet.size > 0 ? st.transSet.size : "-";
             let saldoCassaStore = storeTotalCash[s] || 0;
             
-            totalIncasso += st.incasso; totalContanteGiorno += st.contanteGiorno; totalPos += st.pos;
-            totalCredito += st.credito; totalCapi += st.capi; totalSconto += st.sconto;
+            totalIncasso += st.incasso;
+            totalContanteGiorno += st.contanteGiorno;
+            totalPos += st.pos;
+            totalCredito += st.credito;
+            totalCapi += st.capi;
+            totalSconto += st.sconto;
             if(st.transSet.size > 0) totalTrans += st.transSet.size;
 
             let safeStore = s.replace(/'/g, "\\'").replace(/"/g, '&quot;');
             let storeLink = `<span class="fw-bold store-link" title="Applica filtro e analizza questo punto vendita" onclick="filterDashboardByStoreAndDate('${safeStore}', '${dateVal}')"><i class="fas fa-filter me-1 small"></i>${s}</span>`;
 
-            tbody.insertAdjacentHTML('beforeend', `<tr><td class="text-start ps-4">${storeLink}</td><td class="text-primary fw-bold" style="font-size: 1.1rem;">${formatEur(st.incasso)}</td><td class="text-secondary">${formatEur(st.contanteGiorno)}</td><td class="text-success fw-bold bg-success bg-opacity-10" style="font-size: 1.2rem;">${formatEur(saldoCassaStore)}</td><td class="text-info">${formatEur(st.pos)}</td><td class="text-warning">${formatEur(st.credito)}</td><td class="fw-semibold">${st.capi}</td><td class="text-secondary fw-bold">${numTrans}</td><td class="text-danger">${formatEur(st.sconto)}</td></tr>`);
+            tbody.insertAdjacentHTML('beforeend', `
+                <tr>
+                    <td class="text-start ps-4">${storeLink}</td>
+                    <td class="text-primary fw-bold" style="font-size: 1.1rem;">${formatEur(st.incasso)}</td>
+                    <td class="text-secondary">${formatEur(st.contanteGiorno)}</td>
+                    <td class="text-success fw-bold bg-success bg-opacity-10" style="font-size: 1.2rem;">${formatEur(saldoCassaStore)}</td>
+                    <td class="text-info">${formatEur(st.pos)}</td>
+                    <td class="text-warning">${formatEur(st.credito)}</td>
+                    <td class="fw-semibold">${st.capi}</td>
+                    <td class="text-secondary fw-bold">${numTrans}</td>
+                    <td class="text-danger">${formatEur(st.sconto)}</td>
+                </tr>
+            `);
         });
 
-        for(let k in storeTotalCash) totalSaldoCassaRete += storeTotalCash[k];
-
-        tbody.insertAdjacentHTML('beforeend', `<tr class="table-info border-info fw-bold" style="font-size: 1.1rem;"><td class="text-start ps-4">TOTALE RETE</td><td class="text-primary">${formatEur(totalIncasso)}</td><td class="text-secondary">${formatEur(totalContanteGiorno)}</td><td class="text-success fw-bold bg-success bg-opacity-25" style="font-size: 1.2rem;" title="Somma totale della cassa nel DB">${formatEur(totalSaldoCassaRete)}</td><td class="text-info">${formatEur(totalPos)}</td><td class="text-warning">${formatEur(totalCredito)}</td><td>${totalCapi}</td><td class="text-secondary">${totalTrans > 0 ? totalTrans : "-"}</td><td class="text-danger">${formatEur(totalSconto)}</td></tr>`);
-    }
-
-    function computeFilteredStats() {
-        const selStore = document.getElementById('filterStore').value;
-        const selMonth = document.getElementById('filterMonth').value;
-        const selDay = document.getElementById('filterDay').value;
-        const searchCardRaw = document.getElementById('filterCard').value.trim();
-        const searchCard = searchCardRaw.toUpperCase();
-        const searchTerms = document.getElementById('filterDesc').value.toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
-
-        let totIncasso = 0, totListino = 0, totCapi = 0;
-        let transazioniSet = new Set();
-        let dataStore = {}, dataMonth = {};
-        let dataDow = { 'Lunedì':0, 'Martedì':0, 'Mercoledì':0, 'Giovedì':0, 'Venerdì':0, 'Sabato':0, 'Domenica':0 };
-        let productStats = {};
-        clientStatsCurrentFilter = {};
-        let filteredData = [];
-
-        rawData.forEach(row => {
-            let storeVal = (row[COL_STORE] || 'Sconosciuto').trim();
-            let dateVal = (row[COL_DATA] || '').trim();
-            let mDate = moment(dateVal, ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
-            let monthVal = mDate.isValid() ? mDate.format("YYYY-MM") : 'Sconosciuto';
-            let dayVal = mDate.isValid() ? mDate.format("YYYY-MM-DD") : 'Sconosciuto';
-            
-            let cardValRaw = (row[COL_CARD] || '').trim();
-            let cardValUpper = cardValRaw.toUpperCase();
-            let descVal = (row[COL_DESC] || '').trim();
-            let descLower = descVal.toLowerCase();
-            let codIntVal = (row[COL_COD_INT] || '').trim().toLowerCase();
-            let eanVal = (row[COL_EAN] || '').trim().toLowerCase();
-            
-            if (selStore !== 'ALL' && storeVal !== selStore) return;
-            if (selMonth !== 'ALL' && monthVal !== selMonth) return;
-            if (selDay !== 'ALL' && dayVal !== selDay) return;
-            if (searchCard !== '' && !cardValUpper.includes(searchCard)) return;
-            
-            if (searchTerms.length > 0 && !searchTerms.every(term => 
-                descLower.includes(term) || codIntVal.includes(term) || eanVal.includes(term)
-            )) return;
-            
-            filteredData.push(row);
-
-            let qta = parseEuro(row[COL_QTA]); if(qta === 0) qta = 1; 
-            let pListinoUnit = parseEuro(row[COL_LISTINO]);
-            let pNettoUnit = parseEuro(row[COL_NETTO]);
-            let rigaNetto = pNettoUnit * qta;
-            let rigaListino = pListinoUnit * qta;
-            let scontoRiga = rigaListino - rigaNetto; if(scontoRiga < 0) scontoRiga = 0;
-
-            totIncasso += rigaNetto; totListino += rigaListino; totCapi += qta;
-
-            let transId = (row[COL_TRANS] || '').trim();
-            if(transId) transazioniSet.add(`${storeVal}_${dateVal}_${transId}`);
-
-            if(descVal) {
-                if(!productStats[descVal]) productStats[descVal] = { qta: 0, incasso: 0 };
-                productStats[descVal].qta += qta;
-                productStats[descVal].incasso += rigaNetto;
-            }
-            
-            if (cardValRaw !== '') {
-                if(!clientStatsCurrentFilter[cardValUpper]) {
-                    clientStatsCurrentFilter[cardValUpper] = { incasso: 0, capi: 0, sconto: 0, listino: 0, lastDateMoment: null };
-                }
-                clientStatsCurrentFilter[cardValUpper].incasso += rigaNetto;
-                clientStatsCurrentFilter[cardValUpper].capi += qta;
-                clientStatsCurrentFilter[cardValUpper].sconto += scontoRiga;
-                clientStatsCurrentFilter[cardValUpper].listino += rigaListino;
-                if(mDate.isValid()) {
-                    if (!clientStatsCurrentFilter[cardValUpper].lastDateMoment || mDate.isAfter(clientStatsCurrentFilter[cardValUpper].lastDateMoment)) {
-                        clientStatsCurrentFilter[cardValUpper].lastDateMoment = mDate;
-                    }
-                }
-            }
-
-            if(!dataStore[storeVal]) dataStore[storeVal] = 0;
-            dataStore[storeVal] += rigaNetto;
-
-            let sortMonth = mDate.isValid() ? mDate.format("YYYY-MM") : '0000-00';
-            let displayMonth = mDate.isValid() ? mDate.format("MMM YYYY") : 'Sconosciuto';
-            if(!dataMonth[sortMonth]) dataMonth[sortMonth] = { label: displayMonth, val: 0 };
-            dataMonth[sortMonth].val += rigaNetto;
-
-            if(mDate.isValid()) {
-                let dow = mDate.format('dddd');
-                dow = dow.charAt(0).toUpperCase() + dow.slice(1);
-                if(dataDow[dow] !== undefined) dataDow[dow] += rigaNetto;
-            }
-        });
-
-        let totSconto = totListino - totIncasso; if(totSconto < 0) totSconto = 0;
-        let numClienti = transazioniSet.size > 0 ? transazioniSet.size : filteredData.length;
-
-        return {
-            selStore, selMonth, selDay, searchCard, searchTerms,
-            filteredData, totIncasso, totListino, totCapi, totSconto, numClienti,
-            dataStore, dataMonth, dataDow, productStats, clientStatsCurrentFilter
-        };
-    }
-
-    function prepareReportModal() {
-        if (rawData.length === 0) {
-            document.getElementById('reportFilterInfo').innerHTML = '<span class="text-danger">Carica prima i dati con "Aggiorna Dati".</span>';
-            document.getElementById('reportStatsRow').innerHTML = '';
-            document.getElementById('exportCount').textContent = '0';
-            return;
+        for(let k in storeTotalCash) {
+            totalSaldoCassaRete += storeTotalCash[k];
         }
 
-        const stats = computeFilteredStats();
-        window._lastReportStats = stats; 
-
-        let filterParts = [];
-        if(stats.selStore !== 'ALL') filterParts.push(`Negozio: <strong>${stats.selStore}</strong>`);
-        if(stats.selMonth !== 'ALL') filterParts.push(`Mese: <strong>${moment(stats.selMonth, "YYYY-MM").format("MMMM YYYY")}</strong>`);
-        if(stats.selDay !== 'ALL') filterParts.push(`Giorno: <strong>${moment(stats.selDay, "YYYY-MM-DD").format("DD/MM/YYYY")}</strong>`);
-        if(stats.searchCard) filterParts.push(`Card/CF: <strong>${stats.searchCard}</strong>`);
-        if(stats.searchTerms.length) filterParts.push(`Ricerca articolo: <strong>${stats.searchTerms.join(' ')}</strong>`);
-        
-        document.getElementById('reportFilterInfo').innerHTML = filterParts.length
-            ? ('<i class="fas fa-filter me-1"></i>Filtri attivi &rarr; ' + filterParts.join(' &nbsp;|&nbsp; '))
-            : '<i class="fas fa-globe me-1"></i>Nessun filtro attivo: il riepilogo copre tutta la rete e tutto lo storico caricato.';
-
-        let scontoPerc = stats.totListino > 0 ? (stats.totSconto / stats.totListino * 100) : 0;
-        let pmCapo = stats.totCapi > 0 ? stats.totIncasso / stats.totCapi : 0;
-        let pmCliente = stats.numClienti > 0 ? stats.totIncasso / stats.numClienti : 0;
-        let clientCards = Object.keys(stats.clientStatsCurrentFilter);
-
-        let atRiskCount = 0;
-        clientCards.forEach(card => {
-            let g = clientSalesStats[card];
-            if(g && g.lastDateMoment && moment().diff(g.lastDateMoment, 'days') > 90) atRiskCount++;
-        });
-
-        const cards = [
-            { label: 'Incasso Totale', val: formatEur(stats.totIncasso), color: 'text-primary' },
-            { label: 'Sconto Medio', val: scontoPerc.toFixed(1) + '%', color: 'text-danger' },
-            { label: 'Capi Venduti', val: stats.totCapi.toLocaleString('it-IT'), color: 'text-success' },
-            { label: 'Clienti/Transaz.', val: stats.numClienti.toLocaleString('it-IT'), color: 'text-info' },
-            { label: 'Prezzo Medio Capo', val: formatEur(pmCapo), color: 'text-warning' },
-            { label: 'Spesa Media Cliente', val: formatEur(pmCliente), color: 'text-secondary' },
-            { label: 'Clienti Unici Filtrati', val: clientCards.length, color: 'text-dark' },
-            { label: 'Clienti a Rischio (>90gg)', val: atRiskCount, color: 'text-danger' }
-        ];
-
-        let html = '';
-        cards.forEach(c => {
-            html += `<div class="col-md-3 col-6"><div class="crm-stat-box"><div class="crm-stat-lbl">${c.label}</div><div class="crm-stat-val ${c.color}">${c.val}</div></div></div>`;
-        });
-        document.getElementById('reportStatsRow').innerHTML = html;
-
-        document.getElementById('exportCount').textContent = clientCards.length;
-        document.getElementById('aiReportModalBox').innerHTML = '<div class="ai-insight text-muted"><em>Premi "Genera Analisi AI del Periodo" per ottenere consigli operativi basati sul periodo attuale, la stagionalità e gli eventi commerciali del momento.</em></div>';
-    }
-    
-    document.getElementById('reportModal').addEventListener('show.bs.modal', prepareReportModal);
-
-    function generateAiAnalysis() {
-        const stats = window._lastReportStats || computeFilteredStats();
-        const box = document.getElementById('aiReportModalBox');
-        const btn = document.getElementById('btnGenAi');
-
-        if (stats.filteredData.length === 0) {
-            box.innerHTML = '<p class="text-muted mb-0"><em>Nessun dato nel filtro corrente: modifica i parametri di ricerca prima di generare l\'analisi.</em></p>';
-            return;
-        }
-
-        btn.disabled = true;
-        box.innerHTML = '<div class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin fa-2x mb-2"></i><br>Elaborazione Logica Stagionale in corso...</div>';
-
-        setTimeout(() => {
-            box.innerHTML = generateLocalSeasonalAi(stats);
-            btn.disabled = false;
-        }, 800);
-    }
-
-    function generateLocalSeasonalAi(stats) {
-        let currentMonthNum = moment().month() + 1; // 1-12
-        let currentMonthName = moment().format('MMMM'); // es. "Settembre"
-        let currentYear = moment().year();
-
-        let scontoPerc = stats.totListino > 0 ? (stats.totSconto / stats.totListino * 100) : 0;
-        let storesArr = Object.keys(stats.dataStore);
-        let bestStore = storesArr.length ? storesArr.reduce((a, b) => stats.dataStore[a] > stats.dataStore[b] ? a : b) : '-';
-        let bestDay = Object.keys(stats.dataDow).reduce((a, b) => stats.dataDow[a] > stats.dataDow[b] ? a : b);
-        let prodNames = Object.keys(stats.productStats);
-        let topProd = prodNames.length ? prodNames.reduce((a, b) => stats.productStats[a].incasso > stats.productStats[b].incasso ? a : b) : '-';
-
-        let clientEntries = Object.keys(stats.clientStatsCurrentFilter).map(card => ({ card, ...stats.clientStatsCurrentFilter[card] }));
-        let atRiskCount = 0;
-        clientEntries.forEach(c => {
-            let g = clientSalesStats[c.card];
-            if (g && g.lastDateMoment && moment().diff(g.lastDateMoment, 'days') > 90) atRiskCount++;
-        });
-
-        // SINTESI STAGIONALE DINAMICA (Azione basata sul mese corrente)
-        let seasonalContext = "";
-        let actions = [];
-
-        switch(currentMonthNum) {
-            case 1:
-            case 2:
-                seasonalContext = "Siamo nel pieno dei <strong>Saldi Invernali</strong>.";
-                actions.push("🔥 <strong>Liquidazione Stock:</strong> Usa i clienti filtrati per lanciare messaggi di 'Ultimi Ribassi' e svuotare il magazzino invernale.");
-                if (scontoPerc < 20) actions.push("⚠️ <strong>Allerta Margine:</strong> Lo sconto medio è basso per il periodo dei saldi. Spingi di più la promo per fare cassa e liberare spazio.");
-                actions.push("👗 <strong>Transizione:</strong> Inizia a proporre i primi capi continuativi o della pre-collezione primaverile a margine pieno.");
-                break;
-            case 3:
-            case 4:
-            case 5:
-                seasonalContext = "Siamo in <strong>Primavera (Pasqua/Cerimonie)</strong>.";
-                actions.push("🌸 <strong>Nuova Collezione:</strong> Manda un WhatsApp al segmento per presentare le nuove vetrine primaverili.");
-                actions.push("👗 <strong>Eventi e Cerimonie:</strong> Spingi articoli eleganti, completi o abiti da cerimonia. Fai up-selling proponendo accessori coordinati.");
-                if (topProd !== '-') actions.push(`📈 Il prodotto trainante è <strong>${topProd}</strong>: mettilo in evidenza sui social o nelle vetrine del punto vendita.`);
-                break;
-            case 6:
-            case 7:
-            case 8:
-                seasonalContext = "Siamo nel periodo della <strong>Collezione Mare e Saldi Estivi</strong>.";
-                actions.push("☀️ <strong>Abbigliamento Mare/Estate:</strong> Promuovi i capi leggeri prima che i clienti partano per le ferie.");
-                actions.push("💸 <strong>Promo Saldi:</strong> I saldi estivi generano molto traffico. Usa l'elenco clienti per inviare l'invito ai 'Saldi Privati' qualche giorno prima dell'inizio ufficiale.");
-                if (scontoPerc > 40) actions.push("📉 <strong>Attenzione ai Margini:</strong> Lo sconto applicato è molto alto. Cerca di fare cross-selling proponendo un accessorio a prezzo pieno vicino alla cassa.");
-                break;
-            case 9:
-            case 10:
-                seasonalContext = "Ci troviamo nel periodo del <strong>Rientro, Back to School e Nuova Stagione</strong>.";
-                actions.push("🎒 <strong>Back to Work/School:</strong> I saldi sono finiti in Italia ai primi di settembre. È il momento ideale per spingere capi quotidiani, jeans, felpe e capispalla leggeri.");
-                if (scontoPerc > 25) {
-                    actions.push("📊 <strong>Azione Promozionale:</strong> Questo gruppo è storicamente sensibile ai saldi. Dato che la nuova merce è a prezzo pieno, proponi loro uno speciale coupon 'Welcome Autumn 15%' valido solo per 7 giorni per invogliarli a entrare.");
-                } else {
-                    actions.push("💎 <strong>Azione Premium:</strong> I clienti filtrati acquistano volentieri a prezzo pieno. Invia una mail/WhatsApp con il lookbook esclusivo della Nuova Collezione Autunno-Inverno.");
-                }
-                if (topProd !== '-') actions.push(`🧥 Il best-seller attuale è <strong>${topProd}</strong>: assicurati che gli store (soprattutto ${bestStore}) abbiano tutte le taglie esposte in evidenza.`);
-                break;
-            case 11:
-                seasonalContext = "Siamo nel mese del <strong>Black Friday e Mid-Season</strong>.";
-                actions.push("🖤 <strong>Pre-Black Friday:</strong> Non aspettare l'ultimo giorno. Manda un accesso anticipato ('VIP Black Friday') al segmento filtrato per battere la concorrenza.");
-                actions.push("🥶 <strong>Freddo in Arrivo:</strong> Spingi forte sui capi spalla invernali, maglieria pesante e giubbotti, che hanno lo scontrino medio più alto.");
-                break;
-            case 12:
-                seasonalContext = "Pieno periodo delle <strong>Festività Natalizie e Regali</strong>.";
-                actions.push("🎄 <strong>Idee Regalo:</strong> Il traffico è alto per i regali. Proponi Gift Card o piccoli accessori da cassa per aumentare i pezzi per scontrino.");
-                actions.push("🎁 <strong>Upselling:</strong> Fai scattare la magia del 'compralo anche per te'. Il cliente che cerca regali spesso è ben disposto a premiare anche se stesso.");
-                if (bestDay !== '-') actions.push(`📅 Durante il ${bestDay} c'è il picco di traffico: rinforza i turni in negozio per abbattere le code in cassa e curare il packaging regalo.`);
-                break;
-        }
-
-        let html = `<p class="fs-6 text-dark" style="line-height:1.6;">L'analisi intelligente rileva che ci troviamo nel mese di <strong>${currentMonthName} ${currentYear}</strong>. ${seasonalContext} Nel gruppo che hai filtrato in dashboard, l'incasso è di <strong>${formatEur(stats.totIncasso)}</strong> con uno sconto medio del <strong>${scontoPerc.toFixed(1)}%</strong>.</p>`;
-
-        html += `<h6 class="text-primary mt-4 fw-bold">Azioni Operative Consigliate:</h6>`;
-        html += `<ul class="text-dark" style="line-height:1.7;">`;
-        actions.forEach(a => html += `<li>${a}</li>`);
-        html += `</ul>`;
-
-        html += `<div class="mt-4 p-3 bg-white rounded border border-warning border-opacity-50">
-            <h6 class="text-warning fw-bold mb-2"><i class="fas fa-exclamation-triangle me-2"></i>Recupero Clienti a Rischio</h6>`;
-        if (atRiskCount > 0) {
-            html += `<p class="mb-0 small text-secondary">Hai filtrato un gruppo in cui <strong>${atRiskCount} clienti</strong> (su ${clientEntries.length}) non vengono in negozio da oltre 3 mesi. <strong>Consiglio operativo:</strong> Usa il pulsante verde di esportazione sottostante per estrarre questo CSV e caricalo nel tuo sistema di invio messaggi. Invia loro la dicitura: <em>"Ci manchi! Passa a trovarci questa settimana e ti abbiamo riservato una sorpresa sulle nuove collezioni in store."</em></p>`;
-        } else {
-            html += `<p class="mb-0 small text-secondary">La fedeltà dei clienti attualmente filtrati è ottima, non si registrano criticità di abbandono nel breve termine in questo gruppo.</p>`;
-        }
-        html += `</div>`;
-
-        return html;
-    }
-
-    function exportFilteredClients() {
-        const stats = window._lastReportStats || computeFilteredStats();
-        const cards = Object.keys(stats.clientStatsCurrentFilter);
-
-        if (cards.length === 0) {
-            alert("Nessun cliente trovato con i filtri correnti.");
-            return;
-        }
-
-        let rows = [["Card/CF", "Nome", "Cognome", "Città", "Telefono", "Email", "Incasso Periodo", "Capi Periodo", "Sconto Medio Periodo %", "Ultima Visita (storico)", "Store Preferito (storico)"]];
-
-        cards.forEach(card => {
-            let cf = stats.clientStatsCurrentFilter[card];
-            let anag = clientDict[card] || {};
-            let global = clientSalesStats[card];
-            let scontoMedio = cf.listino > 0 ? ((cf.sconto / cf.listino) * 100).toFixed(1) : "0";
-            let recency = (global && global.lastDateMoment) ? (moment().diff(global.lastDateMoment, 'days') + " gg") : "-";
-            let favStore = "-";
-            if (global && Object.keys(global.stores).length > 0) {
-                favStore = Object.keys(global.stores).reduce((a, b) => global.stores[a] > global.stores[b] ? a : b);
-            }
-            rows.push([
-                card, anag.nome || "", anag.cognome || "", anag.citta || "", anag.tel || "", anag.mail || "",
-                cf.incasso.toFixed(2).replace('.', ','), cf.capi, scontoMedio, recency, favStore
-            ]);
-        });
-
-        let csvContent = rows.map(r => r.map(field => `"${String(field).replace(/"/g, '""')}"`).join(";")).join("\n");
-        let blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
-        let link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `clienti_export_${moment().format('YYYYMMDD_HHmmss')}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
+        tbody.insertAdjacentHTML('beforeend', `
+            <tr class="table-info border-info fw-bold" style="font-size: 1.1rem;">
+                <td class="text-start ps-4">TOTALE RETE</td>
+                <td class="text-primary">${formatEur(totalIncasso)}</td>
+                <td class="text-secondary">${formatEur(totalContanteGiorno)}</td>
+                <td class="text-success fw-bold bg-success bg-opacity-25" style="font-size: 1.2rem;" title="Somma totale della cassa nel DB">${formatEur(totalSaldoCassaRete)}</td>
+                <td class="text-info">${formatEur(totalPos)}</td>
+                <td class="text-warning">${formatEur(totalCredito)}</td>
+                <td>${totalCapi}</td>
+                <td class="text-secondary">${totalTrans > 0 ? totalTrans : "-"}</td>
+                <td class="text-danger">${formatEur(totalSconto)}</td>
+            </tr>
+        `);
     }
 
     function filterDashboardByStoreAndDate(storeName, dateVal) {
@@ -1147,14 +933,26 @@
         debounceTimer = setTimeout(() => { updateDashboard(); }, 400);
     }
 
+    function parseEuro(valString) {
+        if(!valString) return 0;
+        let s = String(valString).replace('€', '').trim();
+        if(s.includes(',') && s.includes('.')) { s = s.replace(/\./g, '').replace(',', '.'); } 
+        else if (s.includes(',')) { s = s.replace(',', '.'); }
+        let f = parseFloat(s);
+        return isNaN(f) ? 0 : f;
+    }
+
     function renderClientCrmProfile(searchCard) {
         let profileBox = document.getElementById('clientProfileBox');
+        let globalAiBox = document.getElementById('globalAiBox');
         
         if (!searchCard || !clientSalesStats[searchCard]) {
             profileBox.classList.add('d-none');
+            globalAiBox.classList.remove('d-none');
             return;
         }
 
+        // 1. Dati Anagrafici da DBCLI (se esistenti)
         if (clientDict[searchCard]) {
             let cli = clientDict[searchCard];
             document.getElementById('cpNome').textContent = cli.nome || '-';
@@ -1167,25 +965,31 @@
             document.getElementById('cpStore').textContent = cli.store || '-';
             document.getElementById('cpPunti').textContent = cli.punti || '0';
         } else {
+            // Svuota se non ho l'anagrafica ma ho le vendite
             ['cpNome','cpCognome','cpCf','cpCitta','cpTel','cpMail','cpData','cpStore','cpPunti'].forEach(id => document.getElementById(id).textContent = '-');
         }
 
+        // 2. Calcolo Statistiche RFM dalla History Completa
         let cst = clientSalesStats[searchCard];
         document.getElementById('cpBadgeCard').textContent = `Card/CF: ${searchCard}`;
         
+        // Recency
         let recencyDays = "-";
         if(cst.lastDateMoment) {
             recencyDays = moment().diff(cst.lastDateMoment, 'days');
         }
         
+        // Sconto Medio
         let scontoMedio = cst.listino > 0 ? (cst.sconto / cst.listino) * 100 : 0;
         
+        // Negozio Preferito
         let favStore = "-";
         let stores = Object.keys(cst.stores);
         if(stores.length > 0) {
             favStore = stores.reduce((a, b) => cst.stores[a] > cst.stores[b] ? a : b);
         }
         
+        // Prodotto più acquistato
         let favProd = "-";
         let prods = Object.keys(cst.products);
         if(prods.length > 0) {
@@ -1199,118 +1003,150 @@
         document.getElementById('crmDiscount').textContent = `${scontoMedio.toFixed(1)}%`;
         document.getElementById('crmFavStore').textContent = favStore;
 
+        // 3. Generazione Consigli AI per il Cliente
         let aiAdvice = "";
+        
+        // Churn / Recency Analysis
         if (recencyDays !== "-") {
-            if (recencyDays > 180) aiAdvice += "🚨 <strong>Cliente Perso/Dormiente:</strong> Non acquista da oltre 6 mesi. Necessaria campagna di re-engagement aggressiva.<br>";
-            else if (recencyDays > 90) aiAdvice += "⚠️ <strong>Rischio Abbandono:</strong> Assente da oltre 3 mesi. Invia un messaggio di sollecito.<br>";
-            else if (recencyDays < 30 && cst.dateSet.size > 2) aiAdvice += "🌟 <strong>Cliente VIP Caldo:</strong> Molto attivo di recente. Ottimo target per anteprime.<br>";
+            if (recencyDays > 180) aiAdvice += "🚨 <strong>Cliente Perso/Dormiente:</strong> Non acquista da oltre 6 mesi. Necessaria campagna di re-engagement aggressiva (es. Sconto altissimo o Regalo su rientro).<br>";
+            else if (recencyDays > 90) aiAdvice += "⚠️ <strong>Rischio Abbandono:</strong> Assente da oltre 3 mesi. Inviare un messaggio WhatsApp invitandolo a scoprire la nuova collezione.<br>";
+            else if (recencyDays < 30 && cst.dateSet.size > 2) aiAdvice += "🌟 <strong>Cliente VIP Caldo:</strong> Molto attivo di recente. Ottimo target per anteprime o articoli a margine pieno.<br>";
         }
-        if (scontoMedio > 40) aiAdvice += "🏷️ <strong>Cacciatore di Sconti:</strong> Compra in saldo. Evita le proposte a prezzo pieno.<br>";
-        else if (scontoMedio < 10 && cst.incasso > 100) aiAdvice += "💎 <strong>Cliente Premium:</strong> Punta su qualità, servizio e nuove collezioni a prezzo intero.<br>";
 
+        // Price Sensitivity
+        if (scontoMedio > 40) aiAdvice += "🏷️ <strong>Cacciatore di Sconti (Price-Sensitive):</strong> Compra quasi esclusivamente in forte saldo. Inutile proporre merce a prezzo pieno; contattalo per smaltimento stock o fine serie.<br>";
+        else if (scontoMedio < 10 && cst.incasso > 100) aiAdvice += "💎 <strong>Cliente Premium:</strong> Bassa sensibilità al prezzo. Punta sul valore, qualità, e servizio dedicato.<br>";
+
+        // Cross/Up Selling
         if (favProd !== "-") {
-            aiAdvice += `🎯 <strong>Azione Diretta:</strong> Il suo articolo preferito è <em>"${favProd}"</em>. Proponi varianti in cross-selling.`;
+            aiAdvice += `🎯 <strong>Azione Diretta:</strong> Il suo articolo preferito storico è <em>"${favProd}"</em>. Proponi varianti colore, accessori abbinabili (Cross-Selling) o l'evoluzione di questo prodotto.`;
         }
 
         if(aiAdvice === "") aiAdvice = "Dati insufficienti per generare un pattern. Incoraggiare ulteriori visite in store.";
         document.getElementById('crmAiAction').innerHTML = aiAdvice;
 
         profileBox.classList.remove('d-none');
+        globalAiBox.classList.add('d-none'); // Nascondo l'AI di rete se sto guardando un singolo cliente
     }
 
     function updateDashboard() {
         document.getElementById('dashboardSection').classList.remove('d-none');
 
-        const selStore = document.getElementById('filterStore').value;
-        const selMonth = document.getElementById('filterMonth').value;
-        const selDay = document.getElementById('filterDay').value;
-        
-        const searchCardRaw = document.getElementById('filterCard').value.trim();
-        const searchCard = searchCardRaw.toUpperCase();
-        const searchTerms = document.getElementById('filterDesc').value.toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
+        const searchCard = document.getElementById('filterCard').value.trim().toUpperCase();
 
+        // Aggiorna Pannello CRM cliente singolo
         renderClientCrmProfile(searchCard);
 
-        let totIncasso = 0; let totListino = 0; let totCapi = 0;
-        let transazioniSet = new Set();
-        let dataStore = {}; let dataMonth = {};
-        let dataDow = { 'Lunedì':0, 'Martedì':0, 'Mercoledì':0, 'Giovedì':0, 'Venerdì':0, 'Sabato':0, 'Domenica':0 };
-        
-        let filteredData = [];
+        // Unica computazione filtrata: viene riusata per KPI, grafici, tabella, AI box
+        // e resta in cache (window._lastReportStats) per la modale Report & Analisi AI,
+        // evitando di ripercorrere due volte l'intero dataset ad ogni cambio filtro.
+        const stats = computeFilteredStats();
+        window._lastReportStats = stats;
 
-        rawData.forEach(row => {
-            let storeVal = (row[COL_STORE] || 'Sconosciuto').trim();
-            let dateVal = (row[COL_DATA] || '').trim();
-            let mDate = moment(dateVal, ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
-            let monthVal = mDate.isValid() ? mDate.format("YYYY-MM") : 'Sconosciuto';
-            let dayVal = mDate.isValid() ? mDate.format("YYYY-MM-DD") : 'Sconosciuto';
-            
-            let cardValRaw = (row[COL_CARD] || '').trim();
-            let cardValUpper = cardValRaw.toUpperCase();
-            let descVal = (row[COL_DESC] || '').trim();
-            let descLower = descVal.toLowerCase();
-            let codIntVal = (row[COL_COD_INT] || '').trim().toLowerCase();
-            let eanVal = (row[COL_EAN] || '').trim().toLowerCase();
-            
-            if (selStore !== 'ALL' && storeVal !== selStore) return;
-            if (selMonth !== 'ALL' && monthVal !== selMonth) return;
-            if (selDay !== 'ALL' && dayVal !== selDay) return;
-            if (searchCard !== '' && !cardValUpper.includes(searchCard)) return;
-            if (searchTerms.length > 0 && !searchTerms.every(term => 
-                descLower.includes(term) || codIntVal.includes(term) || eanVal.includes(term)
-            )) return;
-            
-            filteredData.push(row);
+        let scontoPerc = stats.totListino > 0 ? (stats.totSconto / stats.totListino) * 100 : 0;
+        let pmCapo = stats.totCapi > 0 ? (stats.totIncasso / stats.totCapi) : 0;
+        let pmCliente = stats.numClienti > 0 ? (stats.totIncasso / stats.numClienti) : 0;
 
-            let qta = parseEuro(row[COL_QTA]); if(qta === 0) qta = 1; 
-            let pListinoUnit = parseEuro(row[COL_LISTINO]);
-            let pNettoUnit = parseEuro(row[COL_NETTO]);
-            let rigaNetto = pNettoUnit * qta;
-            let rigaListino = pListinoUnit * qta;
-            let scontoRiga = rigaListino - rigaNetto; if(scontoRiga < 0) scontoRiga = 0;
-
-            totIncasso += rigaNetto; totListino += rigaListino; totCapi += qta;
-
-            let transId = (row[COL_TRANS] || '').trim();
-            if(transId) transazioniSet.add(`${storeVal}_${dateVal}_${transId}`);
-
-            if(!dataStore[storeVal]) dataStore[storeVal] = 0;
-            dataStore[storeVal] += rigaNetto;
-
-            let sortMonth = mDate.isValid() ? mDate.format("YYYY-MM") : '0000-00';
-            let displayMonth = mDate.isValid() ? mDate.format("MMM YYYY") : 'Sconosciuto';
-            if(!dataMonth[sortMonth]) dataMonth[sortMonth] = { label: displayMonth, val: 0 };
-            dataMonth[sortMonth].val += rigaNetto;
-
-            if(mDate.isValid()) {
-                let dow = mDate.format('dddd');
-                dow = dow.charAt(0).toUpperCase() + dow.slice(1);
-                if(dataDow[dow] !== undefined) dataDow[dow] += rigaNetto;
-            }
-        });
-
-        let totSconto = totListino - totIncasso; if(totSconto < 0) totSconto = 0;
-        let numClienti = transazioniSet.size > 0 ? transazioniSet.size : filteredData.length;
-        let pmCapo = totCapi > 0 ? (totIncasso / totCapi) : 0;
-        let pmCliente = numClienti > 0 ? (totIncasso / numClienti) : 0;
-        let scontoPerc = totListino > 0 ? (totSconto / totListino) * 100 : 0;
-
-        document.getElementById('kpiIncasso').textContent = formatEur(totIncasso);
-        document.getElementById('kpiSconto').textContent = formatEur(totSconto);
+        document.getElementById('kpiIncasso').textContent = formatEur(stats.totIncasso);
+        document.getElementById('kpiSconto').textContent = formatEur(stats.totSconto);
         document.getElementById('kpiScontoPerc').textContent = `${scontoPerc.toFixed(1)}% del listino`;
-        document.getElementById('kpiCapi').textContent = totCapi.toLocaleString('it-IT');
-        document.getElementById('kpiClienti').textContent = numClienti.toLocaleString('it-IT');
+        document.getElementById('kpiCapi').textContent = stats.totCapi.toLocaleString('it-IT');
+        document.getElementById('kpiClienti').textContent = stats.numClienti.toLocaleString('it-IT');
         document.getElementById('kpiPrezzoMedio').textContent = formatEur(pmCapo);
         document.getElementById('kpiSpesaMedia').textContent = formatEur(pmCliente);
 
-        renderChart('storeChart', 'bar', dataStore, 'Incasso (€)', '#0d6efd');
-        const sortedMonthKeys = Object.keys(dataMonth).sort();
+        renderChart('storeChart', 'bar', stats.dataStore, 'Incasso (€)', '#0d6efd');
+        const sortedMonthKeys = Object.keys(stats.dataMonth).sort();
         const finalMonthData = {};
-        sortedMonthKeys.forEach(k => { finalMonthData[dataMonth[k].label] = dataMonth[k].val; });
+        sortedMonthKeys.forEach(k => { finalMonthData[stats.dataMonth[k].label] = stats.dataMonth[k].val; });
         renderChart('monthChart', 'line', finalMonthData, 'Incasso Mensile (€)', '#198754');
-        renderChart('dowChart', 'bar', dataDow, 'Incasso per Giorno (€)', '#ffc107');
+        renderChart('dowChart', 'bar', stats.dataDow, 'Incasso per Giorno (€)', '#ffc107');
 
-        updateTable(filteredData);
+        if(searchCard === '') {
+            generateGlobalAiReport(stats.filteredData.length, stats.totIncasso, scontoPerc, stats.dataStore, stats.dataDow, stats.productStats, stats.clientStatsCurrentFilter);
+        }
+
+        updateTable(stats.filteredData);
+    }
+
+    function generateGlobalAiReport(rowCount, totIncasso, scontoPerc, dataStore, dataDow, productStats, clientStats) {
+        const reportDiv = document.getElementById('aiReport');
+        if (rowCount === 0) {
+            reportDiv.innerHTML = "<em>I filtri correnti non hanno prodotto alcun risultato. Modifica i parametri di ricerca.</em>";
+            return;
+        }
+
+        let reportHtml = "<ul>";
+
+        let valSconto = "Il margine è solido, la leva promozionale applicata è bassa.";
+        if (scontoPerc > 15 && scontoPerc <= 35) valSconto = "È in atto una strategia di sconti media per spingere i volumi.";
+        else if (scontoPerc > 35) valSconto = "Forte incidenza promozionale (presumibilmente periodo di saldi o liquidazione). Margini compressi per massimizzare il volume d'uscita.";
+        reportHtml += `<li><strong>Strategia Prezzi:</strong> Lo sconto medio si attesta al <strong>${scontoPerc.toFixed(1)}%</strong>. ${valSconto}</li>`;
+
+        let stores = Object.keys(dataStore);
+        if (stores.length > 1) {
+            let bestStore = stores.reduce((a, b) => dataStore[a] > dataStore[b] ? a : b);
+            let percBest = ((dataStore[bestStore] / totIncasso) * 100).toFixed(1);
+            reportHtml += `<li><strong>Performance Negozi:</strong> Il punto vendita trainante in questa selezione è <strong>${bestStore}</strong>, che da solo genera il <strong>${percBest}%</strong> del fatturato totale filtrato.</li>`;
+        }
+
+        let bestDay = Object.keys(dataDow).reduce((a, b) => dataDow[a] > dataDow[b] ? a : b);
+        let maxDayVal = dataDow[bestDay];
+        if(maxDayVal > 0) {
+            reportHtml += `<li><strong>Giorno di Picco:</strong> Storicamente, il momento di maggiore affluenza e conversioni risulta essere il <strong>${bestDay}</strong>.</li>`;
+        }
+
+        let prodNames = Object.keys(productStats);
+        if(prodNames.length > 0) {
+            let topRevProd = prodNames.reduce((a, b) => productStats[a].incasso > productStats[b].incasso ? a : b);
+            let topQtaProd = prodNames.reduce((a, b) => productStats[a].qta > productStats[b].qta ? a : b);
+            
+            if (topRevProd === topQtaProd) {
+                reportHtml += `<li><strong>Campione di Vendita:</strong> <strong>${topRevProd}</strong> è il prodotto leader assoluto, con i volumi più alti (${productStats[topRevProd].qta} pezzi) e l'incasso maggiore (${formatEur(productStats[topRevProd].incasso)}).</li>`;
+            } else {
+                reportHtml += `<li><strong>Analisi Prodotto:</strong> L'articolo con maggiore cassa è <strong>${topRevProd}</strong> (${formatEur(productStats[topRevProd].incasso)}), quello che muove più pezzi è <strong>${topQtaProd}</strong> (${productStats[topQtaProd].qta} capi).</li>`;
+            }
+        }
+        
+        let clients = Object.keys(clientStats);
+        if (clients.length > 0) {
+            clients.sort((a, b) => clientStats[b].incasso - clientStats[a].incasso);
+            let topClients = clients.slice(0, 3);
+            
+            reportHtml += `<li class="mt-3"><strong>Top Clienti (CF / Card):</strong> I 3 clienti che hanno generato più valore in questa vista sono:`;
+            reportHtml += `<ul class="mb-0 mt-2" style="list-style-type: none; padding-left: 10px;">`;
+            
+            topClients.forEach((c, index) => {
+                let st = clientStats[c];
+                let scontoMedio = st.listino > 0 ? (st.sconto / st.listino) * 100 : 0;
+                let medaglia = index === 0 ? "🥇" : (index === 1 ? "🥈" : "🥉");
+                
+                let safeCard = c.replace(/"/g, '&quot;');
+                let badgeHtml = `<span class="badge bg-primary card-filter-btn ai-client-badge px-2 py-1 mx-1" title="Apri scheda cliente" data-card="${safeCard}"><i class="fas fa-id-card me-1"></i>${c}</span>`;
+                
+                let extraName = "";
+                if(clientDict[c] && clientDict[c].nome) {
+                    extraName = ` - ${clientDict[c].nome} ${clientDict[c].cognome}`;
+                }
+                
+                reportHtml += `<li class="mt-2 mb-2">${medaglia} ${badgeHtml} ${extraName}: <strong>${formatEur(st.incasso)}</strong> su <strong>${st.capi} capi</strong> (Sconto medio: ${scontoMedio.toFixed(1)}%)</li>`;
+            });
+            reportHtml += `</ul></li>`;
+        }
+
+        reportHtml += "</ul>";
+        reportDiv.innerHTML = reportHtml;
+
+        const aiBadges = reportDiv.querySelectorAll('.ai-client-badge');
+        aiBadges.forEach(badge => {
+            badge.addEventListener('click', function() {
+                filterByCard(this.getAttribute('data-card'));
+            });
+        });
+    }
+
+    function formatEur(val) {
+        return '€ ' + val.toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     }
 
     function renderChart(canvasId, type, dataObj, label, color) {
@@ -1421,6 +1257,411 @@
             autoWidth: false,
             order: dateColIdx >= 0 ? [[ dateColIdx, 'desc' ]] : [] 
         });
+    }
+
+    // ==========================================================
+    // REPORT MODALE: statistiche riepilogo + analisi AI + export
+    // ==========================================================
+
+    // Ricalcola le stesse aggregazioni di updateDashboard() in base ai filtri correnti,
+    // ma restituendole invece di scriverle direttamente nel DOM della dashboard principale.
+    function computeFilteredStats() {
+        const selStore = document.getElementById('filterStore').value;
+        const selMonth = document.getElementById('filterMonth').value;
+        const selDay = document.getElementById('filterDay').value;
+        const searchCardRaw = document.getElementById('filterCard').value.trim();
+        const searchCard = searchCardRaw.toUpperCase();
+        const searchTerms = document.getElementById('filterDesc').value.toLowerCase().trim().split(/\s+/).filter(t => t.length > 0);
+
+        let totIncasso = 0, totListino = 0, totCapi = 0;
+        let transazioniSet = new Set();
+        let dataStore = {}, dataMonth = {};
+        let dataDow = { 'Lunedì':0, 'Martedì':0, 'Mercoledì':0, 'Giovedì':0, 'Venerdì':0, 'Sabato':0, 'Domenica':0 };
+        let productStats = {};
+        let clientStatsCurrentFilter = {};
+        let filteredData = [];
+
+        rawData.forEach(row => {
+            let storeVal = (row[COL_STORE] || 'Sconosciuto').trim();
+            let dateVal = (row[COL_DATA] || '').trim();
+            let mDate = moment(dateVal, ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
+            let monthVal = mDate.isValid() ? mDate.format("YYYY-MM") : 'Sconosciuto';
+            let dayVal = mDate.isValid() ? mDate.format("YYYY-MM-DD") : 'Sconosciuto';
+
+            let cardValRaw = (row[COL_CARD] || '').trim();
+            let cardValUpper = cardValRaw.toUpperCase();
+            let descVal = (row[COL_DESC] || '').trim();
+            let descLower = descVal.toLowerCase();
+            let codIntVal = (row[COL_COD_INT] || '').trim().toLowerCase();
+            let eanVal = (row[COL_EAN] || '').trim().toLowerCase();
+
+            if (selStore !== 'ALL' && storeVal !== selStore) return;
+            if (selMonth !== 'ALL' && monthVal !== selMonth) return;
+            if (selDay !== 'ALL' && dayVal !== selDay) return;
+            if (searchCard !== '' && !cardValUpper.includes(searchCard)) return;
+            if (searchTerms.length > 0 && !searchTerms.every(term =>
+                descLower.includes(term) || codIntVal.includes(term) || eanVal.includes(term)
+            )) return;
+
+            filteredData.push(row);
+
+            let qta = parseEuro(row[COL_QTA]); if(qta === 0) qta = 1;
+            let pListinoUnit = parseEuro(row[COL_LISTINO]);
+            let pNettoUnit = parseEuro(row[COL_NETTO]);
+            let rigaNetto = pNettoUnit * qta;
+            let rigaListino = pListinoUnit * qta;
+            let scontoRiga = rigaListino - rigaNetto; if(scontoRiga < 0) scontoRiga = 0;
+
+            totIncasso += rigaNetto; totListino += rigaListino; totCapi += qta;
+
+            let transId = (row[COL_TRANS] || '').trim();
+            if(transId) transazioniSet.add(`${storeVal}_${dateVal}_${transId}`);
+
+            if(descVal) {
+                if(!productStats[descVal]) productStats[descVal] = { qta: 0, incasso: 0 };
+                productStats[descVal].qta += qta;
+                productStats[descVal].incasso += rigaNetto;
+            }
+
+            if (cardValRaw !== '') {
+                if(!clientStatsCurrentFilter[cardValUpper]) clientStatsCurrentFilter[cardValUpper] = { incasso: 0, capi: 0, sconto: 0, listino: 0 };
+                clientStatsCurrentFilter[cardValUpper].incasso += rigaNetto;
+                clientStatsCurrentFilter[cardValUpper].capi += qta;
+                clientStatsCurrentFilter[cardValUpper].sconto += scontoRiga;
+                clientStatsCurrentFilter[cardValUpper].listino += rigaListino;
+            }
+
+            if(!dataStore[storeVal]) dataStore[storeVal] = 0;
+            dataStore[storeVal] += rigaNetto;
+
+            let sortMonth = mDate.isValid() ? mDate.format("YYYY-MM") : '0000-00';
+            let displayMonth = mDate.isValid() ? mDate.format("MMM YYYY") : 'Sconosciuto';
+            if(!dataMonth[sortMonth]) dataMonth[sortMonth] = { label: displayMonth, val: 0 };
+            dataMonth[sortMonth].val += rigaNetto;
+
+            if(mDate.isValid()) {
+                let dow = mDate.format('dddd');
+                dow = dow.charAt(0).toUpperCase() + dow.slice(1);
+                if(dataDow[dow] !== undefined) dataDow[dow] += rigaNetto;
+            }
+        });
+
+        let totSconto = totListino - totIncasso; if(totSconto < 0) totSconto = 0;
+        let numClienti = transazioniSet.size > 0 ? transazioniSet.size : filteredData.length;
+
+        return {
+            selStore, selMonth, selDay, searchCard, searchTerms,
+            filteredData, totIncasso, totListino, totCapi, totSconto, numClienti,
+            dataStore, dataMonth, dataDow, productStats, clientStatsCurrentFilter
+        };
+    }
+
+    // Popola la modale con il riepilogo statistico non appena viene aperta
+    function prepareReportModal() {
+        if (rawData.length === 0) {
+            document.getElementById('reportFilterInfo').innerHTML = '<span class="text-danger">Carica prima i dati con "Aggiorna Dati".</span>';
+            document.getElementById('reportStatsRow').innerHTML = '';
+            document.getElementById('exportCount').textContent = '0';
+            return;
+        }
+
+        // Riusa la cache calcolata dall'ultimo updateDashboard() (stessi filtri):
+        // evita di ripercorrere l'intero dataset una seconda volta solo per aprire la modale.
+        const stats = window._lastReportStats || computeFilteredStats();
+        window._lastReportStats = stats;
+
+        let filterParts = [];
+        if(stats.selStore !== 'ALL') filterParts.push(`Negozio: <strong>${stats.selStore}</strong>`);
+        if(stats.selMonth !== 'ALL') filterParts.push(`Mese: <strong>${moment(stats.selMonth, "YYYY-MM").format("MMMM YYYY")}</strong>`);
+        if(stats.selDay !== 'ALL') filterParts.push(`Giorno: <strong>${moment(stats.selDay, "YYYY-MM-DD").format("DD/MM/YYYY")}</strong>`);
+        if(stats.searchCard) filterParts.push(`Card/CF: <strong>${stats.searchCard}</strong>`);
+        if(stats.searchTerms.length) filterParts.push(`Ricerca articolo: <strong>${stats.searchTerms.join(' ')}</strong>`);
+        document.getElementById('reportFilterInfo').innerHTML = filterParts.length
+            ? ('<i class="fas fa-filter me-1"></i>Filtri attivi &rarr; ' + filterParts.join(' &nbsp;|&nbsp; '))
+            : '<i class="fas fa-globe me-1"></i>Nessun filtro attivo: il riepilogo copre tutta la rete e tutto lo storico caricato.';
+
+        let scontoPerc = stats.totListino > 0 ? (stats.totSconto / stats.totListino * 100) : 0;
+        let pmCapo = stats.totCapi > 0 ? stats.totIncasso / stats.totCapi : 0;
+        let pmCliente = stats.numClienti > 0 ? stats.totIncasso / stats.numClienti : 0;
+        let clientCards = Object.keys(stats.clientStatsCurrentFilter);
+
+        let atRiskCount = 0;
+        clientCards.forEach(card => {
+            let g = clientSalesStats[card];
+            if(g && g.lastDateMoment && moment().diff(g.lastDateMoment, 'days') > 90) atRiskCount++;
+        });
+
+        const cards = [
+            { label: 'Incasso Totale', val: formatEur(stats.totIncasso), color: 'text-primary' },
+            { label: 'Sconto Medio', val: scontoPerc.toFixed(1) + '%', color: 'text-danger' },
+            { label: 'Capi Venduti', val: stats.totCapi.toLocaleString('it-IT'), color: 'text-success' },
+            { label: 'Clienti/Transaz.', val: stats.numClienti.toLocaleString('it-IT'), color: 'text-info' },
+            { label: 'Prezzo Medio Capo', val: formatEur(pmCapo), color: 'text-warning' },
+            { label: 'Spesa Media Cliente', val: formatEur(pmCliente), color: 'text-secondary' },
+            { label: 'Clienti Unici nel Filtro', val: clientCards.length, color: 'text-dark' },
+            { label: 'Clienti a Rischio (>90gg)', val: atRiskCount, color: 'text-danger' }
+        ];
+
+        let html = '';
+        cards.forEach(c => {
+            html += `<div class="col-md-3 col-6"><div class="crm-stat-box"><div class="crm-stat-lbl">${c.label}</div><div class="crm-stat-val ${c.color}">${c.val}</div></div></div>`;
+        });
+        document.getElementById('reportStatsRow').innerHTML = html;
+
+        document.getElementById('exportCount').textContent = clientCards.length;
+        document.getElementById('aiReportModalBox').innerHTML = '<div class="ai-insight text-muted"><em>Premi "Genera Analisi AI del Periodo" per ottenere consigli operativi basati sul periodo attuale, la stagionalità e gli eventi commerciali del momento.</em></div>';
+
+        document.getElementById('geminiApiKeyInput').value = localStorage.getItem('geminiApiKey') || '';
+    }
+    document.getElementById('reportModal').addEventListener('show.bs.modal', prepareReportModal);
+
+    function saveGeminiKey() {
+        const key = document.getElementById('geminiApiKeyInput').value.trim();
+        if (key) {
+            localStorage.setItem('geminiApiKey', key);
+            alert('Chiave Gemini salvata nel browser.');
+        } else {
+            localStorage.removeItem('geminiApiKey');
+            alert('Chiave Gemini rimossa: verrà usato Claude (solo su claude.ai) o l\'analisi locale.');
+        }
+    }
+
+    // Chiama l'API Anthropic (Claude) per generare consigli operativi contestualizzati
+    // rispetto alla data odierna, alla stagione ed agli eventi commerciali italiani.
+    async function generateAiAnalysis() {
+        const stats = window._lastReportStats || computeFilteredStats();
+        const box = document.getElementById('aiReportModalBox');
+        const btn = document.getElementById('btnGenAi');
+
+        if (stats.filteredData.length === 0) {
+            box.innerHTML = '<p class="text-muted mb-0"><em>Nessun dato nel filtro corrente: modifica i parametri di ricerca prima di generare l\'analisi.</em></p>';
+            return;
+        }
+
+        btn.disabled = true;
+        box.innerHTML = '<div class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin fa-2x mb-2"></i><br>Analisi AI in corso, un momento...</div>';
+
+        try {
+            let scontoPerc = stats.totListino > 0 ? (stats.totSconto / stats.totListino * 100) : 0;
+            let storesArr = Object.keys(stats.dataStore);
+            let bestStore = storesArr.length ? storesArr.reduce((a, b) => stats.dataStore[a] > stats.dataStore[b] ? a : b) : '-';
+            let percBest = (storesArr.length && stats.totIncasso > 0) ? ((stats.dataStore[bestStore] / stats.totIncasso) * 100).toFixed(1) : '0';
+            let bestDay = Object.keys(stats.dataDow).reduce((a, b) => stats.dataDow[a] > stats.dataDow[b] ? a : b);
+            let prodNames = Object.keys(stats.productStats);
+            let topProd = prodNames.length ? prodNames.reduce((a, b) => stats.productStats[a].incasso > stats.productStats[b].incasso ? a : b) : '-';
+
+            let clientEntries = Object.keys(stats.clientStatsCurrentFilter).map(card => ({ card, ...stats.clientStatsCurrentFilter[card] }));
+            let atRiskCount = 0;
+            clientEntries.forEach(c => {
+                let g = clientSalesStats[c.card];
+                if(g && g.lastDateMoment && moment().diff(g.lastDateMoment, 'days') > 90) atRiskCount++;
+            });
+            clientEntries.sort((a, b) => b.incasso - a.incasso);
+            let topClientsText = clientEntries.slice(0, 3).map(c => {
+                let anag = clientDict[c.card];
+                let name = (anag && anag.nome) ? `${anag.nome} ${anag.cognome}`.trim() : c.card;
+                return `${name} (${formatEur(c.incasso)})`;
+            }).join(', ') || 'Nessuno';
+
+            const today = moment().format('DD/MM/YYYY');
+            const monthName = moment().format('MMMM YYYY');
+
+            let filterDescr = 'tutta la rete e tutto lo storico';
+            let parts = [];
+            if(stats.selStore !== 'ALL') parts.push(`negozio ${stats.selStore}`);
+            if(stats.selMonth !== 'ALL') parts.push(`mese ${moment(stats.selMonth, "YYYY-MM").format("MMMM YYYY")}`);
+            if(stats.selDay !== 'ALL') parts.push(`giorno ${moment(stats.selDay, "YYYY-MM-DD").format("DD/MM/YYYY")}`);
+            if(stats.searchCard) parts.push(`cliente ${stats.searchCard}`);
+            if(parts.length) filterDescr = parts.join(', ');
+
+            const prompt = `Sei un consulente retail esperto per una catena italiana di negozi di abbigliamento. Oggi è il ${today} (${monthName}).
+
+Dati del periodo attualmente filtrato nella dashboard (filtro: ${filterDescr}):
+- Incasso totale: ${formatEur(stats.totIncasso)}
+- Capi venduti: ${stats.totCapi}
+- Sconto medio applicato: ${scontoPerc.toFixed(1)}%
+- Numero clienti/transazioni: ${stats.numClienti}
+- Negozio più performante nel gruppo filtrato: ${bestStore} (${percBest}% del fatturato del gruppo filtrato)
+- Giorno della settimana di picco storico: ${bestDay}
+- Prodotto più venduto: ${topProd}
+- Clienti a rischio abbandono (senza acquisti da oltre 90 giorni) nel gruppo filtrato: ${atRiskCount} su ${clientEntries.length}
+- Top 3 clienti per valore nel gruppo filtrato: ${topClientsText}
+
+Analizza questi dati tenendo conto della stagione e degli eventi commerciali italiani vicini alla data odierna (cambio di stagione, periodo di saldi, festività, ricorrenze, rientro dalle vacanze, ecc.). Rispondi in italiano, in HTML semplice (solo tag <p> e <ul><li>, niente markdown né intestazioni h1-h3, pronto per essere inserito in una pagina web), strutturato così:
+1. Una sintesi di massimo 3 righe sull'andamento del periodo analizzato.
+2. Un elenco puntato di 4-5 azioni operative concrete da intraprendere nei prossimi giorni, coerenti con il periodo dell'anno attuale.
+3. Un consiglio specifico su come recuperare i clienti a rischio abbandono individuati.`;
+
+            const geminiKey = (localStorage.getItem('geminiApiKey') || '').trim();
+
+            if (!geminiKey) {
+                // Nessuna chiave Gemini configurata: passiamo direttamente all'analisi locale,
+                // senza perdere tempo a provare Claude (funziona solo dentro claude.ai, non qui).
+                box.innerHTML = generateLocalAiFallback(stats) +
+                    `<p class="text-muted small mt-3 mb-0"><i class="fas fa-circle-info me-1"></i>Nessuna chiave Google Gemini configurata: analisi generata con la logica stagionale integrata. Aggiungi una chiave sopra per un'analisi generata dinamicamente sui tuoi dati.</p>`;
+                btn.disabled = false;
+                return;
+            }
+
+            const geminiResp = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "x-goog-api-key": geminiKey },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+            });
+            if (!geminiResp.ok) throw new Error("Risposta Gemini non valida (" + geminiResp.status + ")");
+            const geminiData = await geminiResp.json();
+            const geminiParts = (geminiData.candidates && geminiData.candidates[0] && geminiData.candidates[0].content && geminiData.candidates[0].content.parts) || [];
+            const text = geminiParts.map(p => p.text || '').join('\n').trim();
+
+            box.innerHTML = text || '<p class="text-muted mb-0">Nessuna risposta ricevuta da Gemini.</p>';
+            if (text) {
+                box.innerHTML += `<p class="text-muted small mt-3 mb-0"><i class="fas fa-circle-check me-1"></i>Analisi generata con Google Gemini.</p>`;
+            }
+
+        } catch (err) {
+            // Google Gemini non è raggiungibile (chiave assente/non valida, quota esaurita,
+            // nessuna connessione). Generiamo comunque un'analisi utile con logica locale.
+            box.innerHTML = generateLocalAiFallback(stats) +
+                `<p class="text-muted small mt-3 mb-0"><i class="fas fa-circle-info me-1"></i>Nota: Google Gemini non è raggiungibile in questo momento (dettaglio tecnico: ${err.message}). L'analisi sopra è stata generata con la logica stagionale integrata, non dal modello AI.</p>`;
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // Analisi di riserva generata interamente in locale (nessuna chiamata di rete),
+    // usata quando l'API Anthropic non è raggiungibile. Combina calendario commerciale
+    // italiano stagionale con le statistiche del filtro corrente.
+    function generateLocalAiFallback(stats) {
+        const monthNum = moment().month() + 1; // 1-12
+        const monthName = moment().format('MMMM YYYY');
+
+        let scontoPerc = stats.totListino > 0 ? (stats.totSconto / stats.totListino * 100) : 0;
+        let storesArr = Object.keys(stats.dataStore);
+        let bestStore = storesArr.length ? storesArr.reduce((a, b) => stats.dataStore[a] > stats.dataStore[b] ? a : b) : null;
+        let bestDay = Object.keys(stats.dataDow).reduce((a, b) => stats.dataDow[a] > stats.dataDow[b] ? a : b);
+        let prodNames = Object.keys(stats.productStats);
+        let topProd = prodNames.length ? prodNames.reduce((a, b) => stats.productStats[a].incasso > stats.productStats[b].incasso ? a : b) : null;
+
+        let clientEntries = Object.keys(stats.clientStatsCurrentFilter).map(card => ({ card, ...stats.clientStatsCurrentFilter[card] }));
+        let atRiskCount = 0;
+        clientEntries.forEach(c => {
+            let g = clientSalesStats[c.card];
+            if (g && g.lastDateMoment && moment().diff(g.lastDateMoment, 'days') > 90) atRiskCount++;
+        });
+
+        // Sintesi stagionale + azioni operative concrete, calibrate sul mese corrente
+        // e sul calendario commerciale italiano (saldi, cambio stagione, Black Friday, Natale).
+        let seasonalContext = "";
+        let actions = [];
+
+        switch (monthNum) {
+            case 1:
+            case 2:
+                seasonalContext = "siamo nel pieno dei <strong>saldi invernali</strong>";
+                actions.push("🔥 <strong>Liquidazione stock:</strong> usa l'elenco clienti filtrato per lanciare messaggi mirati sugli ultimi ribassi e svuotare il magazzino invernale.");
+                if (scontoPerc < 20) actions.push("⚠️ <strong>Sconto sotto media:</strong> per il periodo dei saldi è basso; valuta di intensificare la promozione per liberare spazio a magazzino.");
+                actions.push("👗 <strong>Transizione:</strong> inizia a proporre i primi capi continuativi o di pre-collezione primaverile a margine pieno.");
+                break;
+            case 3:
+            case 4:
+            case 5:
+                seasonalContext = "siamo in piena <strong>primavera</strong> (periodo cerimonie)";
+                actions.push("🌸 <strong>Nuova collezione:</strong> comunica ai clienti più attivi l'arrivo delle vetrine primaverili.");
+                actions.push("👗 <strong>Cerimonie:</strong> spingi articoli eleganti e completi, proponendo accessori coordinati in cross-selling.");
+                if (topProd) actions.push(`📈 Il prodotto trainante è <em>"${topProd}"</em>: mettilo in evidenza in vetrina e sui canali social.`);
+                break;
+            case 6:
+            case 7:
+            case 8:
+                seasonalContext = "siamo nel periodo di <strong>collezione mare e saldi estivi</strong>";
+                actions.push("☀️ <strong>Capi leggeri:</strong> promuovi la collezione estate prima della partenza per le ferie.");
+                actions.push("💸 <strong>Saldi privati:</strong> invia un invito anticipato ai clienti più fedeli qualche giorno prima dell'apertura ufficiale dei saldi.");
+                if (scontoPerc > 40) actions.push("📉 <strong>Margini sotto pressione:</strong> lo sconto medio è molto alto; prova a bilanciare con cross-selling su accessori a prezzo pieno in cassa.");
+                break;
+            case 9:
+            case 10:
+                seasonalContext = "siamo nel periodo di <strong>rientro e cambio di stagione autunno-inverno</strong>";
+                if (scontoPerc > 25) {
+                    actions.push("📊 <strong>Gruppo sensibile allo sconto:</strong> proponi un coupon di benvenuto stagione (validità breve, es. 7 giorni) per portarli in negozio sulla nuova collezione a prezzo pieno.");
+                } else {
+                    actions.push("💎 <strong>Gruppo premium:</strong> invia il lookbook della nuova collezione autunno-inverno, senza bisogno di leve di prezzo.");
+                }
+                if (topProd) actions.push(`🧥 Il best-seller attuale è <em>"${topProd}"</em>: assicurati che ${bestStore ? `il negozio <strong>${bestStore}</strong>` : 'i punti vendita principali'} abbiano tutte le taglie esposte.`);
+                actions.push("🎒 <strong>Capi quotidiani:</strong> finiti i saldi, punta su jeans, felpe e capispalla leggeri per il rientro.");
+                break;
+            case 11:
+                seasonalContext = "siamo nel mese di <strong>Black Friday</strong>";
+                actions.push("🖤 <strong>Anteprima VIP:</strong> anticipa un accesso riservato al Black Friday per il segmento filtrato, prima dell'apertura al pubblico.");
+                actions.push("🥶 <strong>Capi invernali:</strong> spingi su capispalla e maglieria pesante, in genere con lo scontrino medio più alto del periodo.");
+                break;
+            case 12:
+                seasonalContext = "siamo nel pieno delle <strong>festività natalizie</strong>";
+                actions.push("🎄 <strong>Idee regalo:</strong> proponi gift card o piccoli accessori da cassa per aumentare i pezzi per scontrino.");
+                actions.push("🎁 <strong>Cross-selling:</strong> chi cerca un regalo è spesso disposto a premiare anche se stesso: proponilo attivamente in negozio.");
+                if (bestDay) actions.push(`📅 Il ${bestDay} è il giorno di picco: rinforza i turni in negozio per gestire code in cassa e confezioni regalo.`);
+                break;
+        }
+
+        if (bestStore && monthNum !== 9 && monthNum !== 10) {
+            actions.push(`🏆 Il negozio più performante nel gruppo filtrato è <strong>${bestStore}</strong>: valuta di replicarne le buone pratiche sugli altri punti vendita.`);
+        }
+        if (scontoPerc < 10 && monthNum !== 9 && monthNum !== 10) {
+            actions.push(`💎 Lo sconto medio è contenuto (${scontoPerc.toFixed(1)}%): buon segnale di salute del margine, mantieni la disciplina sui prezzi pieni.`);
+        }
+
+        let html = `<p><strong>Sintesi del periodo (${monthName}):</strong> incasso di ${formatEur(stats.totIncasso)} su ${stats.totCapi} capi venduti, sconto medio del ${scontoPerc.toFixed(1)}%. Considerando che ${seasonalContext}, ecco alcune azioni operative consigliate.</p>`;
+
+        html += "<ul>";
+        actions.forEach(a => html += `<li>${a}</li>`);
+        if (bestDay) html += `<li>📅 Il giorno di picco storico è <strong>${bestDay}</strong>: concentra su questo giorno eventuali attività promozionali o rinforzo del personale.</li>`;
+        html += "</ul>";
+
+        if (atRiskCount > 0) {
+            html += `<p><strong>Clienti a rischio abbandono:</strong> ${atRiskCount} clienti su ${clientEntries.length} nel gruppo filtrato non acquistano da oltre 90 giorni. Consiglio: esporta il CSV e contattali con un messaggio mirato al periodo in corso, magari con un piccolo incentivo dedicato al loro rientro.</p>`;
+        } else {
+            html += `<p><strong>Clienti a rischio abbandono:</strong> nessun cliente critico rilevato nel gruppo filtrato al momento.</p>`;
+        }
+
+        return html;
+    }
+
+    // Esporta in CSV l'elenco clienti (anagrafica + statistiche) risultante dai filtri correnti
+    function exportFilteredClients() {
+        const stats = window._lastReportStats || computeFilteredStats();
+        const cards = Object.keys(stats.clientStatsCurrentFilter);
+
+        if (cards.length === 0) {
+            alert("Nessun cliente trovato con i filtri correnti.");
+            return;
+        }
+
+        let rows = [["Card_CF", "Nome", "Cognome", "Citta", "Telefono", "Email", "Incasso_Periodo", "Capi_Periodo", "Sconto_Medio_Perc", "Ultima_Visita_Storico", "Store_Preferito_Storico"]];
+
+        cards.forEach(card => {
+            let cf = stats.clientStatsCurrentFilter[card];
+            let anag = clientDict[card] || {};
+            let global = clientSalesStats[card];
+            let scontoMedio = cf.listino > 0 ? ((cf.sconto / cf.listino) * 100).toFixed(1) : "0";
+            let recency = (global && global.lastDateMoment) ? (moment().diff(global.lastDateMoment, 'days') + " gg") : "-";
+            let favStore = "-";
+            if (global && Object.keys(global.stores).length > 0) {
+                favStore = Object.keys(global.stores).reduce((a, b) => global.stores[a] > global.stores[b] ? a : b);
+            }
+            rows.push([
+                card, anag.nome || "", anag.cognome || "", anag.citta || "", anag.tel || "", anag.mail || "",
+                cf.incasso.toFixed(2).replace('.', ','), cf.capi, scontoMedio, recency, favStore
+            ]);
+        });
+
+        let csvContent = rows.map(r => r.map(field => `"${String(field).replace(/"/g, '""')}"`).join(";")).join("\n");
+        let blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        let link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `clienti_export_${moment().format('YYYYMMDD_HHmmss')}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
     }
 </script>
 </body>
