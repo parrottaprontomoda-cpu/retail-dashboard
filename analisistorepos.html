@@ -14,7 +14,7 @@
         .kpi-value { font-size: 1.8rem; font-weight: 700; color: #2c3e50; }
         .kpi-sub { font-size: 0.85rem; color: #198754; font-weight: 500; }
         .kpi-sub.danger { color: #dc3545; }
-        #chart-container { position: relative; height: 300px; width: 100%; }
+        .chart-container { position: relative; height: 300px; width: 100%; }
         .header-title { background: linear-gradient(135deg, #0d6efd, #8a2be2); color: white; padding: 25px 0; border-radius: 12px; margin-bottom: 30px; box-shadow: 0 4px 15px rgba(13,110,253,0.3); }
         .filter-section { background: white; padding: 20px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         .ai-box { background: linear-gradient(to right, #f8f9fa, #e9ecef); border-left: 5px solid #8a2be2; padding: 20px; border-radius: 8px; }
@@ -96,11 +96,20 @@
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label fw-bold" style="color: #8a2be2;">🔑 API Key Google Gemini:</label>
-                            <div class="input-group">
-                                <input type="password" id="geminiApiKeyInput" class="form-control" placeholder="Inserisci la tua API Key...">
-                                <button class="btn btn-primary" type="button" onclick="updateUrls()"><i class="fas fa-save me-1"></i> Salva e Connetti</button>
-                            </div>
-                            <small class="text-muted d-block mt-1">Crea la chiave gratuitamente su <a href="https://aistudio.google.com/" target="_blank">Google AI Studio</a></small>
+                            <input type="password" id="geminiApiKeyInput" class="form-control mb-1" placeholder="Inserisci la tua API Key (opzionale)...">
+                            <small class="text-muted d-block mt-1">Crea la chiave gratuitamente su <a href="https://aistudio.google.com/" target="_blank">Google AI Studio</a>. Salvata solo in locale nel tuo browser.</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Box Prompt Personalizzabile AI -->
+                    <div class="row mt-2">
+                        <div class="col-12 mb-3">
+                            <label class="form-label fw-bold" style="color: #8a2be2;"><i class="fas fa-brain me-1"></i> Prompt Personalizzato per Google Gemini:</label>
+                            <textarea id="aiPromptInput" class="form-control" rows="5" placeholder="Inserisci qui le istruzioni personalizzate per l'IA..."></textarea>
+                            <small class="text-muted d-block mt-1">Modifica questo testo per cambiare il modo in cui l'Intelligenza Artificiale risponde e quali consigli commerciali ti fornisce.</small>
+                        </div>
+                        <div class="col-12 text-end">
+                            <button class="btn btn-primary" type="button" onclick="updateUrls()"><i class="fas fa-save me-1"></i> Salva e Connetti</button>
                         </div>
                     </div>
                 </div>
@@ -367,7 +376,7 @@
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title fw-bold"><i class="fas fa-store me-2 text-primary"></i>Incassi per Negozio</h5>
-                        <div id="chart-container"><canvas id="storeChart"></canvas></div>
+                        <div class="chart-container"><canvas id="storeChart"></canvas></div>
                     </div>
                 </div>
             </div>
@@ -375,7 +384,7 @@
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title fw-bold"><i class="fas fa-calendar-alt me-2 text-success"></i>Incassi per Mese</h5>
-                        <div id="chart-container"><canvas id="monthChart"></canvas></div>
+                        <div class="chart-container"><canvas id="monthChart"></canvas></div>
                     </div>
                 </div>
             </div>
@@ -387,7 +396,7 @@
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title fw-bold"><i class="fas fa-calendar-day me-2 text-warning"></i>Incassi per Giorno della Settimana</h5>
-                        <div id="chart-container"><canvas id="dowChart"></canvas></div>
+                        <div class="chart-container"><canvas id="dowChart"></canvas></div>
                     </div>
                 </div>
             </div>
@@ -419,7 +428,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/locale/it.min.js"></script>
 
 <script>
-    // INIZIALIZZAZIONE FUNZIONI GLOBALI (Risolve l'errore "formatEur is not defined")
+    // INIZIALIZZAZIONE FUNZIONI GLOBALI E UTILS
     moment.locale('it');
     
     function formatEur(val) {
@@ -445,13 +454,22 @@
         return null;
     }
 
-    // Costanti e Variabili Globali
+    // Default URLs e Prompt AI
     const DEFAULT_VENDITE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRSwk2BhmMriyZotR2gLYtOkHic0lM3-0efkhaKhJ7gxDyQyqbGF0noTp9RV9GQgEHWTeuSskT57sVI/pub?gid=1352769388&single=true&output=csv";
     const DEFAULT_CLIENTI_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1650500047&single=true&output=csv";
-    
+    const DEFAULT_AI_PROMPT = `Sei un Senior Retail Manager in Italia. Analizza i dati di vendita forniti considerando la stagionalità attuale (es. festività, saldi, cambi stagione, rientro a settembre, Black Friday, Natale).
+Rispondi SEMPRE e SOLO in formato HTML valido per l'inclusione in una pagina web (usa tag come <p>, <ul>, <li>, <strong>, <em>, <h6 class="text-primary mt-3 fw-bold">). ASSOLUTAMENTE NON usare formattazione Markdown (niente \`\`\`html o **).
+
+Struttura la tua risposta esplicitamente in questi 4 punti:
+1. Sintesi Commerciale: 2-3 righe sull'andamento del segmento in relazione alla stagione.
+2. Strategia di Prodotto: Come spingere il best-seller o smaltire le giacenze considerando lo sconto medio rilevato.
+3. CRM & Fidelizzazione: Fornisci uno script pratico (testo messaggio WhatsApp/Email) per recuperare i clienti a rischio abbandono.
+4. Azioni Top Clienti: Suggerisci un'azione di up-selling o una coccola riservata per i top clienti del segmento.`;
+
     document.getElementById('urlVenditeInput').value = localStorage.getItem('urlVendite') || DEFAULT_VENDITE_URL;
     document.getElementById('urlClientiInput').value = localStorage.getItem('urlClienti') || DEFAULT_CLIENTI_URL;
     document.getElementById('geminiApiKeyInput').value = localStorage.getItem('geminiApiKey') || "";
+    document.getElementById('aiPromptInput').value = localStorage.getItem('aiPrompt') || DEFAULT_AI_PROMPT;
 
     let rawData = [];
     let columns = [];
@@ -484,6 +502,7 @@
         localStorage.setItem('urlVendite', document.getElementById('urlVenditeInput').value.trim());
         localStorage.setItem('urlClienti', document.getElementById('urlClientiInput').value.trim());
         localStorage.setItem('geminiApiKey', document.getElementById('geminiApiKeyInput').value.trim());
+        localStorage.setItem('aiPrompt', document.getElementById('aiPromptInput').value.trim());
         
         let collapseEl = document.getElementById('collapseSources');
         let bsCollapse = bootstrap.Collapse.getInstance(collapseEl);
@@ -523,9 +542,7 @@
             if (clientsCsv) {
                 Papa.parse(clientsCsv, {
                     header: true, skipEmptyLines: true,
-                    complete: function(cRes) {
-                        buildClientDict(cRes);
-                    }
+                    complete: function(cRes) { buildClientDict(cRes); }
                 });
             }
 
@@ -652,51 +669,41 @@
     }
 
     function setupFilters() {
-        const selData = document.getElementById('colData');
-        const selTrans = document.getElementById('colTransazione');
-        const selDesc = document.getElementById('colDescrizione');
-        const selCard = document.getElementById('colCardCliente');
-        const selCodInt = document.getElementById('colCodInt');
-        const selEan = document.getElementById('colEan');
-        const selStore = document.getElementById('colStore');
-        const selContante = document.getElementById('colContante');
-        const selPos = document.getElementById('colPos');
-        const selCredito = document.getElementById('colCredito');
+        const selects = [
+            'colData', 'colTransazione', 'colDescrizione', 'colCardCliente', 'colCodInt', 
+            'colEan', 'colStore', 'colContante', 'colPos', 'colCredito'
+        ];
         
-        selData.innerHTML = ''; selTrans.innerHTML = ''; selDesc.innerHTML = ''; 
-        selCard.innerHTML = ''; selCodInt.innerHTML = ''; selEan.innerHTML = '';
-        selStore.innerHTML = ''; selContante.innerHTML = ''; selPos.innerHTML = ''; selCredito.innerHTML = '';
+        selects.forEach(id => document.getElementById(id).innerHTML = '');
 
         columns.forEach(col => {
-            selData.appendChild(new Option(col, col));
-            selTrans.appendChild(new Option(col, col));
-            selDesc.appendChild(new Option(col, col));
-            selCard.appendChild(new Option(col, col));
-            selCodInt.appendChild(new Option(col, col));
-            selEan.appendChild(new Option(col, col));
-            selStore.appendChild(new Option(col, col));
-            selContante.appendChild(new Option(col, col));
-            selPos.appendChild(new Option(col, col));
-            selCredito.appendChild(new Option(col, col));
+            selects.forEach(id => document.getElementById(id).appendChild(new Option(col, col)));
         });
         
-        selData.value = COL_DATA; selTrans.value = COL_TRANS; selDesc.value = COL_DESC;
-        selCard.value = COL_CARD; selCodInt.value = COL_COD_INT; selEan.value = COL_EAN;
-        selStore.value = COL_STORE; selContante.value = COL_CONTANTE; selPos.value = COL_POS; selCredito.value = COL_CREDITO;
+        document.getElementById('colData').value = COL_DATA;
+        document.getElementById('colTransazione').value = COL_TRANS;
+        document.getElementById('colDescrizione').value = COL_DESC;
+        document.getElementById('colCardCliente').value = COL_CARD;
+        document.getElementById('colCodInt').value = COL_COD_INT;
+        document.getElementById('colEan').value = COL_EAN;
+        document.getElementById('colStore').value = COL_STORE;
+        document.getElementById('colContante').value = COL_CONTANTE;
+        document.getElementById('colPos').value = COL_POS;
+        document.getElementById('colCredito').value = COL_CREDITO;
 
         extractMonthsAndStores();
         document.getElementById('filterSection').classList.remove('d-none');
         document.getElementById('summaryToggleWrapper').classList.remove('d-none');
         
-        selTrans.addEventListener('change', function() { COL_TRANS = this.value; buildGlobalCRMStats(); updateDashboard(); updateDailySummary(); });
-        selDesc.addEventListener('change', function() { COL_DESC = this.value; buildGlobalCRMStats(); updateDashboard(); });
-        selCard.addEventListener('change', function() { COL_CARD = this.value; buildGlobalCRMStats(); updateDashboard(); });
-        selCodInt.addEventListener('change', function() { COL_COD_INT = this.value; updateDashboard(); });
-        selEan.addEventListener('change', function() { COL_EAN = this.value; updateDashboard(); });
-        selStore.addEventListener('change', function() { COL_STORE = this.value; buildGlobalCRMStats(); updateDashboard(); extractMonthsAndStores(); });
-        selContante.addEventListener('change', function() { COL_CONTANTE = this.value; updateDailySummary(); });
-        selPos.addEventListener('change', function() { COL_POS = this.value; updateDailySummary(); });
-        selCredito.addEventListener('change', function() { COL_CREDITO = this.value; updateDailySummary(); });
+        document.getElementById('colTransazione').addEventListener('change', function() { COL_TRANS = this.value; buildGlobalCRMStats(); updateDashboard(); updateDailySummary(); });
+        document.getElementById('colDescrizione').addEventListener('change', function() { COL_DESC = this.value; buildGlobalCRMStats(); updateDashboard(); });
+        document.getElementById('colCardCliente').addEventListener('change', function() { COL_CARD = this.value; buildGlobalCRMStats(); updateDashboard(); });
+        document.getElementById('colCodInt').addEventListener('change', function() { COL_COD_INT = this.value; updateDashboard(); });
+        document.getElementById('colEan').addEventListener('change', function() { COL_EAN = this.value; updateDashboard(); });
+        document.getElementById('colStore').addEventListener('change', function() { COL_STORE = this.value; buildGlobalCRMStats(); updateDashboard(); extractMonthsAndStores(); });
+        document.getElementById('colContante').addEventListener('change', function() { COL_CONTANTE = this.value; updateDailySummary(); });
+        document.getElementById('colPos').addEventListener('change', function() { COL_POS = this.value; updateDailySummary(); });
+        document.getElementById('colCredito').addEventListener('change', function() { COL_CREDITO = this.value; updateDailySummary(); });
     }
     
     function changeDataColumn() {
@@ -958,17 +965,17 @@
         document.getElementById('reportStatsRow').innerHTML = html;
 
         document.getElementById('exportCount').textContent = clientCards.length;
-        document.getElementById('aiReportModalBox').innerHTML = '<div class="ai-insight text-muted"><em>Premi "Genera Analisi AI del Periodo" per interrogare il modello Google Gemini.</em></div>';
+        document.getElementById('aiReportModalBox').innerHTML = '<div class="ai-insight text-muted"><em>Premi "Genera Analisi AI" per interrogare il modello Google Gemini basato sul periodo attuale e sui tuoi dati.</em></div>';
     }
     
     document.getElementById('reportModal').addEventListener('show.bs.modal', prepareReportModal);
 
-    // FUNZIONE DI CHIAMATA ALLA VERA API DI GOOGLE GEMINI
     async function generateAiAnalysis() {
         const stats = window._lastReportStats || computeFilteredStats();
         const box = document.getElementById('aiReportModalBox');
         const btn = document.getElementById('btnGenAi');
         const apiKey = document.getElementById('geminiApiKeyInput').value.trim();
+        const userPrompt = document.getElementById('aiPromptInput').value.trim() || DEFAULT_AI_PROMPT;
 
         if (stats.filteredData.length === 0) {
             box.innerHTML = '<p class="text-muted mb-0"><em>Nessun dato nel filtro corrente: modifica i parametri di ricerca prima di generare l\'analisi.</em></p>';
@@ -977,12 +984,12 @@
 
         if (!apiKey) {
             box.innerHTML = generateLocalSeasonalAi(stats) + 
-                `<div class="alert alert-warning mt-3 mb-0 small"><i class="fas fa-key me-1"></i><strong>Manca la Chiave API:</strong> Per usare il vero modello di Intelligenza Artificiale, apri "Collegamento Sorgenti Dati e Google Gemini" in alto, inserisci una chiave API gratuita di Google Gemini e clicca "Salva e Connetti". Nel frattempo, leggi l'analisi generata internamente qui sopra.</div>`;
+                `<div class="alert alert-warning mt-3 mb-0 small"><i class="fas fa-key me-1"></i><strong>Manca la Chiave API:</strong> Per usare il vero modello di Intelligenza Artificiale e il Prompt Personalizzato, apri "Collegamento Sorgenti Dati e Google Gemini" in alto, inserisci una chiave API gratuita di Google Gemini e clicca "Salva e Connetti". Nel frattempo, leggi l'analisi generata internamente qui sopra.</div>`;
             return;
         }
 
         btn.disabled = true;
-        box.innerHTML = '<div class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin fa-2x mb-2"></i><br>Consulto il modello Google Gemini 1.5 in corso...</div>';
+        box.innerHTML = '<div class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin fa-2x mb-2"></i><br>Consulto il modello Google Gemini in corso...</div>';
 
         try {
             let scontoPerc = stats.totListino > 0 ? (stats.totSconto / stats.totListino * 100) : 0;
@@ -1017,8 +1024,9 @@
             if(stats.searchCard) parts.push(`cliente ${stats.searchCard}`);
             if(parts.length) filterDescr = parts.join(', ');
 
-            const promptText = `Sei un consulente retail esperto per negozi di abbigliamento. Oggi è il ${today} (${monthName}).
-Dati del periodo attualmente filtrato (${filterDescr}):
+            const promptText = `Oggi è il ${today} (${monthName}).
+
+DATI DEL PERIODO ATTUALMENTE FILTRATO (${filterDescr}):
 - Incasso totale: ${formatEur(stats.totIncasso)}
 - Capi venduti: ${stats.totCapi}
 - Sconto medio applicato: ${scontoPerc.toFixed(1)}%
@@ -1029,19 +1037,10 @@ Dati del periodo attualmente filtrato (${filterDescr}):
 - Clienti a rischio abbandono (> 90 gg): ${atRiskCount}
 - Top 3 clienti: ${topClientsText}
 
-Considera gli eventi e le stagionalità italiane del periodo (es. a settembre il back to school/fine saldi, a dicembre il Natale, a luglio/agosto i saldi, a novembre il black friday, in primavera la pasqua e le cerimonie, ecc.).
+ISTRUZIONI PER L'ANALISI:
+${userPrompt}`;
 
-Scrivi in italiano e restituisci SOLO ed esclusivamente la tua risposta nel seguente formato HTML esatto (senza markdown):
-<p><strong>Sintesi del periodo:</strong> [scrivi massimo 3 righe sull'andamento in relazione al periodo stagionale]</p>
-<h6 class="text-primary mt-3 fw-bold">Consigli Operativi Stagionali:</h6>
-<ul>
-<li>[scrivi un consiglio pratico sul prodotto più venduto]</li>
-<li>[scrivi un consiglio strategico promozionale legato al mese corrente]</li>
-<li>[scrivi una strategia specifica per recuperare i clienti a rischio abbandono inviando un messaggio o mail]</li>
-<li>[scrivi un consiglio su come coccolare i top clienti]</li>
-</ul>`;
-
-            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -1050,21 +1049,30 @@ Scrivi in italiano e restituisci SOLO ed esclusivamente la tua risposta nel segu
             });
 
             if (!response.ok) {
-                if (response.status === 400 || response.status === 403) throw new Error("API Key non valida o permessi insufficienti.");
-                throw new Error("Errore API Gemini (" + response.status + ")");
+                let errBody = null;
+                try { errBody = await response.json(); } catch(e) {}
+                let apiMsg = errBody && errBody.error && errBody.error.message ? errBody.error.message : null;
+                if (response.status === 400 || response.status === 403) throw new Error(apiMsg || "API Key non valida o permessi insufficienti.");
+                if (response.status === 404) throw new Error("Modello Gemini non trovato o non più disponibile (Google aggiorna spesso i nomi dei modelli). " + (apiMsg || ""));
+                throw new Error(apiMsg || ("Errore API Gemini (" + response.status + ")"));
             }
 
             const data = await response.json();
-            let text = data.candidates[0].content.parts[0].text;
-            
-            // Pulisci eventuali tag markdown backticks in caso Gemini li inserisca
+            let candidate = data.candidates && data.candidates[0];
+            let text = candidate && candidate.content && candidate.content.parts && candidate.content.parts[0] && candidate.content.parts[0].text;
+
+            if (!text) {
+                let finishReason = candidate && candidate.finishReason;
+                throw new Error(finishReason ? `Risposta vuota dal modello (motivo: ${finishReason}).` : "Risposta vuota o in un formato inatteso dal modello Gemini.");
+            }
+
             text = text.replace(/```html/g, '').replace(/```/g, '');
 
             box.innerHTML = text;
 
         } catch (err) {
             box.innerHTML = generateLocalSeasonalAi(stats) +
-                `<div class="alert alert-danger mt-3 mb-0 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>Connessione a Gemini fallita:</strong> ${err.message}. Assicurati di aver inserito una chiave API valida. Nel frattempo è stata fornita l'analisi statistica integrata.</div>`;
+                `<div class="alert alert-danger mt-3 mb-0 small"><i class="fas fa-exclamation-triangle me-1"></i><strong>Connessione a Gemini fallita:</strong> ${err.message}. Assicurati di aver inserito una chiave API valida. Nel frattempo è stata fornita l'analisi statistica di default.</div>`;
         } finally {
             btn.disabled = false;
         }
@@ -1072,8 +1080,8 @@ Scrivi in italiano e restituisci SOLO ed esclusivamente la tua risposta nel segu
 
     // Analisi di riserva locale in caso l'API Key manchi o fallisca
     function generateLocalSeasonalAi(stats) {
-        let currentMonthNum = moment().month() + 1; // 1-12
-        let currentMonthName = moment().format('MMMM'); // es. "Settembre"
+        let currentMonthNum = moment().month() + 1; 
+        let currentMonthName = moment().format('MMMM'); 
         let currentYear = moment().year();
 
         let scontoPerc = stats.totListino > 0 ? (stats.totSconto / stats.totListino * 100) : 0;
@@ -1160,7 +1168,6 @@ Scrivi in italiano e restituisci SOLO ed esclusivamente la tua risposta nel segu
         return html;
     }
 
-    // Esporta in CSV l'elenco clienti (anagrafica + statistiche) risultante dai filtri correnti
     function exportFilteredClients() {
         const stats = window._lastReportStats || computeFilteredStats();
         const cards = Object.keys(stats.clientStatsCurrentFilter);
@@ -1325,8 +1332,6 @@ Scrivi in italiano e restituisci SOLO ed esclusivamente la tua risposta nel segu
         let dataStore = {}; let dataMonth = {};
         let dataDow = { 'Lunedì':0, 'Martedì':0, 'Mercoledì':0, 'Giovedì':0, 'Venerdì':0, 'Sabato':0, 'Domenica':0 };
         
-        let productStats = {}; 
-        clientStatsCurrentFilter = {}; 
         let filteredData = [];
 
         rawData.forEach(row => {
@@ -1378,27 +1383,6 @@ Scrivi in italiano e restituisci SOLO ed esclusivamente la tua risposta nel segu
                 let dow = mDate.format('dddd');
                 dow = dow.charAt(0).toUpperCase() + dow.slice(1);
                 if(dataDow[dow] !== undefined) dataDow[dow] += rigaNetto;
-            }
-            
-            if(descVal) {
-                if(!productStats[descVal]) productStats[descVal] = { qta: 0, incasso: 0 };
-                productStats[descVal].qta += qta;
-                productStats[descVal].incasso += rigaNetto;
-            }
-            
-            if (cardValRaw !== '') {
-                if(!clientStatsCurrentFilter[cardValUpper]) {
-                    clientStatsCurrentFilter[cardValUpper] = { incasso: 0, capi: 0, sconto: 0, listino: 0, lastDateMoment: null };
-                }
-                clientStatsCurrentFilter[cardValUpper].incasso += rigaNetto;
-                clientStatsCurrentFilter[cardValUpper].capi += qta;
-                clientStatsCurrentFilter[cardValUpper].sconto += scontoRiga;
-                clientStatsCurrentFilter[cardValUpper].listino += rigaListino;
-                if(mDate.isValid()) {
-                    if (!clientStatsCurrentFilter[cardValUpper].lastDateMoment || mDate.isAfter(clientStatsCurrentFilter[cardValUpper].lastDateMoment)) {
-                        clientStatsCurrentFilter[cardValUpper].lastDateMoment = mDate;
-                    }
-                }
             }
         });
 
