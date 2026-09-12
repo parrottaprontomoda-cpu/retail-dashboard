@@ -423,20 +423,44 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/locale/it.min.js"></script>
 
 <script>
+    // Inizializzazione Moment e Funzioni di formattazione GLOBALI
     moment.locale('it');
     
+    function formatEur(val) {
+        return '€ ' + (Number(val) || 0).toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function parseEuro(valString) {
+        if(!valString) return 0;
+        let s = String(valString).replace('€', '').trim();
+        if(s.includes(',') && s.includes('.')) { s = s.replace(/\./g, '').replace(',', '.'); } 
+        else if (s.includes(',')) { s = s.replace(',', '.'); }
+        let f = parseFloat(s);
+        return isNaN(f) ? 0 : f;
+    }
+
+    function guessCol(cols, keywords) {
+        for(let c of cols) {
+            let low = c.toLowerCase();
+            for(let kw of keywords) {
+                if(low.includes(kw)) return c;
+            }
+        }
+        return null;
+    }
+
     // Default URLs
     const DEFAULT_VENDITE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRSwk2BhmMriyZotR2gLYtOkHic0lM3-0efkhaKhJ7gxDyQyqbGF0noTp9RV9GQgEHWTeuSskT57sVI/pub?gid=1352769388&single=true&output=csv";
     const DEFAULT_CLIENTI_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1650500047&single=true&output=csv";
     
-    // Inizializza URL da LocalStorage o Default
     document.getElementById('urlVenditeInput').value = localStorage.getItem('urlVendite') || DEFAULT_VENDITE_URL;
     document.getElementById('urlClientiInput').value = localStorage.getItem('urlClienti') || DEFAULT_CLIENTI_URL;
     
     let rawData = [];
     let columns = [];
-    let clientDict = {}; // Mappa Card/CF -> Dati Anagrafici
-    let clientSalesStats = {}; // Cache Globale CRM per AI indipendente dai filtri temporali
+    let clientDict = {}; 
+    let clientSalesStats = {}; 
+    let clientStatsCurrentFilter = {};
     
     // Configurazione Colonne Vendite
     let COL_DATA = null;   
@@ -531,7 +555,7 @@
                     COL_CARD    = columns[15] || columns[0]; 
                     COL_STORE   = columns[16] || columns[0]; 
                     
-                    buildGlobalCRMStats();
+                    buildGlobalCRMStats(); 
                     setupFilters();
                     updateDashboard();
                     
@@ -544,16 +568,6 @@
             alert("Errore di connessione. Dettaglio: " + err.message);
             btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Riprova';
         });
-    }
-
-    function guessCol(cols, keywords) {
-        for(let c of cols) {
-            let low = c.toLowerCase();
-            for(let kw of keywords) {
-                if(low.includes(kw)) return c;
-            }
-        }
-        return null;
     }
 
     function buildClientDict(res) {
@@ -807,7 +821,7 @@
         let dataStore = {}, dataMonth = {};
         let dataDow = { 'Lunedì':0, 'Martedì':0, 'Mercoledì':0, 'Giovedì':0, 'Venerdì':0, 'Sabato':0, 'Domenica':0 };
         let productStats = {};
-        let clientStatsCurrentFilter = {};
+        clientStatsCurrentFilter = {};
         let filteredData = [];
 
         rawData.forEach(row => {
@@ -854,11 +868,18 @@
             }
             
             if (cardValRaw !== '') {
-                if(!clientStatsCurrentFilter[cardValUpper]) clientStatsCurrentFilter[cardValUpper] = { incasso: 0, capi: 0, sconto: 0, listino: 0 };
+                if(!clientStatsCurrentFilter[cardValUpper]) {
+                    clientStatsCurrentFilter[cardValUpper] = { incasso: 0, capi: 0, sconto: 0, listino: 0, lastDateMoment: null };
+                }
                 clientStatsCurrentFilter[cardValUpper].incasso += rigaNetto;
                 clientStatsCurrentFilter[cardValUpper].capi += qta;
                 clientStatsCurrentFilter[cardValUpper].sconto += scontoRiga;
                 clientStatsCurrentFilter[cardValUpper].listino += rigaListino;
+                if(mDate.isValid()) {
+                    if (!clientStatsCurrentFilter[cardValUpper].lastDateMoment || mDate.isAfter(clientStatsCurrentFilter[cardValUpper].lastDateMoment)) {
+                        clientStatsCurrentFilter[cardValUpper].lastDateMoment = mDate;
+                    }
+                }
             }
 
             if(!dataStore[storeVal]) dataStore[storeVal] = 0;
@@ -980,7 +1001,7 @@
             if (g && g.lastDateMoment && moment().diff(g.lastDateMoment, 'days') > 90) atRiskCount++;
         });
 
-        // 1. SINTESI STAGIONALE DINAMICA (Siamo a Settembre 2026, quindi entra nel caso 9)
+        // SINTESI STAGIONALE DINAMICA (Azione basata sul mese corrente)
         let seasonalContext = "";
         let actions = [];
 
@@ -1011,11 +1032,11 @@
             case 9:
             case 10:
                 seasonalContext = "Ci troviamo nel periodo del <strong>Rientro, Back to School e Nuova Stagione</strong>.";
-                actions.push("🎒 <strong>Back to Work/School:</strong> I saldi sono finiti. È il momento ideale per spingere capi quotidiani, jeans, felpe e capispalla leggeri.");
+                actions.push("🎒 <strong>Back to Work/School:</strong> I saldi sono finiti in Italia ai primi di settembre. È il momento ideale per spingere capi quotidiani, jeans, felpe e capispalla leggeri.");
                 if (scontoPerc > 25) {
-                    actions.push("📊 <strong>Azione Promozionale:</strong> Questo gruppo è molto sensibile ai saldi. Dato che la nuova merce è a prezzo pieno, proponi loro uno speciale coupon 'Welcome Autumn 15%' valido solo per 7 giorni per invogliarli a entrare.");
+                    actions.push("📊 <strong>Azione Promozionale:</strong> Questo gruppo è storicamente sensibile ai saldi. Dato che la nuova merce è a prezzo pieno, proponi loro uno speciale coupon 'Welcome Autumn 15%' valido solo per 7 giorni per invogliarli a entrare.");
                 } else {
-                    actions.push("💎 <strong>Azione Premium:</strong> I clienti filtrati acquistano volentieri a prezzo pieno. Invia una mail/WhatsApp con il lookbook della Nuova Collezione Autunno-Inverno.");
+                    actions.push("💎 <strong>Azione Premium:</strong> I clienti filtrati acquistano volentieri a prezzo pieno. Invia una mail/WhatsApp con il lookbook esclusivo della Nuova Collezione Autunno-Inverno.");
                 }
                 if (topProd !== '-') actions.push(`🧥 Il best-seller attuale è <strong>${topProd}</strong>: assicurati che gli store (soprattutto ${bestStore}) abbiano tutte le taglie esposte in evidenza.`);
                 break;
@@ -1042,13 +1063,51 @@
         html += `<div class="mt-4 p-3 bg-white rounded border border-warning border-opacity-50">
             <h6 class="text-warning fw-bold mb-2"><i class="fas fa-exclamation-triangle me-2"></i>Recupero Clienti a Rischio</h6>`;
         if (atRiskCount > 0) {
-            html += `<p class="mb-0 small text-secondary">Hai filtrato un gruppo in cui <strong>${atRiskCount} clienti</strong> (su ${clientEntries.length}) non vengono in negozio da oltre 3 mesi. <strong>Consiglio:</strong> Usa il pulsante verde di esportazione per estrarre questo CSV e caricalo nel tuo sistema di invio messaggi. Invia loro la dicitura: <em>"Ci manchi! Passa a trovarci questa settimana e ti abbiamo riservato una sorpresa sulle nuove collezioni in store."</em></p>`;
+            html += `<p class="mb-0 small text-secondary">Hai filtrato un gruppo in cui <strong>${atRiskCount} clienti</strong> (su ${clientEntries.length}) non vengono in negozio da oltre 3 mesi. <strong>Consiglio operativo:</strong> Usa il pulsante verde di esportazione sottostante per estrarre questo CSV e caricalo nel tuo sistema di invio messaggi. Invia loro la dicitura: <em>"Ci manchi! Passa a trovarci questa settimana e ti abbiamo riservato una sorpresa sulle nuove collezioni in store."</em></p>`;
         } else {
-            html += `<p class="mb-0 small text-secondary">La fedeltà dei clienti attualmente filtrati è ottima, non si registrano criticità di abbandono nel breve termine.</p>`;
+            html += `<p class="mb-0 small text-secondary">La fedeltà dei clienti attualmente filtrati è ottima, non si registrano criticità di abbandono nel breve termine in questo gruppo.</p>`;
         }
         html += `</div>`;
 
         return html;
+    }
+
+    function exportFilteredClients() {
+        const stats = window._lastReportStats || computeFilteredStats();
+        const cards = Object.keys(stats.clientStatsCurrentFilter);
+
+        if (cards.length === 0) {
+            alert("Nessun cliente trovato con i filtri correnti.");
+            return;
+        }
+
+        let rows = [["Card/CF", "Nome", "Cognome", "Città", "Telefono", "Email", "Incasso Periodo", "Capi Periodo", "Sconto Medio Periodo %", "Ultima Visita (storico)", "Store Preferito (storico)"]];
+
+        cards.forEach(card => {
+            let cf = stats.clientStatsCurrentFilter[card];
+            let anag = clientDict[card] || {};
+            let global = clientSalesStats[card];
+            let scontoMedio = cf.listino > 0 ? ((cf.sconto / cf.listino) * 100).toFixed(1) : "0";
+            let recency = (global && global.lastDateMoment) ? (moment().diff(global.lastDateMoment, 'days') + " gg") : "-";
+            let favStore = "-";
+            if (global && Object.keys(global.stores).length > 0) {
+                favStore = Object.keys(global.stores).reduce((a, b) => global.stores[a] > global.stores[b] ? a : b);
+            }
+            rows.push([
+                card, anag.nome || "", anag.cognome || "", anag.citta || "", anag.tel || "", anag.mail || "",
+                cf.incasso.toFixed(2).replace('.', ','), cf.capi, scontoMedio, recency, favStore
+            ]);
+        });
+
+        let csvContent = rows.map(r => r.map(field => `"${String(field).replace(/"/g, '""')}"`).join(";")).join("\n");
+        let blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        let link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `clienti_export_${moment().format('YYYYMMDD_HHmmss')}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
     }
 
     function filterDashboardByStoreAndDate(storeName, dateVal) {
@@ -1086,15 +1145,6 @@
     function debounceUpdate() {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => { updateDashboard(); }, 400);
-    }
-
-    function parseEuro(valString) {
-        if(!valString) return 0;
-        let s = String(valString).replace('€', '').trim();
-        if(s.includes(',') && s.includes('.')) { s = s.replace(/\./g, '').replace(',', '.'); } 
-        else if (s.includes(',')) { s = s.replace(',', '.'); }
-        let f = parseFloat(s);
-        return isNaN(f) ? 0 : f;
     }
 
     function renderClientCrmProfile(searchCard) {
@@ -1261,44 +1311,6 @@
         renderChart('dowChart', 'bar', dataDow, 'Incasso per Giorno (€)', '#ffc107');
 
         updateTable(filteredData);
-    }
-
-    function exportFilteredClients() {
-        const stats = window._lastReportStats || computeFilteredStats();
-        const cards = Object.keys(stats.clientStatsCurrentFilter);
-
-        if (cards.length === 0) {
-            alert("Nessun cliente trovato con i filtri correnti.");
-            return;
-        }
-
-        let rows = [["Card_CF", "Nome", "Cognome", "Citta", "Telefono", "Email", "Incasso_Periodo", "Capi_Periodo", "Sconto_Medio_Perc", "Ultima_Visita_Storico", "Store_Preferito_Storico"]];
-
-        cards.forEach(card => {
-            let cf = stats.clientStatsCurrentFilter[card];
-            let anag = clientDict[card] || {};
-            let global = clientSalesStats[card];
-            let scontoMedio = cf.listino > 0 ? ((cf.sconto / cf.listino) * 100).toFixed(1) : "0";
-            let recency = (global && global.lastDateMoment) ? (moment().diff(global.lastDateMoment, 'days') + " gg") : "-";
-            let favStore = "-";
-            if (global && Object.keys(global.stores).length > 0) {
-                favStore = Object.keys(global.stores).reduce((a, b) => global.stores[a] > global.stores[b] ? a : b);
-            }
-            rows.push([
-                card, anag.nome || "", anag.cognome || "", anag.citta || "", anag.tel || "", anag.mail || "",
-                cf.incasso.toFixed(2).replace('.', ','), cf.capi, scontoMedio, recency, favStore
-            ]);
-        });
-
-        let csvContent = rows.map(r => r.map(field => `"${String(field).replace(/"/g, '""')}"`).join(";")).join("\n");
-        let blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
-        let link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `Export_Clienti_Target_${moment().format('YYYYMMDD_HHmm')}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(link.href);
     }
 
     function renderChart(canvasId, type, dataObj, label, color) {
