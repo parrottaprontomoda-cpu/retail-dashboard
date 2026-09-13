@@ -3,120 +3,168 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Ordine Divise Scolastiche</title>
+    <title>Ordine Divise Scolastiche - Gerace</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --primary: #ff6b6b;
+        --secondary: #4ecdc4;
+        --dark: #2d3436;
+        --light: #f7f9fc;
+        --white: #ffffff;
+      }
       body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        background-color: #f7f9fa;
-        color: #333;
-        padding: 20px;
+        font-family: 'Nunito', sans-serif;
+        background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
+        color: var(--dark);
+        padding: 20px 10px;
         margin: 0;
       }
       .container {
-        max-width: 600px;
+        max-width: 650px;
         margin: 0 auto;
-        background: #ffffff;
-        padding: 25px 30px;
-        border-radius: 10px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        background: var(--white);
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        overflow: hidden;
       }
-      h2 {
+      /* Immagine di copertina (Gerace) */
+      .header-image {
+        width: 100%;
+        height: 220px;
+        background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Gerace_panorama.jpg/800px-Gerace_panorama.jpg') no-repeat center center;
+        background-size: cover;
+        position: relative;
+      }
+      .header-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+        padding: 30px 20px 15px;
+        color: white;
         text-align: center;
-        color: #2c3e50;
-        margin-bottom: 25px;
+      }
+      .header-overlay h2 {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+      .form-content {
+        padding: 30px;
       }
       .form-group {
-        margin-bottom: 18px;
+        margin-bottom: 20px;
       }
       label {
         display: block;
-        margin-bottom: 6px;
+        margin-bottom: 8px;
         font-weight: 600;
         font-size: 14px;
+        color: #555;
       }
       input[type="text"], input[type="email"], input[type="tel"], input[type="number"], select {
         width: 100%;
-        padding: 10px;
-        border: 1px solid #ced4da;
-        border-radius: 5px;
+        padding: 12px;
+        border: 2px solid #e1e5ee;
+        border-radius: 8px;
         box-sizing: border-box;
         font-size: 15px;
+        font-family: 'Nunito', sans-serif;
+        transition: border-color 0.3s, box-shadow 0.3s;
+      }
+      input:focus, select:focus {
+        border-color: var(--secondary);
+        box-shadow: 0 0 0 3px rgba(78, 205, 196, 0.2);
+        outline: none;
       }
       input[readonly] {
-        background-color: #e9ecef;
+        background-color: #f8f9fa;
+        color: #7f8c8d;
         cursor: not-allowed;
       }
-      .section-divisa {
-        border: 2px solid #3498db;
+      fieldset {
+        border: none;
+        background: var(--light);
         padding: 20px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        background-color: #f0f8ff;
+        border-radius: 12px;
+        margin-bottom: 25px;
+        position: relative;
       }
-      .section-genitore {
-        border: 2px solid #2ecc71;
-        padding: 20px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        background-color: #eafaf1;
+      legend {
+        background: var(--primary);
+        color: white;
+        padding: 6px 16px;
+        border-radius: 20px;
+        font-weight: 800;
+        font-size: 14px;
+        box-shadow: 0 4px 6px rgba(255, 107, 107, 0.2);
       }
-      .section-legend {
-        color: #2980b9;
-        font-weight: bold;
-        padding: 0 10px;
-        font-size: 15px;
-      }
-      .legend-genitore {
-        color: #27ae60;
-        font-weight: bold;
-        padding: 0 10px;
-        font-size: 15px;
-      }
+      /* Colori alternativi per le sezioni */
+      .section-genitore legend { background: #ff9f43; box-shadow: 0 4px 6px rgba(255, 159, 67, 0.2); }
+      .section-alunno legend { background: var(--secondary); box-shadow: 0 4px 6px rgba(78, 205, 196, 0.2); }
+      .section-divisa legend { background: #5f27cd; box-shadow: 0 4px 6px rgba(95, 39, 205, 0.2); }
+      
       .product-box {
-        background: #fff;
-        border: 1px solid #dcdde1;
-        padding: 15px;
-        border-radius: 6px;
+        background: var(--white);
+        border: 1px solid #eee;
+        padding: 18px;
+        border-radius: 10px;
         margin-bottom: 15px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
       }
       .product-title {
         font-size: 16px;
-        font-weight: bold;
-        color: #2c3e50;
-        margin-bottom: 10px;
-        border-bottom: 1px solid #ecf0f1;
-        padding-bottom: 5px;
+        font-weight: 800;
+        color: #5f27cd;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
       button {
         width: 100%;
-        padding: 12px;
-        background-color: #2980b9;
+        padding: 15px;
+        background-color: var(--primary);
         color: white;
         border: none;
-        border-radius: 5px;
-        font-size: 16px;
-        font-weight: bold;
+        border-radius: 8px;
+        font-size: 18px;
+        font-weight: 800;
+        font-family: 'Nunito', sans-serif;
         cursor: pointer;
-        transition: background-color 0.3s;
+        transition: transform 0.2s, background-color 0.3s;
         margin-top: 10px;
+        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+      }
+      button:hover:not(:disabled) {
+        background-color: #ff5252;
+        transform: translateY(-2px);
       }
       button:disabled {
-        background-color: #95a5a6;
+        background-color: #bdc3c7;
+        box-shadow: none;
         cursor: not-allowed;
+        transform: none;
       }
       #status-db {
-        font-size: 12px;
-        color: #e67e22;
-        margin-bottom: 15px;
+        background: #fef9e7;
+        color: #d35400;
+        padding: 10px;
         text-align: center;
         font-weight: bold;
+        font-size: 13px;
+        border-bottom: 1px solid #f1c40f;
       }
       #message {
         margin-top: 20px;
         text-align: center;
-        font-weight: bold;
-        padding: 10px;
-        border-radius: 5px;
+        font-weight: 800;
+        padding: 15px;
+        border-radius: 8px;
         display: none;
       }
       .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
@@ -125,126 +173,136 @@
   </head>
   <body>
     <div class="container">
-      <h2>Ordine Divise Scolastiche</h2>
       
-      <div id="status-db">Sincronizzazione catalogo prodotti in corso...</div>
+      <div class="header-image">
+        <div class="header-overlay">
+          <h2>Ordini Divise Scolastiche</h2>
+        </div>
+      </div>
 
-      <form id="orderForm">
-        
-        <fieldset class="section-genitore">
-          <legend class="legend-genitore">Dati del Genitore</legend>
-          <div class="form-group">
-            <label for="nomeGenitore">Nome e Cognome:</label>
-            <input type="text" id="nomeGenitore" name="nomeGenitore" placeholder="Inserisci il tuo nome e cognome" required>
-          </div>
-          <div class="form-group">
-            <label for="emailGenitore">Email:</label>
-            <input type="email" id="emailGenitore" name="emailGenitore" placeholder="es. mario.rossi@email.com" required>
-          </div>
-          <div class="form-group">
-            <label for="telefonoGenitore">Telefono (Cellulare):</label>
-            <input type="tel" id="telefonoGenitore" name="telefonoGenitore" placeholder="es. 3331234567" required>
-          </div>
-        </fieldset>
+      <div id="status-db">⏳ Sincronizzazione catalogo in corso...</div>
 
-        <fieldset class="section-divisa" style="border-color: #bdc3c7; background-color: #fdfdfd;">
-          <legend class="section-legend" style="color: #7f8c8d;">Dati dell'Alunno</legend>
-          <div class="form-group">
-            <label for="nome">Nome Alunno:</label>
-            <input type="text" id="nome" name="nome" placeholder="Inserisci il nome" required>
-          </div>
-          <div class="form-group">
-            <label for="cognome">Cognome Alunno:</label>
-            <input type="text" id="cognome" name="cognome" placeholder="Inserisci il cognome" required>
-          </div>
-          <div class="form-group">
-            <label for="comune">Comune (Plesso):</label>
-            <select id="comune" name="comune" onchange="updateGrado()" required>
-              <option value="">-- Seleziona Comune/Plesso --</option>
-              <option value="Antonimina">Antonimina</option>
-              <option value="Trearie">Trearie</option>
-              <option value="Azzuria/Merici">Azzuria/Merici</option>
-              <option value="Gerace">Gerace</option>
-              <option value="Canolo">Canolo</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="grado">Grado Scolastico:</label>
-            <select id="grado" name="grado" onchange="updateClassi()" required>
-              <option value="">-- Prima seleziona un Comune --</option>
-            </select>
-          </div>
-        </fieldset>
-
-        <fieldset class="section-divisa">
-          <legend class="section-legend">Configurazione Divisa</legend>
+      <div class="form-content">
+        <form id="orderForm">
           
-          <div class="form-group">
-            <label for="classe">Classe di Appartenenza:</label>
-            <select id="classe" name="classe" onchange="filtraOpzioniDivisa()" required disabled>
-              <option value="">-- Prima seleziona il Grado --</option>
-            </select>
-          </div>
-
-          <!-- PRODOTTO: TUTA -->
-          <div class="product-box">
-            <div class="product-title">Ordina Tuta</div>
+          <!-- DATI GENITORE -->
+          <fieldset class="section-genitore">
+            <legend>👤 Dati del Genitore</legend>
             <div class="form-group">
-              <label for="colore">Colore Tuta:</label>
-              <input type="text" id="colore" name="colore" placeholder="Si compila automaticamente" readonly>
+              <label for="nomeGenitore">Nome e Cognome:</label>
+              <input type="text" id="nomeGenitore" name="nomeGenitore" placeholder="Inserisci nome e cognome" onblur="formattaTesto(this)" required>
             </div>
             <div class="form-group">
-              <label for="misura">Misura Tuta:</label>
-              <select id="misura" name="misura" disabled>
-                <option value="">-- Prima seleziona la Classe --</option>
+              <label for="emailGenitore">Email:</label>
+              <input type="email" id="emailGenitore" name="emailGenitore" placeholder="es. mario.rossi@email.com" required>
+            </div>
+            <div class="form-group">
+              <label for="telefonoGenitore">Telefono (Cellulare):</label>
+              <input type="tel" id="telefonoGenitore" name="telefonoGenitore" placeholder="es. 3331234567" required>
+            </div>
+          </fieldset>
+
+          <!-- DATI ALUNNO -->
+          <fieldset class="section-alunno">
+            <legend>🎓 Dati dell'Alunno</legend>
+            <div class="form-group">
+              <label for="nome">Nome Alunno:</label>
+              <input type="text" id="nome" name="nome" placeholder="Inserisci il nome" onblur="formattaTesto(this)" required>
+            </div>
+            <div class="form-group">
+              <label for="cognome">Cognome Alunno:</label>
+              <input type="text" id="cognome" name="cognome" placeholder="Inserisci il cognome" onblur="formattaTesto(this)" required>
+            </div>
+            <div class="form-group">
+              <label for="comune">Comune (Plesso):</label>
+              <select id="comune" name="comune" onchange="updateGrado()" required>
+                <option value="">-- Seleziona Comune/Plesso --</option>
+                <option value="Antonimina">Antonimina</option>
+                <option value="Trearie">Trearie</option>
+                <option value="Azzuria/Merici">Azzuria/Merici</option>
+                <option value="Gerace">Gerace</option>
+                <option value="Canolo">Canolo</option>
               </select>
             </div>
             <div class="form-group">
-              <label for="persTuta">Personalizzazione Tuta:</label>
-              <select id="persTuta" name="persTuta" disabled>
-                <option value="Nessuna">Nessuna personalizzazione</option>
-                <option value="Solo logo scuola">Solo logo della scuola</option>
-                <option value="Logo scuola e nome">Logo scuola e nome del bambino</option>
+              <label for="grado">Grado Scolastico:</label>
+              <select id="grado" name="grado" onchange="updateClassi()" required>
+                <option value="">-- Prima seleziona un Comune --</option>
               </select>
             </div>
-            <div class="form-group">
-              <label for="quantitaTuta">Quantità Tuta:</label>
-              <input type="number" id="quantitaTuta" name="quantitaTuta" min="0" value="0">
-            </div>
-          </div>
+          </fieldset>
 
-          <!-- PRODOTTO: T-SHIRT -->
-          <div class="product-box">
-            <div class="product-title">Ordina T-Shirt</div>
+          <!-- CONFIGURAZIONE DIVISA -->
+          <fieldset class="section-divisa">
+            <legend>👕 Configurazione Divisa</legend>
+            
             <div class="form-group">
-              <label for="tshirtColore">Colore T-Shirt:</label>
-              <input type="text" id="tshirtColore" name="tshirtColore" placeholder="Si compila automaticamente" readonly>
-            </div>
-            <div class="form-group">
-              <label for="tshirtMisura">Misura T-Shirt:</label>
-              <select id="tshirtMisura" name="tshirtMisura" disabled>
-                <option value="">-- Prima seleziona la Classe --</option>
+              <label for="classe">Classe di Appartenenza:</label>
+              <select id="classe" name="classe" onchange="filtraOpzioniDivisa()" required disabled>
+                <option value="">-- Prima seleziona il Grado --</option>
               </select>
             </div>
-            <div class="form-group">
-              <label for="persTshirt">Personalizzazione T-Shirt:</label>
-              <select id="persTshirt" name="persTshirt" disabled>
-                <option value="Nessuna">Nessuna personalizzazione</option>
-                <option value="Solo logo scuola">Solo logo della scuola</option>
-                <option value="Logo scuola e nome">Logo scuola e nome del bambino</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="quantitaTshirt">Quantità T-Shirt:</label>
-              <input type="number" id="quantitaTshirt" name="quantitaTshirt" min="0" value="0">
-            </div>
-          </div>
 
-        </fieldset>
+            <!-- PRODOTTO: TUTA -->
+            <div class="product-box">
+              <div class="product-title">📦 Ordina Tuta</div>
+              <div class="form-group">
+                <label for="colore">Colore Tuta:</label>
+                <input type="text" id="colore" name="colore" placeholder="Si compila automaticamente" readonly>
+              </div>
+              <div class="form-group">
+                <label for="misura">Misura Tuta:</label>
+                <select id="misura" name="misura" disabled>
+                  <option value="">-- Prima seleziona la Classe --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="persTuta">Personalizzazione Tuta:</label>
+                <select id="persTuta" name="persTuta" disabled>
+                  <option value="Nessuna">Nessuna personalizzazione</option>
+                  <option value="Solo logo scuola">Solo logo della scuola</option>
+                  <option value="Logo scuola e nome">Logo scuola e nome del bambino</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="quantitaTuta">Quantità Tuta:</label>
+                <input type="number" id="quantitaTuta" name="quantitaTuta" min="0" value="0">
+              </div>
+            </div>
 
-        <button type="button" id="submitBtn" onclick="submitForm()" disabled>Attendi sincronizzazione...</button>
-      </form>
-      <div id="message"></div>
+            <!-- PRODOTTO: T-SHIRT -->
+            <div class="product-box">
+              <div class="product-title">👕 Ordina T-Shirt</div>
+              <div class="form-group">
+                <label for="tshirtColore">Colore T-Shirt:</label>
+                <input type="text" id="tshirtColore" name="tshirtColore" placeholder="Si compila automaticamente" readonly>
+              </div>
+              <div class="form-group">
+                <label for="tshirtMisura">Misura T-Shirt:</label>
+                <select id="tshirtMisura" name="tshirtMisura" disabled>
+                  <option value="">-- Prima seleziona la Classe --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="persTshirt">Personalizzazione T-Shirt:</label>
+                <select id="persTshirt" name="persTshirt" disabled>
+                  <option value="Nessuna">Nessuna personalizzazione</option>
+                  <option value="Solo logo scuola">Solo logo della scuola</option>
+                  <option value="Logo scuola e nome">Logo scuola e nome del bambino</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="quantitaTshirt">Quantità T-Shirt:</label>
+                <input type="number" id="quantitaTshirt" name="quantitaTshirt" min="0" value="0">
+              </div>
+            </div>
+
+          </fieldset>
+
+          <button type="button" id="submitBtn" onclick="submitForm()" disabled>Attendi sincronizzazione...</button>
+        </form>
+        <div id="message"></div>
+      </div>
     </div>
 
     <script>
@@ -264,6 +322,16 @@
         '2/3': 9, '4/5': 10, '6/7': 11, '8/9': 12, '10/11': 13, '12/13': 14
       };
 
+      // Funzione per maiuscola iniziale e resto minuscolo
+      function formattaTesto(inputElement) {
+        let testo = inputElement.value;
+        if (!testo) return;
+        testo = testo.toLowerCase().replace(/(?:^|\s)\S/g, function(lettera) {
+          return lettera.toUpperCase();
+        });
+        inputElement.value = testo;
+      }
+
       function getColValue(item, colName) {
         const key = Object.keys(item).find(k => k.trim().toUpperCase() === colName.trim().toUpperCase());
         return key ? item[key] : null;
@@ -274,16 +342,16 @@
           .then(res => res.json())
           .then(data => {
             if(data.error) {
-              document.getElementById("status-db").innerText = "Errore: " + data.error;
+              document.getElementById("status-db").innerText = "❌ Errore: " + data.error;
               return;
             }
             dbProdotti = data;
             document.getElementById("status-db").style.display = "none";
             document.getElementById("submitBtn").disabled = false;
-            document.getElementById("submitBtn").innerText = "Registra Ordine";
+            document.getElementById("submitBtn").innerText = "Invia Ordine ✓";
           })
           .catch(err => {
-            document.getElementById("status-db").innerText = "Impossibile scaricare le divise. Ricarica la pagina.";
+            document.getElementById("status-db").innerText = "❌ Impossibile scaricare le divise. Ricarica la pagina.";
             document.getElementById("status-db").style.color = "red";
           });
       };
@@ -473,7 +541,7 @@
         .then(resData => {
           msgDiv.style.display = "block";
           if (resData.status === "success") {
-            msgDiv.innerText = resData.message;
+            msgDiv.innerText = "Ordine Inviato con Successo! 🎉";
             msgDiv.className = "success";
             form.reset();
             updateGrado();
@@ -482,14 +550,14 @@
             msgDiv.className = "error";
           }
           btn.disabled = false;
-          btn.innerText = "Registra Ordine";
+          btn.innerText = "Invia Ordine ✓";
         })
         .catch(err => {
           msgDiv.style.display = "block";
           msgDiv.innerText = "Si è verificato un errore di connessione col server.";
           msgDiv.className = "error";
           btn.disabled = false;
-          btn.innerText = "Registra Ordine";
+          btn.innerText = "Invia Ordine ✓";
         });
       }
     </script>
