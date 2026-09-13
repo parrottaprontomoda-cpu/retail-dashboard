@@ -34,7 +34,13 @@
         font-weight: 600;
         font-size: 14px;
       }
-      input[type="text"], select {
+      .security-note {
+        font-size: 12px;
+        color: #7f8c8d;
+        margin-top: 4px;
+        display: block;
+      }
+      input[type="text"], input[type="password"], select {
         width: 100%;
         padding: 10px;
         border: 1px solid #ced4da;
@@ -42,7 +48,7 @@
         box-sizing: border-box;
         font-size: 15px;
       }
-      input[type="text"]:focus, select:focus {
+      input[type="text"]:focus, input[type="password"]:focus, select:focus {
         border-color: #3498db;
         outline: none;
       }
@@ -83,6 +89,12 @@
       <h2>Ordine Divise Scolastiche</h2>
       <form id="orderForm">
         
+        <div class="form-group">
+          <label for="pin">Codice Scuola:</label>
+          <input type="password" id="pin" name="pin" placeholder="Inserisci il codice fornito dalla scuola" required>
+          <span class="security-note">Richiesto per confermare l'autenticità dell'ordine.</span>
+        </div>
+
         <div class="form-group">
           <label for="nome">Nome Alunno:</label>
           <input type="text" id="nome" name="nome" placeholder="Inserisci il nome" required>
@@ -171,12 +183,26 @@
         const msgDiv = document.getElementById("message");
         const btn = document.getElementById("submitBtn");
 
+        // 1. Controllo base dei campi
         if (!form.checkValidity()) {
           form.reportValidity();
           return;
         }
 
+        // 2. Controllo Anti-Spam (limite di 3 minuti tra un invio e l'altro)
+        const tempoUltimoInvio = localStorage.getItem('ultimoInvioDivise');
+        const tempoAttuale = new Date().getTime();
+        const treMinuti = 3 * 60 * 1000;
+
+        if (tempoUltimoInvio && (tempoAttuale - tempoUltimoInvio < treMinuti)) {
+          msgDiv.style.display = "block";
+          msgDiv.innerText = "Hai già inviato un ordine di recente. Per favore, attendi qualche minuto prima di inserirne un altro.";
+          msgDiv.className = "error";
+          return;
+        }
+
         const data = {
+          pin: document.getElementById("pin").value,
           nome: document.getElementById("nome").value,
           cognome: document.getElementById("cognome").value,
           comune: document.getElementById("comune").value,
@@ -187,7 +213,7 @@
         };
 
         btn.disabled = true;
-        btn.innerText = "Registrazione in corso...";
+        btn.innerText = "Verifica in corso...";
         msgDiv.style.display = "none";
 
         fetch(SCRIPT_URL, {
@@ -205,8 +231,11 @@
             msgDiv.className = "success";
             form.reset();
             updateGrado();
+            // Registra il momento del successo per attivare il blocco temporale
+            localStorage.setItem('ultimoInvioDivise', new Date().getTime());
           } else {
-            msgDiv.innerText = "Errore: " + responseData.message;
+            // Se il PIN è errato, il server restituisce errore
+            msgDiv.innerText = "Attenzione: " + responseData.message;
             msgDiv.className = "error";
           }
           btn.disabled = false;
@@ -214,7 +243,7 @@
         })
         .catch(error => {
           msgDiv.style.display = "block";
-          msgDiv.innerText = "Si è verificato un errore di connessione col server.";
+          msgDiv.innerText = "Si è verificato un errore di connessione. Riprova più tardi.";
           msgDiv.className = "error";
           btn.disabled = false;
           btn.innerText = "Registra Ordine";
