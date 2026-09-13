@@ -97,7 +97,7 @@
   </head>
   <body>
     <div class="container">
-      <h2>Ordine Divise Scolastiche</h2>
+      <h2>Ordine Divise Scolastiche[cite: 1]</h2>
       
       <div id="status-db">Sincronizzazione catalogo prodotti in corso...</div>
 
@@ -161,7 +161,6 @@
     </div>
 
     <script>
-      // INSERISCI QUI IL TUO LINK GOOGLE APPS SCRIPT
       const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz6ZYZjFh_B-zeHVhdK5UnRsPY2iF0a1gD7tK1msKbilWivoBimB8sTaxgDm339AScB/exec';
       
       let dbProdotti = [];
@@ -173,6 +172,12 @@
         "Gerace": ["Scuola dell'infanzia", "Scuola primaria", "Scuola secondaria di primo grado"],
         "Canolo": ["Scuola primaria"]
       };
+
+      // Estrattore universale per ignorare spazi e maiuscole/minuscole nelle intestazioni
+      function getColValue(item, colName) {
+        const key = Object.keys(item).find(k => k.trim().toUpperCase() === colName.trim().toUpperCase());
+        return key ? item[key] : null;
+      }
 
       window.onload = function() {
         fetch(SCRIPT_URL + '?action=getProdotti')
@@ -215,7 +220,8 @@
       }
 
       function updateClassi() {
-        const gradoSelezionato = document.getElementById("grado").value;
+        // Legge il grado selezionato in formato minuscolo per la comparazione
+        const gradoSelezionato = document.getElementById("grado").value.trim().toLowerCase();
         const classeSelect = document.getElementById("classe");
         
         document.getElementById("colore").value = "";
@@ -229,13 +235,14 @@
           return;
         }
 
-        // Filtra usando la colonna "GRADO"
+        // Filtra usando la colonna "GRADO" (ignora maiuscole e spazi)
         const classiFiltrate = dbProdotti.filter(item => {
-           return item["GRADO"] && item["GRADO"].toString().trim() === gradoSelezionato;
+           const val = getColValue(item, "GRADO");
+           return val && val.toString().trim().toLowerCase() === gradoSelezionato;
         });
 
         // Mappa i risultati usando la colonna "CLASSE"
-        const classiUniche = [...new Set(classiFiltrate.map(item => item["CLASSE"]))].filter(Boolean).sort();
+        const classiUniche = [...new Set(classiFiltrate.map(item => getColValue(item, "CLASSE")))].filter(Boolean).sort();
         
         if (classiUniche.length > 0) {
           classiUniche.forEach(c => {
@@ -251,8 +258,8 @@
       }
 
       function filtraOpzioniDivisa() {
-        const classe = document.getElementById("classe").value;
-        const grado = document.getElementById("grado").value;
+        const classe = document.getElementById("classe").value.trim().toLowerCase();
+        const grado = document.getElementById("grado").value.trim().toLowerCase();
         const coloreInput = document.getElementById("colore");
         const misuraSelect = document.getElementById("misura");
 
@@ -264,18 +271,21 @@
           return;
         }
 
-        // Trova la riga specifica (matching "CLASSE" e "GRADO")
-        const righeClasse = dbProdotti.filter(item => item["CLASSE"] == classe && item["GRADO"] == grado);
+        // Trova la riga specifica (matching "CLASSE" e "GRADO" insensibile)
+        const righeClasse = dbProdotti.filter(item => {
+          const c = getColValue(item, "CLASSE");
+          const g = getColValue(item, "GRADO");
+          return c && g && c.toString().trim().toLowerCase() === classe && g.toString().trim().toLowerCase() === grado;
+        });
         
         if (righeClasse.length > 0) {
-          // Utilizza la colonna "TUTA" come descrizione/colore
-          coloreInput.value = righeClasse[0]["TUTA"] || "";
+          coloreInput.value = getColValue(righeClasse[0], "TUTA") || "";
           
           let tutteLeMisure = [];
           righeClasse.forEach(item => {
-            // Utilizza la colonna "MIS TUTE" per le taglie
-            if (item["MIS TUTE"]) {
-              const separate = item["MIS TUTE"].toString().split('-');
+            const misure = getColValue(item, "MIS TUTE");
+            if (misure) {
+              const separate = misure.toString().split('-');
               separate.forEach(m => {
                 if (m.trim()) tutteLeMisure.push(m.trim());
               });
@@ -284,7 +294,7 @@
           
           let misureUniche = [...new Set(tutteLeMisure)];
           
-          // Mappa estesa per gestire l'ordine da XXXS a XXL
+          // Mappa estesa per gestire l'ordine
           const priority = { 'XXXS': 1, 'XXS': 2, 'XS': 3, 'S': 4, 'M': 5, 'L': 6, 'XL': 7, 'XXL': 8 };
           
           misureUniche.sort((a, b) => {
