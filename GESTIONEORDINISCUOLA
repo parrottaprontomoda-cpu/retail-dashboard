@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ordine Divise Scolastiche</title>
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f7f9fa;
+        color: #333;
+        padding: 20px;
+        margin: 0;
+      }
+      .container {
+        max-width: 500px;
+        margin: 0 auto;
+        background: #ffffff;
+        padding: 25px 30px;
+        border-radius: 10px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      }
+      h2 {
+        text-align: center;
+        color: #2c3e50;
+        margin-bottom: 25px;
+      }
+      .form-group {
+        margin-bottom: 18px;
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      input[type="text"], select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ced4da;
+        border-radius: 5px;
+        box-sizing: border-box;
+        font-size: 15px;
+      }
+      input[type="text"]:focus, select:focus {
+        border-color: #3498db;
+        outline: none;
+      }
+      button {
+        width: 100%;
+        padding: 12px;
+        background-color: #2980b9;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background-color 0.3s;
+        margin-top: 10px;
+      }
+      button:hover {
+        background-color: #1c5980;
+      }
+      button:disabled {
+        background-color: #95a5a6;
+        cursor: not-allowed;
+      }
+      #message {
+        margin-top: 20px;
+        text-align: center;
+        font-weight: bold;
+        padding: 10px;
+        border-radius: 5px;
+        display: none;
+      }
+      .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+      .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>Ordine Divise Scolastiche</h2>
+      <form id="orderForm">
+        
+        <div class="form-group">
+          <label for="nome">Nome Alunno:</label>
+          <input type="text" id="nome" name="nome" placeholder="Inserisci il nome" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="cognome">Cognome Alunno:</label>
+          <input type="text" id="cognome" name="cognome" placeholder="Inserisci il cognome" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="comune">Comune (Plesso):</label>
+          <select id="comune" name="comune" onchange="updateGrado()" required>
+            <option value="">-- Seleziona Comune/Plesso --</option>
+            <option value="Antonimina">Antonimina</option>
+            <option value="Trarie">Trarie</option>
+            <option value="Azzuria/Merici">Azzuria/Merici</option>
+            <option value="Gerace">Gerace</option>
+            <option value="Canolo">Canolo</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label for="grado">Grado Scolastico:</label>
+          <select id="grado" name="grado" required>
+            <option value="">-- Prima seleziona un Comune --</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="classe">Classe di Appartenenza:</label>
+          <input type="text" id="classe" name="classe" placeholder="Es. 1A, 2B, 3C" required>
+        </div>
+
+        <div class="form-group">
+          <label for="misura">Misura della Tuta:</label>
+          <select id="misura" name="misura" required>
+            <option value="">-- Seleziona Misura --</option>
+            <option value="XS">XS</option>
+            <option value="S">S</option>
+            <option value="M">M</option>
+            <option value="L">L</option>
+            <option value="XL">XL</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="colore">Colore della Tuta:</label>
+          <input type="text" id="colore" name="colore" placeholder="Es. Blu navy, Grigio" required>
+        </div>
+
+        <button type="button" id="submitBtn" onclick="submitForm()">Registra Ordine</button>
+      </form>
+      <div id="message"></div>
+    </div>
+
+    <script>
+      const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz6ZYZjFh_B-zeHVhdK5UnRsPY2iF0a1gD7tK1msKbilWivoBimB8sTaxgDm339AScB/exec';
+      
+      const scuoleData = {
+        "Antonimina": ["Scuola secondaria di primo grado"],
+        "Trarie": ["Scuola dell'infanzia", "Scuola primaria"],
+        "Azzuria/Merici": ["Scuola dell'infanzia", "Scuola primaria"],
+        "Gerace": ["Scuola dell'infanzia", "Scuola primaria", "Scuola secondaria di primo grado"],
+        "Canolo": ["Scuola primaria"]
+      };
+
+      function updateGrado() {
+        const comuneSelezionato = document.getElementById("comune").value;
+        const gradoSelect = document.getElementById("grado");
+        
+        gradoSelect.innerHTML = '<option value="">-- Seleziona Grado Scolastico --</option>';
+        
+        if (comuneSelezionato && scuoleData[comuneSelezionato]) {
+          scuoleData[comuneSelezionato].forEach(function(grado) {
+            const option = document.createElement("option");
+            option.value = grado;
+            option.text = grado;
+            gradoSelect.appendChild(option);
+          });
+        }
+      }
+
+      function submitForm() {
+        const form = document.getElementById("orderForm");
+        const msgDiv = document.getElementById("message");
+        const btn = document.getElementById("submitBtn");
+
+        if (!form.checkValidity()) {
+          form.reportValidity();
+          return;
+        }
+
+        const data = {
+          nome: document.getElementById("nome").value,
+          cognome: document.getElementById("cognome").value,
+          comune: document.getElementById("comune").value,
+          grado: document.getElementById("grado").value,
+          classe: document.getElementById("classe").value,
+          misura: document.getElementById("misura").value,
+          colore: document.getElementById("colore").value
+        };
+
+        btn.disabled = true;
+        btn.innerText = "Registrazione in corso...";
+        msgDiv.style.display = "none";
+
+        fetch(SCRIPT_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain;charset=utf-8',
+          },
+          body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(responseData => {
+          msgDiv.style.display = "block";
+          if (responseData.status === "success") {
+            msgDiv.innerText = responseData.message;
+            msgDiv.className = "success";
+            form.reset();
+            updateGrado();
+          } else {
+            msgDiv.innerText = "Errore: " + responseData.message;
+            msgDiv.className = "error";
+          }
+          btn.disabled = false;
+          btn.innerText = "Registra Ordine";
+        })
+        .catch(error => {
+          msgDiv.style.display = "block";
+          msgDiv.innerText = "Si è verificato un errore di connessione col server.";
+          msgDiv.className = "error";
+          btn.disabled = false;
+          btn.innerText = "Registra Ordine";
+          console.error('Errore:', error);
+        });
+      }
+    </script>
+  </body>
+</html>
