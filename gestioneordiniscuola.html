@@ -13,7 +13,7 @@
         margin: 0;
       }
       .container {
-        max-width: 500px;
+        max-width: 600px;
         margin: 0 auto;
         background: #ffffff;
         padding: 25px 30px;
@@ -34,7 +34,7 @@
         font-weight: 600;
         font-size: 14px;
       }
-      input[type="text"], input[type="email"], input[type="tel"], select {
+      input[type="text"], input[type="email"], input[type="tel"], input[type="number"], select {
         width: 100%;
         padding: 10px;
         border: 1px solid #ced4da;
@@ -71,6 +71,21 @@
         font-weight: bold;
         padding: 0 10px;
         font-size: 15px;
+      }
+      .product-box {
+        background: #fff;
+        border: 1px solid #dcdde1;
+        padding: 15px;
+        border-radius: 6px;
+        margin-bottom: 15px;
+      }
+      .product-title {
+        font-size: 16px;
+        font-weight: bold;
+        color: #2c3e50;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #ecf0f1;
+        padding-bottom: 5px;
       }
       button {
         width: 100%;
@@ -110,7 +125,7 @@
   </head>
   <body>
     <div class="container">
-      <h2>Ordine Divise Scolastiche[cite: 1]</h2>
+      <h2>Ordine Divise Scolastiche</h2>
       
       <div id="status-db">Sincronizzazione catalogo prodotti in corso...</div>
 
@@ -118,17 +133,14 @@
         
         <fieldset class="section-genitore">
           <legend class="legend-genitore">Dati del Genitore</legend>
-          
           <div class="form-group">
             <label for="nomeGenitore">Nome e Cognome:</label>
             <input type="text" id="nomeGenitore" name="nomeGenitore" placeholder="Inserisci il tuo nome e cognome" required>
           </div>
-          
           <div class="form-group">
             <label for="emailGenitore">Email:</label>
             <input type="email" id="emailGenitore" name="emailGenitore" placeholder="es. mario.rossi@email.com" required>
           </div>
-          
           <div class="form-group">
             <label for="telefonoGenitore">Telefono (Cellulare):</label>
             <input type="tel" id="telefonoGenitore" name="telefonoGenitore" placeholder="es. 3331234567" required>
@@ -141,12 +153,10 @@
             <label for="nome">Nome Alunno:</label>
             <input type="text" id="nome" name="nome" placeholder="Inserisci il nome" required>
           </div>
-          
           <div class="form-group">
             <label for="cognome">Cognome Alunno:</label>
             <input type="text" id="cognome" name="cognome" placeholder="Inserisci il cognome" required>
           </div>
-          
           <div class="form-group">
             <label for="comune">Comune (Plesso):</label>
             <select id="comune" name="comune" onchange="updateGrado()" required>
@@ -158,7 +168,6 @@
               <option value="Canolo">Canolo</option>
             </select>
           </div>
-          
           <div class="form-group">
             <label for="grado">Grado Scolastico:</label>
             <select id="grado" name="grado" onchange="updateClassi()" required>
@@ -177,17 +186,44 @@
             </select>
           </div>
 
-          <div class="form-group">
-            <label for="colore">Colore/Tipo della Tuta:</label>
-            <input type="text" id="colore" name="colore" placeholder="Si compila automaticamente" readonly required>
+          <!-- PRODOTTO: TUTA -->
+          <div class="product-box">
+            <div class="product-title">Ordina Tuta</div>
+            <div class="form-group">
+              <label for="colore">Colore Tuta:</label>
+              <input type="text" id="colore" name="colore" placeholder="Si compila automaticamente" readonly>
+            </div>
+            <div class="form-group">
+              <label for="misura">Misura Tuta:</label>
+              <select id="misura" name="misura" disabled>
+                <option value="">-- Prima seleziona la Classe --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="quantitaTuta">Quantità Tuta:</label>
+              <input type="number" id="quantitaTuta" name="quantitaTuta" min="0" value="0">
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="misura">Misura della Tuta:</label>
-            <select id="misura" name="misura" required disabled>
-              <option value="">-- Prima seleziona la Classe --</option>
-            </select>
+          <!-- PRODOTTO: T-SHIRT -->
+          <div class="product-box">
+            <div class="product-title">Ordina T-Shirt</div>
+            <div class="form-group">
+              <label for="tshirtColore">Colore T-Shirt:</label>
+              <input type="text" id="tshirtColore" name="tshirtColore" placeholder="Si compila automaticamente" readonly>
+            </div>
+            <div class="form-group">
+              <label for="tshirtMisura">Misura T-Shirt:</label>
+              <select id="tshirtMisura" name="tshirtMisura" disabled>
+                <option value="">-- Prima seleziona la Classe --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="quantitaTshirt">Quantità T-Shirt:</label>
+              <input type="number" id="quantitaTshirt" name="quantitaTshirt" min="0" value="0">
+            </div>
           </div>
+
         </fieldset>
 
         <button type="button" id="submitBtn" onclick="submitForm()" disabled>Attendi sincronizzazione...</button>
@@ -197,7 +233,6 @@
 
     <script>
       const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz6ZYZjFh_B-zeHVhdK5UnRsPY2iF0a1gD7tK1msKbilWivoBimB8sTaxgDm339AScB/exec';
-      
       let dbProdotti = [];
 
       const scuoleData = {
@@ -206,6 +241,12 @@
         "Azzuria/Merici": ["Scuola dell'infanzia", "Scuola primaria"],
         "Gerace": ["Scuola dell'infanzia", "Scuola primaria", "Scuola secondaria di primo grado"],
         "Canolo": ["Scuola primaria"]
+      };
+
+      // Mappa priorità espansa (lettere e numeri d'età)
+      const priorityMap = {
+        'XXXS': 1, 'XXS': 2, 'XS': 3, 'S': 4, 'M': 5, 'L': 6, 'XL': 7, 'XXL': 8,
+        '2/3': 9, '4/5': 10, '6/7': 11, '8/9': 12, '10/11': 13, '12/13': 14
       };
 
       function getColValue(item, colName) {
@@ -222,7 +263,6 @@
               return;
             }
             dbProdotti = data;
-            
             document.getElementById("status-db").style.display = "none";
             document.getElementById("submitBtn").disabled = false;
             document.getElementById("submitBtn").innerText = "Registra Ordine";
@@ -240,9 +280,7 @@
         grado.innerHTML = '<option value="">-- Seleziona Grado Scolastico --</option>';
         document.getElementById("classe").innerHTML = '<option value="">-- Prima seleziona il Grado --</option>';
         document.getElementById("classe").disabled = true;
-        document.getElementById("colore").value = "";
-        document.getElementById("misura").innerHTML = '<option value="">-- Prima seleziona la Classe --</option>';
-        document.getElementById("misura").disabled = true;
+        resetProdotti();
 
         if (comune && scuoleData[comune]) {
           scuoleData[comune].forEach(g => {
@@ -257,10 +295,7 @@
         const gradoSelezionato = document.getElementById("grado").value.trim().toLowerCase();
         const classeSelect = document.getElementById("classe");
         
-        document.getElementById("colore").value = "";
-        document.getElementById("misura").innerHTML = '<option value="">-- Prima seleziona la Classe --</option>';
-        document.getElementById("misura").disabled = true;
-
+        resetProdotti();
         classeSelect.innerHTML = '<option value="">-- Seleziona Classe --</option>';
 
         if (!gradoSelezionato) {
@@ -288,19 +323,43 @@
         }
       }
 
+      function resetProdotti() {
+        document.getElementById("colore").value = "";
+        document.getElementById("misura").innerHTML = '<option value="">-- Prima seleziona la Classe --</option>';
+        document.getElementById("misura").disabled = true;
+        document.getElementById("quantitaTuta").value = "0";
+
+        document.getElementById("tshirtColore").value = "";
+        document.getElementById("tshirtMisura").innerHTML = '<option value="">-- Prima seleziona la Classe --</option>';
+        document.getElementById("tshirtMisura").disabled = true;
+        document.getElementById("quantitaTshirt").value = "0";
+      }
+
+      function parseMisure(misureString, selectElement) {
+        if (!misureString) return;
+        const separate = misureString.toString().split('-');
+        let uniche = [...new Set(separate.map(m => m.trim()).filter(Boolean))];
+        
+        uniche.sort((a, b) => {
+           const pA = priorityMap[a.toUpperCase()] || 99;
+           const pB = priorityMap[b.toUpperCase()] || 99;
+           return pA - pB;
+        });
+
+        uniche.forEach(m => {
+          const opt = document.createElement("option");
+          opt.value = m; opt.text = m;
+          selectElement.appendChild(opt);
+        });
+      }
+
       function filtraOpzioniDivisa() {
         const classe = document.getElementById("classe").value.trim().toLowerCase();
         const grado = document.getElementById("grado").value.trim().toLowerCase();
-        const coloreInput = document.getElementById("colore");
-        const misuraSelect = document.getElementById("misura");
-
-        misuraSelect.innerHTML = '<option value="">-- Seleziona Misura --</option>';
         
-        if (!classe || !grado) {
-          coloreInput.value = "";
-          misuraSelect.disabled = true;
-          return;
-        }
+        resetProdotti();
+
+        if (!classe || !grado) return;
 
         const righeClasse = dbProdotti.filter(item => {
           const c = getColValue(item, "CLASSE");
@@ -309,39 +368,27 @@
         });
         
         if (righeClasse.length > 0) {
-          coloreInput.value = getColValue(righeClasse[0], "TUTA") || "";
-          
-          let tutteLeMisure = [];
-          righeClasse.forEach(item => {
-            const misure = getColValue(item, "MIS TUTE");
-            if (misure) {
-              const separate = misure.toString().split('-');
-              separate.forEach(m => {
-                if (m.trim()) tutteLeMisure.push(m.trim());
-              });
-            }
-          });
-          
-          let misureUniche = [...new Set(tutteLeMisure)];
-          
-          const priority = { 'XXXS': 1, 'XXS': 2, 'XS': 3, 'S': 4, 'M': 5, 'L': 6, 'XL': 7, 'XXL': 8 };
-          
-          misureUniche.sort((a, b) => {
-             const pA = priority[a.toUpperCase()] || 99;
-             const pB = priority[b.toUpperCase()] || 99;
-             return pA - pB;
-          });
+          const riga = righeClasse[0];
 
-          misureUniche.forEach(m => {
-            const opt = document.createElement("option");
-            opt.value = m; opt.text = m;
-            misuraSelect.appendChild(opt);
-          });
-          
-          misuraSelect.disabled = false;
-        } else {
-          coloreInput.value = "Nessuna divisa trovata";
-          misuraSelect.disabled = true;
+          // Gestione TUTA
+          const tutaColore = getColValue(riga, "TUTA") || "";
+          if (tutaColore) {
+            document.getElementById("colore").value = tutaColore;
+            const msTuta = document.getElementById("misura");
+            msTuta.innerHTML = '<option value="">-- Seleziona Misura --</option>';
+            parseMisure(getColValue(riga, "MIS TUTE"), msTuta);
+            msTuta.disabled = false;
+          }
+
+          // Gestione T-SHIRT
+          const tshirtColore = getColValue(riga, "T-SHIRT") || "";
+          if (tshirtColore) {
+            document.getElementById("tshirtColore").value = tshirtColore;
+            const msTshirt = document.getElementById("tshirtMisura");
+            msTshirt.innerHTML = '<option value="">-- Seleziona Misura --</option>';
+            parseMisure(getColValue(riga, "MISURE T-SHIRT"), msTshirt);
+            msTshirt.disabled = false;
+          }
         }
       }
 
@@ -350,8 +397,29 @@
         const msgDiv = document.getElementById("message");
         const btn = document.getElementById("submitBtn");
 
+        // Controllo validità campi anagrafici standard
         if (!form.checkValidity()) {
           form.reportValidity();
+          return;
+        }
+
+        // Lettura quantità
+        const qTuta = parseInt(document.getElementById("quantitaTuta").value) || 0;
+        const qTshirt = parseInt(document.getElementById("quantitaTshirt").value) || 0;
+
+        // Validazione incrociata articoli
+        if (qTuta === 0 && qTshirt === 0) {
+          alert("Devi ordinare almeno una Tuta o una T-Shirt (Quantità > 0).");
+          return;
+        }
+
+        if (qTuta > 0 && document.getElementById("misura").value === "") {
+          alert("Hai inserito una quantità per la Tuta ma non hai selezionato la Misura.");
+          return;
+        }
+
+        if (qTshirt > 0 && document.getElementById("tshirtMisura").value === "") {
+          alert("Hai inserito una quantità per la T-Shirt ma non hai selezionato la Misura.");
           return;
         }
 
@@ -364,8 +432,14 @@
           comune: document.getElementById("comune").value,
           grado: document.getElementById("grado").value,
           classe: document.getElementById("classe").value,
-          misura: document.getElementById("misura").value,
-          colore: document.getElementById("colore").value
+          
+          colore: qTuta > 0 ? document.getElementById("colore").value : "",
+          misura: qTuta > 0 ? document.getElementById("misura").value : "",
+          quantitaTuta: qTuta,
+
+          tshirtColore: qTshirt > 0 ? document.getElementById("tshirtColore").value : "",
+          tshirtMisura: qTshirt > 0 ? document.getElementById("tshirtMisura").value : "",
+          quantitaTshirt: qTshirt
         };
 
         btn.disabled = true;
