@@ -200,6 +200,14 @@
               </select>
             </div>
             <div class="form-group">
+              <label for="persTuta">Personalizzazione Tuta:</label>
+              <select id="persTuta" name="persTuta" disabled>
+                <option value="Nessuna">Nessuna personalizzazione</option>
+                <option value="Solo logo scuola">Solo logo della scuola</option>
+                <option value="Logo scuola e nome">Logo scuola e nome del bambino</option>
+              </select>
+            </div>
+            <div class="form-group">
               <label for="quantitaTuta">Quantità Tuta:</label>
               <input type="number" id="quantitaTuta" name="quantitaTuta" min="0" value="0">
             </div>
@@ -216,6 +224,14 @@
               <label for="tshirtMisura">Misura T-Shirt:</label>
               <select id="tshirtMisura" name="tshirtMisura" disabled>
                 <option value="">-- Prima seleziona la Classe --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="persTshirt">Personalizzazione T-Shirt:</label>
+              <select id="persTshirt" name="persTshirt" disabled>
+                <option value="Nessuna">Nessuna personalizzazione</option>
+                <option value="Solo logo scuola">Solo logo della scuola</option>
+                <option value="Logo scuola e nome">Logo scuola e nome del bambino</option>
               </select>
             </div>
             <div class="form-group">
@@ -243,7 +259,6 @@
         "Canolo": ["Scuola primaria"]
       };
 
-      // Mappa priorità espansa (lettere e numeri d'età)
       const priorityMap = {
         'XXXS': 1, 'XXS': 2, 'XS': 3, 'S': 4, 'M': 5, 'L': 6, 'XL': 7, 'XXL': 8,
         '2/3': 9, '4/5': 10, '6/7': 11, '8/9': 12, '10/11': 13, '12/13': 14
@@ -327,11 +342,15 @@
         document.getElementById("colore").value = "";
         document.getElementById("misura").innerHTML = '<option value="">-- Prima seleziona la Classe --</option>';
         document.getElementById("misura").disabled = true;
+        document.getElementById("persTuta").value = "Nessuna";
+        document.getElementById("persTuta").disabled = true;
         document.getElementById("quantitaTuta").value = "0";
 
         document.getElementById("tshirtColore").value = "";
         document.getElementById("tshirtMisura").innerHTML = '<option value="">-- Prima seleziona la Classe --</option>';
         document.getElementById("tshirtMisura").disabled = true;
+        document.getElementById("persTshirt").value = "Nessuna";
+        document.getElementById("persTshirt").disabled = true;
         document.getElementById("quantitaTshirt").value = "0";
       }
 
@@ -370,7 +389,6 @@
         if (righeClasse.length > 0) {
           const riga = righeClasse[0];
 
-          // Gestione TUTA
           const tutaColore = getColValue(riga, "TUTA") || "";
           if (tutaColore) {
             document.getElementById("colore").value = tutaColore;
@@ -378,9 +396,9 @@
             msTuta.innerHTML = '<option value="">-- Seleziona Misura --</option>';
             parseMisure(getColValue(riga, "MIS TUTE"), msTuta);
             msTuta.disabled = false;
+            document.getElementById("persTuta").disabled = false;
           }
 
-          // Gestione T-SHIRT
           const tshirtColore = getColValue(riga, "T-SHIRT") || "";
           if (tshirtColore) {
             document.getElementById("tshirtColore").value = tshirtColore;
@@ -388,6 +406,7 @@
             msTshirt.innerHTML = '<option value="">-- Seleziona Misura --</option>';
             parseMisure(getColValue(riga, "MISURE T-SHIRT"), msTshirt);
             msTshirt.disabled = false;
+            document.getElementById("persTshirt").disabled = false;
           }
         }
       }
@@ -397,17 +416,14 @@
         const msgDiv = document.getElementById("message");
         const btn = document.getElementById("submitBtn");
 
-        // Controllo validità campi anagrafici standard
         if (!form.checkValidity()) {
           form.reportValidity();
           return;
         }
 
-        // Lettura quantità
         const qTuta = parseInt(document.getElementById("quantitaTuta").value) || 0;
         const qTshirt = parseInt(document.getElementById("quantitaTshirt").value) || 0;
 
-        // Validazione incrociata articoli
         if (qTuta === 0 && qTshirt === 0) {
           alert("Devi ordinare almeno una Tuta o una T-Shirt (Quantità > 0).");
           return;
@@ -436,10 +452,12 @@
           colore: qTuta > 0 ? document.getElementById("colore").value : "",
           misura: qTuta > 0 ? document.getElementById("misura").value : "",
           quantitaTuta: qTuta,
+          persTuta: qTuta > 0 ? document.getElementById("persTuta").value : "",
 
           tshirtColore: qTshirt > 0 ? document.getElementById("tshirtColore").value : "",
           tshirtMisura: qTshirt > 0 ? document.getElementById("tshirtMisura").value : "",
-          quantitaTshirt: qTshirt
+          quantitaTshirt: qTshirt,
+          persTshirt: qTshirt > 0 ? document.getElementById("persTshirt").value : ""
         };
 
         btn.disabled = true;
