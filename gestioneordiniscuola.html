@@ -28,7 +28,6 @@
         box-shadow: 0 10px 30px rgba(0,0,0,0.08);
         overflow: hidden;
       }
-      /* Immagine di copertina (Gerace) */
       .header-image {
         width: 100%;
         height: 220px;
@@ -103,7 +102,6 @@
         font-size: 14px;
         box-shadow: 0 4px 6px rgba(255, 107, 107, 0.2);
       }
-      /* Colori alternativi per le sezioni */
       .section-genitore legend { background: #ff9f43; box-shadow: 0 4px 6px rgba(255, 159, 67, 0.2); }
       .section-alunno legend { background: var(--secondary); box-shadow: 0 4px 6px rgba(78, 205, 196, 0.2); }
       .section-divisa legend { background: #5f27cd; box-shadow: 0 4px 6px rgba(95, 39, 205, 0.2); }
@@ -124,7 +122,37 @@
         display: flex;
         align-items: center;
         gap: 8px;
+        border-bottom: 1px solid #ecf0f1;
+        padding-bottom: 5px;
       }
+      .preview-image {
+        display: block;
+        max-width: 100%;
+        max-height: 250px;
+        border-radius: 8px;
+        margin: 0 auto 15px auto;
+        object-fit: contain;
+      }
+      .color-circle {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: 1px solid #b2bec3;
+        vertical-align: middle;
+        margin-left: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      .scheda-link {
+        display: inline-block;
+        margin-top: 8px;
+        font-size: 13px;
+        color: #3498db;
+        text-decoration: none;
+        font-weight: bold;
+      }
+      .scheda-link:hover { text-decoration: underline; }
+      
       button {
         width: 100%;
         padding: 15px;
@@ -185,7 +213,6 @@
       <div class="form-content">
         <form id="orderForm">
           
-          <!-- DATI GENITORE -->
           <fieldset class="section-genitore">
             <legend>👤 Dati del Genitore</legend>
             <div class="form-group">
@@ -202,7 +229,6 @@
             </div>
           </fieldset>
 
-          <!-- DATI ALUNNO -->
           <fieldset class="section-alunno">
             <legend>🎓 Dati dell'Alunno</legend>
             <div class="form-group">
@@ -232,7 +258,6 @@
             </div>
           </fieldset>
 
-          <!-- CONFIGURAZIONE DIVISA -->
           <fieldset class="section-divisa">
             <legend>👕 Configurazione Divisa</legend>
             
@@ -243,9 +268,14 @@
               </select>
             </div>
 
-            <!-- PRODOTTO: TUTA -->
+            <!-- BOX TUTA -->
             <div class="product-box">
               <div class="product-title">📦 Ordina Tuta</div>
+              
+              <div id="tutaPreviewContainer" style="display: none;">
+                <img id="tutaPreviewImg" src="" class="preview-image" alt="Anteprima Tuta">
+              </div>
+
               <div class="form-group">
                 <label for="colore">Colore Tuta:</label>
                 <input type="text" id="colore" name="colore" placeholder="Si compila automaticamente" readonly>
@@ -255,6 +285,7 @@
                 <select id="misura" name="misura" disabled>
                   <option value="">-- Prima seleziona la Classe --</option>
                 </select>
+                <a id="linkSchedaTuta" href="#" target="_blank" class="scheda-link" style="display:none;">📄 Vedi Scheda Tecnica Taglie</a>
               </div>
               <div class="form-group">
                 <label for="persTuta">Personalizzazione Tuta:</label>
@@ -270,13 +301,18 @@
               </div>
             </div>
 
-            <!-- PRODOTTO: T-SHIRT -->
+            <!-- BOX T-SHIRT -->
             <div class="product-box">
               <div class="product-title">👕 Ordina T-Shirt</div>
+              
               <div class="form-group">
-                <label for="tshirtColore">Colore T-Shirt:</label>
+                <label for="tshirtColore">
+                  Colore T-Shirt: 
+                  <span id="tshirtColorCircle" class="color-circle" style="display:none;"></span>
+                </label>
                 <input type="text" id="tshirtColore" name="tshirtColore" placeholder="Si compila automaticamente" readonly>
               </div>
+              
               <div class="form-group">
                 <label for="tshirtMisura">Misura T-Shirt:</label>
                 <select id="tshirtMisura" name="tshirtMisura" disabled>
@@ -322,7 +358,14 @@
         '2/3': 9, '4/5': 10, '6/7': 11, '8/9': 12, '10/11': 13, '12/13': 14
       };
 
-      // Funzione per maiuscola iniziale e resto minuscolo
+      // Mappa colori CSS in base al nome
+      const colorMap = {
+        "ROSSO": "#e74c3c", "GIALLO": "#f1c40f", "BIANCO": "#ffffff",
+        "BLU": "#2980b9", "NERO": "#2d3436", "VERDE": "#2ecc71",
+        "GRIGIO": "#95a5a6", "AZZURRO": "#74b9ff", "ARANCIONE": "#e67e22",
+        "NAVY": "#130f40", "BORDEAUX": "#8e44ad"
+      };
+
       function formattaTesto(inputElement) {
         let testo = inputElement.value;
         if (!testo) return;
@@ -335,6 +378,11 @@
       function getColValue(item, colName) {
         const key = Object.keys(item).find(k => k.trim().toUpperCase() === colName.trim().toUpperCase());
         return key ? item[key] : null;
+      }
+
+      function getColorHex(colorString) {
+        const key = colorString.trim().toUpperCase();
+        return colorMap[key] || colorString; 
       }
 
       window.onload = function() {
@@ -413,6 +461,8 @@
         document.getElementById("persTuta").value = "Nessuna";
         document.getElementById("persTuta").disabled = true;
         document.getElementById("quantitaTuta").value = "0";
+        document.getElementById("tutaPreviewContainer").style.display = "none";
+        document.getElementById("linkSchedaTuta").style.display = "none";
 
         document.getElementById("tshirtColore").value = "";
         document.getElementById("tshirtMisura").innerHTML = '<option value="">-- Prima seleziona la Classe --</option>';
@@ -420,6 +470,7 @@
         document.getElementById("persTshirt").value = "Nessuna";
         document.getElementById("persTshirt").disabled = true;
         document.getElementById("quantitaTshirt").value = "0";
+        document.getElementById("tshirtColorCircle").style.display = "none";
       }
 
       function parseMisure(misureString, selectElement) {
@@ -457,9 +508,25 @@
         if (righeClasse.length > 0) {
           const riga = righeClasse[0];
 
+          // Dati TUTA
           const tutaColore = getColValue(riga, "TUTA") || "";
           if (tutaColore) {
             document.getElementById("colore").value = tutaColore;
+            
+            // Anteprima Immagine Tuta
+            const fotoTuta = getColValue(riga, "FOTO TUTA");
+            if(fotoTuta) {
+              document.getElementById("tutaPreviewImg").src = fotoTuta;
+              document.getElementById("tutaPreviewContainer").style.display = "block";
+            }
+
+            // Scheda tecnica Tuta
+            const schedaTuta = getColValue(riga, "SCHEDA TECNICA TAGLIE TUTA");
+            if(schedaTuta) {
+              document.getElementById("linkSchedaTuta").href = schedaTuta;
+              document.getElementById("linkSchedaTuta").style.display = "inline-block";
+            }
+
             const msTuta = document.getElementById("misura");
             msTuta.innerHTML = '<option value="">-- Seleziona Misura --</option>';
             parseMisure(getColValue(riga, "MIS TUTE"), msTuta);
@@ -467,9 +534,16 @@
             document.getElementById("persTuta").disabled = false;
           }
 
+          // Dati T-SHIRT
           const tshirtColore = getColValue(riga, "T-SHIRT") || "";
           if (tshirtColore) {
             document.getElementById("tshirtColore").value = tshirtColore;
+            
+            // Tondino colorato
+            const tondino = document.getElementById("tshirtColorCircle");
+            tondino.style.backgroundColor = getColorHex(tshirtColore);
+            tondino.style.display = "inline-block";
+
             const msTshirt = document.getElementById("tshirtMisura");
             msTshirt.innerHTML = '<option value="">-- Seleziona Misura --</option>';
             parseMisure(getColValue(riga, "MISURE T-SHIRT"), msTshirt);
