@@ -34,13 +34,7 @@
         font-weight: 600;
         font-size: 14px;
       }
-      .security-note {
-        font-size: 12px;
-        color: #7f8c8d;
-        margin-top: 4px;
-        display: block;
-      }
-      input[type="text"], input[type="password"], select {
+      input[type="text"], select {
         width: 100%;
         padding: 10px;
         border: 1px solid #ced4da;
@@ -48,9 +42,22 @@
         box-sizing: border-box;
         font-size: 15px;
       }
-      input[type="text"]:focus, input[type="password"]:focus, select:focus {
-        border-color: #3498db;
-        outline: none;
+      input[readonly] {
+        background-color: #e9ecef;
+        cursor: not-allowed;
+      }
+      .section-divisa {
+        border: 2px solid #3498db;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        background-color: #f0f8ff;
+      }
+      .section-legend {
+        color: #2980b9;
+        font-weight: bold;
+        padding: 0 10px;
+        font-size: 15px;
       }
       button {
         width: 100%;
@@ -65,12 +72,16 @@
         transition: background-color 0.3s;
         margin-top: 10px;
       }
-      button:hover {
-        background-color: #1c5980;
-      }
       button:disabled {
         background-color: #95a5a6;
         cursor: not-allowed;
+      }
+      #status-db {
+        font-size: 12px;
+        color: #e67e22;
+        margin-bottom: 15px;
+        text-align: center;
+        font-weight: bold;
       }
       #message {
         margin-top: 20px;
@@ -87,14 +98,11 @@
   <body>
     <div class="container">
       <h2>Ordine Divise Scolastiche</h2>
+      
+      <div id="status-db">Sincronizzazione catalogo prodotti in corso...</div>
+
       <form id="orderForm">
         
-        <div class="form-group">
-          <label for="pin">Codice Scuola:</label>
-          <input type="password" id="pin" name="pin" placeholder="Inserisci il codice fornito dalla scuola" required>
-          <span class="security-note">Richiesto per confermare l'autenticità dell'ordine.</span>
-        </div>
-
         <div class="form-group">
           <label for="nome">Nome Alunno:</label>
           <input type="text" id="nome" name="nome" placeholder="Inserisci il nome" required>
@@ -124,29 +132,30 @@
           </select>
         </div>
 
-        <div class="form-group">
-          <label for="classe">Classe di Appartenenza:</label>
-          <input type="text" id="classe" name="classe" placeholder="Es. 1A, 2B, 3C" required>
-        </div>
+        <fieldset class="section-divisa">
+          <legend class="section-legend">Configurazione Divisa</legend>
+          
+          <div class="form-group">
+            <label for="classe">Classe di Appartenenza:</label>
+            <select id="classe" name="classe" onchange="filtraOpzioniDivisa()" required disabled>
+              <option value="">-- In attesa del catalogo... --</option>
+            </select>
+          </div>
 
-        <div class="form-group">
-          <label for="misura">Misura della Tuta:</label>
-          <select id="misura" name="misura" required>
-            <option value="">-- Seleziona Misura --</option>
-            <option value="XS">XS</option>
-            <option value="S">S</option>
-            <option value="M">M</option>
-            <option value="L">L</option>
-            <option value="XL">XL</option>
-          </select>
-        </div>
+          <div class="form-group">
+            <label for="colore">Colore/Tipo della Tuta:</label>
+            <input type="text" id="colore" name="colore" placeholder="Si compila automaticamente" readonly required>
+          </div>
 
-        <div class="form-group">
-          <label for="colore">Colore della Tuta:</label>
-          <input type="text" id="colore" name="colore" placeholder="Es. Blu navy, Grigio" required>
-        </div>
+          <div class="form-group">
+            <label for="misura">Misura della Tuta:</label>
+            <select id="misura" name="misura" required disabled>
+              <option value="">-- Prima seleziona la Classe --</option>
+            </select>
+          </div>
+        </fieldset>
 
-        <button type="button" id="submitBtn" onclick="submitForm()">Registra Ordine</button>
+        <button type="button" id="submitBtn" onclick="submitForm()" disabled>Attendi sincronizzazione...</button>
       </form>
       <div id="message"></div>
     </div>
@@ -154,6 +163,8 @@
     <script>
       const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz6ZYZjFh_B-zeHVhdK5UnRsPY2iF0a1gD7tK1msKbilWivoBimB8sTaxgDm339AScB/exec';
       
+      let dbProdotti = [];
+
       const scuoleData = {
         "Antonimina": ["Scuola secondaria di primo grado"],
         "Trarie": ["Scuola dell'infanzia", "Scuola primaria"],
@@ -162,19 +173,103 @@
         "Canolo": ["Scuola primaria"]
       };
 
-      function updateGrado() {
-        const comuneSelezionato = document.getElementById("comune").value;
-        const gradoSelect = document.getElementById("grado");
-        
-        gradoSelect.innerHTML = '<option value="">-- Seleziona Grado Scolastico --</option>';
-        
-        if (comuneSelezionato && scuoleData[comuneSelezionato]) {
-          scuoleData[comuneSelezionato].forEach(function(grado) {
-            const option = document.createElement("option");
-            option.value = grado;
-            option.text = grado;
-            gradoSelect.appendChild(option);
+      window.onload = function() {
+        fetch(SCRIPT_URL + '?action=getProdotti')
+          .then(res => res.json())
+          .then(data => {
+            if(data.error) {
+              document.getElementById("status-db").innerText = "Errore: " + data.error;
+              return;
+            }
+            dbProdotti = data;
+            popolaMenuClassi();
+            
+            document.getElementById("status-db").style.display = "none";
+            document.getElementById("classe").disabled = false;
+            document.getElementById("submitBtn").disabled = false;
+            document.getElementById("submitBtn").innerText = "Registra Ordine";
+          })
+          .catch(err => {
+            document.getElementById("status-db").innerText = "Impossibile scaricare le divise. Ricarica la pagina.";
+            document.getElementById("status-db").style.color = "red";
           });
+      };
+
+      function updateGrado() {
+        const comune = document.getElementById("comune").value;
+        const grado = document.getElementById("grado");
+        grado.innerHTML = '<option value="">-- Seleziona Grado Scolastico --</option>';
+        if (comune && scuoleData[comune]) {
+          scuoleData[comune].forEach(g => {
+            const opt = document.createElement("option");
+            opt.value = g; opt.text = g;
+            grado.appendChild(opt);
+          });
+        }
+      }
+
+      function popolaMenuClassi() {
+        const classeSelect = document.getElementById("classe");
+        const classiUniche = [...new Set(dbProdotti.map(item => item.Classe))].filter(Boolean).sort();
+        
+        classeSelect.innerHTML = '<option value="">-- Seleziona Classe --</option>';
+        classiUniche.forEach(c => {
+          const opt = document.createElement("option");
+          opt.value = c; opt.text = c;
+          classeSelect.appendChild(opt);
+        });
+      }
+
+      function filtraOpzioniDivisa() {
+        const classe = document.getElementById("classe").value;
+        const coloreInput = document.getElementById("colore");
+        const misuraSelect = document.getElementById("misura");
+
+        misuraSelect.innerHTML = '<option value="">-- Seleziona Misura --</option>';
+        
+        if (!classe) {
+          coloreInput.value = "";
+          misuraSelect.disabled = true;
+          return;
+        }
+
+        const righeClasse = dbProdotti.filter(item => item.Classe == classe);
+        
+        if (righeClasse.length > 0) {
+          coloreInput.value = righeClasse[0].Colore || "";
+          
+          let tutteLeMisure = [];
+          righeClasse.forEach(item => {
+            if (item.Misura) {
+              // Estrapola le misure, separandole dal trattino
+              const separate = item.Misura.toString().split('-');
+              separate.forEach(m => {
+                if (m.trim()) tutteLeMisure.push(m.trim());
+              });
+            }
+          });
+          
+          let misureUniche = [...new Set(tutteLeMisure)];
+          
+          // Mappa di priorità per ordinare le taglie correttamente
+          const priority = { 'XS': 1, 'S': 2, 'M': 3, 'L': 4, 'XL': 5 };
+          
+          misureUniche.sort((a, b) => {
+             const pA = priority[a.toUpperCase()] || 99;
+             const pB = priority[b.toUpperCase()] || 99;
+             return pA - pB;
+          });
+
+          misureUniche.forEach(m => {
+            const opt = document.createElement("option");
+            opt.value = m; opt.text = m;
+            misuraSelect.appendChild(opt);
+          });
+          
+          misuraSelect.disabled = false;
+        } else {
+          coloreInput.value = "Nessuna divisa trovata";
+          misuraSelect.disabled = true;
         }
       }
 
@@ -183,26 +278,12 @@
         const msgDiv = document.getElementById("message");
         const btn = document.getElementById("submitBtn");
 
-        // 1. Controllo base dei campi
         if (!form.checkValidity()) {
           form.reportValidity();
           return;
         }
 
-        // 2. Controllo Anti-Spam (limite di 3 minuti tra un invio e l'altro)
-        const tempoUltimoInvio = localStorage.getItem('ultimoInvioDivise');
-        const tempoAttuale = new Date().getTime();
-        const treMinuti = 3 * 60 * 1000;
-
-        if (tempoUltimoInvio && (tempoAttuale - tempoUltimoInvio < treMinuti)) {
-          msgDiv.style.display = "block";
-          msgDiv.innerText = "Hai già inviato un ordine di recente. Per favore, attendi qualche minuto prima di inserirne un altro.";
-          msgDiv.className = "error";
-          return;
-        }
-
         const data = {
-          pin: document.getElementById("pin").value,
           nome: document.getElementById("nome").value,
           cognome: document.getElementById("cognome").value,
           comune: document.getElementById("comune").value,
@@ -213,41 +294,36 @@
         };
 
         btn.disabled = true;
-        btn.innerText = "Verifica in corso...";
+        btn.innerText = "Registrazione in corso...";
         msgDiv.style.display = "none";
 
         fetch(SCRIPT_URL, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'text/plain;charset=utf-8',
-          },
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
           body: JSON.stringify(data)
         })
-        .then(response => response.json())
-        .then(responseData => {
+        .then(res => res.json())
+        .then(resData => {
           msgDiv.style.display = "block";
-          if (responseData.status === "success") {
-            msgDiv.innerText = responseData.message;
+          if (resData.status === "success") {
+            msgDiv.innerText = resData.message;
             msgDiv.className = "success";
             form.reset();
             updateGrado();
-            // Registra il momento del successo per attivare il blocco temporale
-            localStorage.setItem('ultimoInvioDivise', new Date().getTime());
+            filtraOpzioniDivisa();
           } else {
-            // Se il PIN è errato, il server restituisce errore
-            msgDiv.innerText = "Attenzione: " + responseData.message;
+            msgDiv.innerText = "Errore: " + resData.message;
             msgDiv.className = "error";
           }
           btn.disabled = false;
           btn.innerText = "Registra Ordine";
         })
-        .catch(error => {
+        .catch(err => {
           msgDiv.style.display = "block";
-          msgDiv.innerText = "Si è verificato un errore di connessione. Riprova più tardi.";
+          msgDiv.innerText = "Si è verificato un errore di connessione col server.";
           msgDiv.className = "error";
           btn.disabled = false;
           btn.innerText = "Registra Ordine";
-          console.error('Errore:', error);
         });
       }
     </script>
