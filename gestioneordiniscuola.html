@@ -34,7 +34,7 @@
         font-weight: 600;
         font-size: 14px;
       }
-      input[type="text"], select {
+      input[type="text"], input[type="email"], input[type="tel"], select {
         width: 100%;
         padding: 10px;
         border: 1px solid #ced4da;
@@ -53,8 +53,21 @@
         margin-bottom: 20px;
         background-color: #f0f8ff;
       }
+      .section-genitore {
+        border: 2px solid #2ecc71;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        background-color: #eafaf1;
+      }
       .section-legend {
         color: #2980b9;
+        font-weight: bold;
+        padding: 0 10px;
+        font-size: 15px;
+      }
+      .legend-genitore {
+        color: #27ae60;
         font-weight: bold;
         padding: 0 10px;
         font-size: 15px;
@@ -103,34 +116,56 @@
 
       <form id="orderForm">
         
-        <div class="form-group">
-          <label for="nome">Nome Alunno:</label>
-          <input type="text" id="nome" name="nome" placeholder="Inserisci il nome" required>
-        </div>
-        
-        <div class="form-group">
-          <label for="cognome">Cognome Alunno:</label>
-          <input type="text" id="cognome" name="cognome" placeholder="Inserisci il cognome" required>
-        </div>
-        
-        <div class="form-group">
-          <label for="comune">Comune (Plesso):</label>
-          <select id="comune" name="comune" onchange="updateGrado()" required>
-            <option value="">-- Seleziona Comune/Plesso --</option>
-            <option value="Antonimina">Antonimina</option>
-            <option value="Trarie">Trarie</option>
-            <option value="Azzuria/Merici">Azzuria/Merici</option>
-            <option value="Gerace">Gerace</option>
-            <option value="Canolo">Canolo</option>
-          </select>
-        </div>
-        
-        <div class="form-group">
-          <label for="grado">Grado Scolastico:</label>
-          <select id="grado" name="grado" onchange="updateClassi()" required>
-            <option value="">-- Prima seleziona un Comune --</option>
-          </select>
-        </div>
+        <fieldset class="section-genitore">
+          <legend class="legend-genitore">Dati del Genitore</legend>
+          
+          <div class="form-group">
+            <label for="nomeGenitore">Nome e Cognome:</label>
+            <input type="text" id="nomeGenitore" name="nomeGenitore" placeholder="Inserisci il tuo nome e cognome" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="emailGenitore">Email:</label>
+            <input type="email" id="emailGenitore" name="emailGenitore" placeholder="es. mario.rossi@email.com" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="telefonoGenitore">Telefono (Cellulare):</label>
+            <input type="tel" id="telefonoGenitore" name="telefonoGenitore" placeholder="es. 3331234567" required>
+          </div>
+        </fieldset>
+
+        <fieldset class="section-divisa" style="border-color: #bdc3c7; background-color: #fdfdfd;">
+          <legend class="section-legend" style="color: #7f8c8d;">Dati dell'Alunno</legend>
+          <div class="form-group">
+            <label for="nome">Nome Alunno:</label>
+            <input type="text" id="nome" name="nome" placeholder="Inserisci il nome" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="cognome">Cognome Alunno:</label>
+            <input type="text" id="cognome" name="cognome" placeholder="Inserisci il cognome" required>
+          </div>
+          
+          <div class="form-group">
+            <label for="comune">Comune (Plesso):</label>
+            <select id="comune" name="comune" onchange="updateGrado()" required>
+              <option value="">-- Seleziona Comune/Plesso --</option>
+              <option value="Antonimina">Antonimina</option>
+              <option value="Trarie">Trarie</option>
+              <option value="Azzuria/Merici">Azzuria/Merici</option>
+              <option value="Gerace">Gerace</option>
+              <option value="Canolo">Canolo</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="grado">Grado Scolastico:</label>
+            <select id="grado" name="grado" onchange="updateClassi()" required>
+              <option value="">-- Prima seleziona un Comune --</option>
+            </select>
+          </div>
+        </fieldset>
 
         <fieldset class="section-divisa">
           <legend class="section-legend">Configurazione Divisa</legend>
@@ -173,7 +208,6 @@
         "Canolo": ["Scuola primaria"]
       };
 
-      // Estrattore universale per ignorare spazi e maiuscole/minuscole nelle intestazioni
       function getColValue(item, colName) {
         const key = Object.keys(item).find(k => k.trim().toUpperCase() === colName.trim().toUpperCase());
         return key ? item[key] : null;
@@ -220,7 +254,6 @@
       }
 
       function updateClassi() {
-        // Legge il grado selezionato in formato minuscolo per la comparazione
         const gradoSelezionato = document.getElementById("grado").value.trim().toLowerCase();
         const classeSelect = document.getElementById("classe");
         
@@ -235,13 +268,11 @@
           return;
         }
 
-        // Filtra usando la colonna "GRADO" (ignora maiuscole e spazi)
         const classiFiltrate = dbProdotti.filter(item => {
            const val = getColValue(item, "GRADO");
            return val && val.toString().trim().toLowerCase() === gradoSelezionato;
         });
 
-        // Mappa i risultati usando la colonna "CLASSE"
         const classiUniche = [...new Set(classiFiltrate.map(item => getColValue(item, "CLASSE")))].filter(Boolean).sort();
         
         if (classiUniche.length > 0) {
@@ -271,7 +302,6 @@
           return;
         }
 
-        // Trova la riga specifica (matching "CLASSE" e "GRADO" insensibile)
         const righeClasse = dbProdotti.filter(item => {
           const c = getColValue(item, "CLASSE");
           const g = getColValue(item, "GRADO");
@@ -294,7 +324,6 @@
           
           let misureUniche = [...new Set(tutteLeMisure)];
           
-          // Mappa estesa per gestire l'ordine
           const priority = { 'XXXS': 1, 'XXS': 2, 'XS': 3, 'S': 4, 'M': 5, 'L': 6, 'XL': 7, 'XXL': 8 };
           
           misureUniche.sort((a, b) => {
@@ -327,6 +356,9 @@
         }
 
         const data = {
+          nomeGenitore: document.getElementById("nomeGenitore").value,
+          emailGenitore: document.getElementById("emailGenitore").value,
+          telefonoGenitore: document.getElementById("telefonoGenitore").value,
           nome: document.getElementById("nome").value,
           cognome: document.getElementById("cognome").value,
           comune: document.getElementById("comune").value,
