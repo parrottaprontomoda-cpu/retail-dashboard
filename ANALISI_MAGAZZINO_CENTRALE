@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Analisi Magazzino - ELENCO NOTE</title>
+    <!-- CSS Esterni -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
+    <!-- Select2 CSS per menu a tendina ricercabili -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+    
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .navbar { background-color: #2c3e50; }
+        .card-kpi { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s; }
+        .card-kpi:hover { transform: translateY(-5px); }
+        .kpi-icon { font-size: 2.5rem; opacity: 0.8; }
+        .chart-container { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .chart-wrapper { position: relative; height: 280px; width: 100%; } 
+        .table-container { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        
+        #preFilterScreen { background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 600px; margin: 50px auto; text-align: center; }
+        #loading { display: none; text-align: center; padding: 50px; margin-top: 50px; }
+        
+        tfoot th { background-color: #e9ecef !important; font-size: 1.1rem; color: #2c3e50; }
+        td.dt-control { text-align: center; cursor: pointer; }
+        td.dt-control i { transition: transform 0.2s; }
+        
+        .matrix-table th, .matrix-table td { vertical-align: middle; text-align: center; }
+        .matrix-table .color-col { text-align: left; font-weight: bold; background-color: #f8f9fa; width: 150px; }
+        .matrix-table .tot-col { background-color: #f8f9fa; font-weight: bold; }
+
+        @media print {
+            @page { size: A4; margin: 15mm; }
+            body { font-size: 11pt; background-color: white; }
+            body * { visibility: hidden; }
+            
+            body.modal-open { overflow: visible !important; height: auto !important; }
+            #packingListModal { position: absolute; left: 0; top: 0; margin: 0; padding: 0; overflow: visible !important; display: block !important; }
+            #packingListModal * { visibility: visible; }
+            
+            .modal-dialog { max-width: 100%; margin: 0; padding: 0; }
+            .modal-content { border: none; box-shadow: none; }
+            .modal-header, .modal-footer, .d-print-none { display: none !important; }
+            .modal-body { padding: 0 !important; }
+
+            .matrix-table th { background-color: #e9ecef !important; -webkit-print-color-adjust: exact; color-adjust: exact; }
+            .matrix-table td.color-col { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; color-adjust: exact; }
+            
+            .packing-item { page-break-inside: avoid; margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 15px; }
+            thead { display: table-header-group; }
+            tr { page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark mb-4">
+    <div class="container-fluid">
+        <span class="navbar-brand mb-0 h1"><i class="fas fa-boxes me-2"></i> Analisi Magazzino Centrale</span>
+        <span class="navbar-text text-white-50" id="status-indicator"><i class="fas fa-filter me-1"></i> In attesa di parametri</span>
+    </div>
+</nav>
+
+<div class="container-fluid px-4">
+
+    <!-- SCHERMATA INIZIALE DI PRE-FILTRAGGIO -->
+    <div id="preFilterScreen">
+        <h3 class="mb-4"><i class="fas fa-cloud-download-alt text-primary mb-3" style="font-size: 3rem;"></i><br>Estrai Dati Magazzino</h3>
+        <p class="text-muted mb-4">Seleziona il periodo da analizzare. I dati verranno filtrati sui server di Google prima di essere scaricati per evitare blocchi del browser.</p>
+        
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <select id="select-year" class="form-select form-select-lg">
+                    <option value="">Tutti gli anni (Lento)</option>
+                    <option value="2026" selected>2026</option>
+                    <option value="2025">2025</option>
+                    <option value="2024">2024</option>
+                    <option value="2023">2023</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <select id="select-month" class="form-select form-select-lg">
+                    <option value="">Tutto l'anno</option>
+                    <option value="01">Gennaio</option>
+                    <option value="02">Febbraio</option>
+                    <option value="03">Marzo</option>
+                    <option value="04">Aprile</option>
+                    <option value="05">Maggio</option>
+                    <option value="06">Giugno</option>
+                    <option value="07">Luglio</option>
+                    <option value="08">Agosto</option>
+                    <option value="09">Settembre</option>
+                    <option value="10">Ottobre</option>
+                    <option value="11">Novembre</option>
+                    <option value="12">Dicembre</option>
+                </select>
+            </div>
+        </div>
+        <button id="btnLoadData" class="btn btn-primary btn-lg w-100 mt-3"><i class="fas fa-sync me-2"></i> Connetti e Scarica Dati</button>
+    </div>
+
+    <!-- SCHERMATA DI CARICAMENTO -->
+    <div id="loading">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+        <h5 class="mt-3">Connessione a Google Fogli in corso...</h5>
+        <p class="text-muted">L'estrazione potrebbe richiedere qualche secondo a seconda della mole di dati.</p>
+    </div>
+
+    <!-- DASHBOARD PRINCIPALE -->
+    <div id="dashboardContent" style="display: none;">
+        
+        <!-- KPI Cards -->
+        <div class="row mb-4">
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card card-kpi bg-primary text-white h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-uppercase mb-1">Movimenti (Righe)</div>
+                                <div class="h5 mb-0 font-weight-bold" id="kpi-rows">0</div>
+                            </div>
+                            <div class="col-auto"><i class="fas fa-list-ol kpi-icon"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card card-kpi bg-success text-white h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-uppercase mb-1">Saldo Netto (Pezzi)</div>
+                                <div class="h5 mb-0 font-weight-bold" id="kpi-qta">0</div>
+                            </div>
+                            <div class="col-auto"><i class="fas fa-cubes kpi-icon"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card card-kpi bg-info text-white h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-uppercase mb-1">Saldo Netto Valore</div>
+                                <div class="h5 mb-0 font-weight-bold" id="kpi-valore">€ 0.00</div>
+                            </div>
+                            <div class="col-auto"><i class="fas fa-euro-sign kpi-icon"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6 mb-4">
+                <div class="card card-kpi bg-warning text-white h-100 py-2">
+                    <div class="card-body">
+                        <div class="row no-gutters align-items-center">
+                            <div class="col mr-2">
+                                <div class="text-xs font-weight-bold text-uppercase mb-1">Destinazioni Coinvolte</div>
+                                <div class="h5 mb-0 font-weight-bold" id="kpi-clienti">0</div>
+                            </div>
+                            <div class="col-auto"><i class="fas fa-users kpi-icon"></i></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filtri Dinamici Dashboard -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body py-3">
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-2">
+                                <label class="fw-bold small">Destinazione</label>
+                                <select id="filter-tipo" class="form-select select2-searchable">
+                                    <option value="ALL">Tutti i tipi</option>
+                                    <option value="Punto Vendita Diretto">Solo Punti Vendita</option>
+                                    <option value="Cliente Esterno">Solo Clienti Esterni</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="fw-bold small">Fornitore</label>
+                                <select id="filter-forn" class="form-select select2-searchable"><option value="ALL">Tutti</option></select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="fw-bold small">Azienda (Operatore)</label>
+                                <select id="filter-oper" class="form-select select2-searchable"><option value="ALL">Tutti</option></select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="fw-bold small text-primary">Cerca ID o Cliente</label>
+                                <!-- La classe select2-searchable attiva l'autocompletamento -->
+                                <select id="filter-idril" class="form-select select2-searchable"><option value="ALL">Tutti gli ID</option></select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="fw-bold small">Articolo (Descrizione)</label>
+                                <input type="text" id="filter-art" class="form-control" placeholder="Es. Pantalone...">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="fw-bold small">Codice / EAN13</label>
+                                <input type="text" id="filter-ean" class="form-control" placeholder="Es. 805...">
+                            </div>
+                        </div>
+                        <div class="row g-2 mt-2">
+                            <div class="col-md-6">
+                                <button id="applyFiltersBtn" class="btn btn-secondary w-100"><i class="fas fa-filter"></i> Applica Filtri alla Dashboard</button>
+                            </div>
+                            <div class="col-md-6">
+                                <button id="btnPackingList" class="btn btn-success w-100"><i class="fas fa-boxes"></i> Genera Packing List da ID Selezionato</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="chart-container">
+                    <h5 class="mb-3">Top 10 Volumi per Destinazione</h5>
+                    <div class="chart-wrapper"><canvas id="chartClienti"></canvas></div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="chart-container">
+                    <h5 class="mb-3">Top 10 Volumi per Articolo</h5>
+                    <div class="chart-wrapper"><canvas id="chartArticoli"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table Raggruppata -->
+        <div class="row mb-5">
+            <div class="col-12">
+                <div class="table-container">
+                    <h5 class="mb-3">Dettaglio Movimentazioni per Codice</h5>
+                    <div class="table-responsive">
+                        <table id="dataTable" class="table table-hover align-middle" style="width:100%; font-size: 0.95rem;">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th style="width: 30px;"></th>
+                                    <th>EAN/Codice</th>
+                                    <th>Descrizione Articolo</th>
+                                    <th>Saldo Q.tà</th>
+                                    <th>Saldo Valore</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="3" style="text-align:right">Subtotale netto filtrato:</th>
+                                    <th id="footer-qta">0</th>
+                                    <th id="footer-tot">€ 0.00</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Packing List -->
+<div class="modal fade" id="packingListModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-fullscreen-lg-down">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white d-print-none">
+                <h5 class="modal-title"><i class="fas fa-clipboard-list me-2"></i> Packing List Rilevamento</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4" id="packingListBody">
+                <!-- Contenuto generato dinamicamente -->
+            </div>
+            <div class="modal-footer d-print-none">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                <button type="button" class="btn btn-primary" onclick="window.print()"><i class="fas fa-print me-2"></i> Stampa in PDF / Carta</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Script JS Essenziali -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    const sheetID = "1OlxI1A6wuhvH0gnfo3VnkyQ58kWBgIfJAVIjUIuZw-I";
+    const sheetName = "NOTE";
+    const COLONNA_DATA = 'B'; 
+    
+    const NOME_COLONNA_QTA_MAGAZZINO = "INSERISCI_TITOLO_COLONNA_N"; 
+    const NOME_COLONNA_ID_RILEVAMENTO = "INSERISCI_TITOLO_COLONNA_Q"; 
+    const NOME_COLONNA_MISURA = "INSERISCI_TITOLO_COLONNA_S"; 
+    const NOME_COLONNA_COLORE = "INSERISCI_TITOLO_COLONNA_T"; 
+    
+    const PUNTI_VENDITA = ['PEPLO', 'PARROTTA POINT CHIARAVALLE', 'PARROTTA PRONTO MODA', 'CARAMELLO', 'TIKO'];
+
+    const sizePriority = {
+        'XXXS': 1, 'XXS': 2, 'XS': 3, 'S': 4, 'M': 5, 'L': 6, 'XL': 7, 'XXL': 8, '2XL': 8, '3XL': 9, '4XL': 10, 'TU': 99, 'UNICA': 99
+    };
+
+    let globalData = [];
+    let globalCols = [];
+    let charts = {};
+
+    document.getElementById('btnLoadData').addEventListener('click', function() {
+        let y = document.getElementById('select-year').value;
+        let m = document.getElementById('select-month').value;
+        
+        document.getElementById('preFilterScreen').style.display = 'none';
+        document.getElementById('loading').style.display = 'block';
+
+        let tq = "SELECT *";
+        if (y) {
+            let searchStr = y;
+            if (m) searchStr = m + "/" + y; 
+            tq += ` WHERE ${COLONNA_DATA} CONTAINS '${searchStr}'`;
+        }
+
+        const apiGoogleUrl = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json;responseHandler:handleGoogleData&sheet=${sheetName}&headers=1&tq=${encodeURIComponent(tq)}`;
+
+        let script = document.createElement('script');
+        script.src = apiGoogleUrl;
+        script.onerror = function() {
+            document.getElementById('loading').innerHTML = `<h5 class="text-danger mt-4">Errore di rete durante la connessione.</h5>`;
+        };
+        document.body.appendChild(script);
+    });
+
+    window.handleGoogleData = function(response) {
+        if (!response || !response.table) {
+            document.getElementById('loading').innerHTML = `<h5 class="text-danger mt-4">Nessun dato trovato o errore di lettura.</h5>
+            <button class="btn btn-outline-primary mt-3" onclick="location.reload()">Torna Indietro</button>`;
+            return;
+        }
+        
+        globalCols = response.table.cols.map((c, i) => c && c.label ? c.label : 'Colonna_' + i);
+        
+        let parsedData = response.table.rows.map(r => {
+            let rowObj = {};
+            r.c.forEach((cell, i) => {
+                rowObj[globalCols[i]] = (cell && cell.f !== undefined && cell.f !== null) ? cell.f : (cell && cell.v !== null ? cell.v : '');
+            });
+            return rowObj;
+        });
+
+        if(parsedData.length === 0) {
+            document.getElementById('loading').innerHTML = `<h5 class="text-warning mt-4">Nessuna operazione trovata in questo periodo.</h5>
+            <button class="btn btn-outline-primary mt-3" onclick="location.reload()">Torna Indietro</button>`;
+            return;
+        }
+
+        processData(parsedData);
+    };
+
+    function parseEuro(valStr) {
+        if(!valStr) return 0;
+        let clean = String(valStr).replace('€', '').replace(/\./g, '').replace(',', '.').trim();
+        let num = parseFloat(clean);
+        return isNaN(num) ? 0 : num;
+    }
+
+    function sortSizes(a, b) {
+        let aUpper = String(a).toUpperCase().trim();
+        let bUpper = String(b).toUpperCase().trim();
+        let aPrio = sizePriority[aUpper];
+        let bPrio = sizePriority[bUpper];
+        if (aPrio && bPrio) return aPrio - bPrio; 
+        if (aPrio) return -1; 
+        if (bPrio) return 1;  
+        let aNum = parseFloat(a);
+        let bNum = parseFloat(b);
+        if (!isNaN(aNum) && !isNaN(bNum)) return aNum - bNum;
+        return aUpper.localeCompare(bUpper);
+    }
+
+    function processData(data) {
+        globalData = [];
+        let fornSet = new Set(), operSet = new Set();
+        let idRilMap = {}; 
+        
+        let nomeColonnaN = globalCols.length >= 14 ? globalCols[13] : '';
+        let nomeColonnaQ = globalCols.length >= 17 ? globalCols[16] : '';
+        let nomeColonnaS = globalCols.length >= 19 ? globalCols[18] : '';
+        let nomeColonnaT = globalCols.length >= 20 ? globalCols[19] : '';
+
+        data.forEach(row => {
+            let qtaRaw = row[NOME_COLONNA_QTA_MAGAZZINO] !== undefined ? row[NOME_COLONNA_QTA_MAGAZZINO] : row[nomeColonnaN];
+            let idRil = row[NOME_COLONNA_ID_RILEVAMENTO] !== undefined ? row[NOME_COLONNA_ID_RILEVAMENTO] : (row[nomeColonnaQ] || '');
+            let misura = row[NOME_COLONNA_MISURA] !== undefined ? row[NOME_COLONNA_MISURA] : (row[nomeColonnaS] || '');
+            let colore = row[NOME_COLONNA_COLORE] !== undefined ? row[NOME_COLONNA_COLORE] : (row[nomeColonnaT] || '');
+            
+            let qta = parseFloat(String(qtaRaw).replace(',', '.')) || 0;
+            let tot = parseEuro(row['TOT']);
+            
+            let cliente = String(row['CLI'] || row['MAG'] || 'Sconosciuto').toUpperCase();
+            let isPV = PUNTI_VENDITA.some(pv => cliente.includes(pv));
+            
+            let processedRow = {
+                ...row,
+                _TipoDestinazione: isPV ? 'Punto Vendita Diretto' : 'Cliente Esterno',
+                _qta_num: qta,
+                _tot_num: tot,
+                _id_ril: String(idRil).trim(),
+                _misura: String(misura).trim(),
+                _colore: String(colore).trim()
+            };
+            globalData.push(processedRow);
+
+            if(row['forn']) fornSet.add(row['forn']);
+            if(row['OPER']) operSet.add(row['OPER']);
+            
+            if(processedRow._id_ril !== '') {
+                idRilMap[processedRow._id_ril] = cliente;
+            }
+        });
+        
+        // Popolamento Dinamico dei Select per Select2
+        let fornSelect = $('#filter-forn');
+        fornSelect.empty().append('<option value="ALL">Tutti</option>');
+        [...fornSet].sort().forEach(f => fornSelect.append(new Option(f, f)));
+
+        let operSelect = $('#filter-oper');
+        operSelect.empty().append('<option value="ALL">Tutti</option>');
+        [...operSet].sort().forEach(o => operSelect.append(new Option(o, o)));
+        
+        let idSelect = $('#filter-idril');
+        idSelect.empty().append('<option value="ALL">Tutti gli ID</option>');
+        
+        let sortedIds = Object.keys(idRilMap).sort((a, b) => {
+            let numA = parseInt(a.replace(/\D/g, ''), 10);
+            let numB = parseInt(b.replace(/\D/g, ''), 10);
+            if (!isNaN(numA) && !isNaN(numB)) {
+                if(numA !== numB) return numB - numA; 
+            }
+            return String(b).localeCompare(String(a)); 
+        });
+
+        sortedIds.forEach(id => {
+            let clienteAssegnato = idRilMap[id];
+            idSelect.append(new Option(`${id} - ${clienteAssegnato}`, id));
+        });
+
+        // Inizializzazione Autocompletamento Select2
+        $('.select2-searchable').select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            language: {
+                noResults: function () {
+                    return "Nessun risultato";
+                }
+            }
+        });
+
+        document.getElementById('status-indicator').innerHTML = `<i class="fas fa-check-circle text-success me-1"></i> Sincronizzazione completata`;
+        updateDashboard(globalData);
+        
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('dashboardContent').style.display = 'block';
+    }
+
+    document.getElementById('applyFiltersBtn').addEventListener('click', function() {
+        let fTipo = document.getElementById('filter-tipo').value;
+        let fForn = document.getElementById('filter-forn').value;
+        let fOper = document.getElementById('filter-oper').value;
+        let fIdRil = document.getElementById('filter-idril').value;
+        let fArt = document.getElementById('filter-art').value.toLowerCase();
+        let fEan = document.getElementById('filter-ean').value.toLowerCase();
+        
+        let filtered = globalData.filter(row => {
+            let mTipo = (fTipo === 'ALL') || (row['_TipoDestinazione'] === fTipo);
+            let mForn = (fForn === 'ALL') || (row['forn'] === fForn);
+            let mOper = (fOper === 'ALL') || (row['OPER'] === fOper);
+            let mIdRil = (fIdRil === 'ALL') || (row['_id_ril'] === fIdRil);
+            let mArt = (fArt === '') || (String(row['DESCRIZIONE']).toLowerCase().includes(fArt));
+            let mEan = (fEan === '') || (String(row['COD']).toLowerCase().includes(fEan));
+            
+            return mTipo && mForn && mOper && mIdRil && mArt && mEan;
+        });
+        
+        updateDashboard(filtered);
+    });
+
+    // GENERATORE PACKING LIST
+    document.getElementById('btnPackingList').addEventListener('click', function() {
+        let idRil = document.getElementById('filter-idril').value;
+        if(idRil === 'ALL') {
+            alert("Per generare il Packing List devi selezionare un ID Rilevamento specifico dalla casella 'Cerca ID o Cliente'.");
+            return;
+        }
+
+        let reportData = globalData.filter(row => row['_id_ril'] === idRil);
+        if(reportData.length === 0) {
+            alert("Nessun dato trovato per questo ID Rilevamento.");
+            return;
+        }
+
+        let grouped = {};
+        let dataRil = reportData[0]['DATA'] || '';
+        let operRil = reportData[0]['OPER'] || '';
+        let clienteRil = reportData[0]['CLI'] || reportData[0]['MAG'] || 'Destinazione Multipla / Non definita';
+        
+        reportData.forEach(r => {
+            let ean = r['COD'] || 'N/D';
+            if(!grouped[ean]) {
+                grouped[ean] = { desc: r['DESCRIZIONE'] || 'N/D', colors: new Set(), sizes: new Set(), matrix: {}, tot: 0 };
+            }
+            let c = r._colore !== '' ? r._colore : 'N/D';
+            let m = r._misura !== '' ? r._misura : 'N/D';
+            
+            grouped[ean].colors.add(c);
+            grouped[ean].sizes.add(m);
+            if(!grouped[ean].matrix[c]) grouped[ean].matrix[c] = {};
+            if(!grouped[ean].matrix[c][m]) grouped[ean].matrix[c][m] = 0;
+            
+            grouped[ean].matrix[c][m] += r._qta_num;
+            grouped[ean].tot += r._qta_num;
+        });
+
+        let html = `
+            <div class="row border-bottom pb-3 mb-4">
+                <div class="col-7">
+                    <h2 class="mb-0 text-uppercase fw-bold">PACKING LIST</h2>
+                    <h5 class="text-secondary mt-1">ID Ril: <strong>${idRil}</strong></h5>
+                </div>
+                <div class="col-5 text-end">
+                    <p class="mb-1 fs-5"><strong>Cliente:</strong> <span class="text-primary fw-bold">${clienteRil}</span></p>
+                    <p class="mb-1"><strong>Data:</strong> ${dataRil.split(' ')[0]}</p>
+                    <p class="mb-0"><strong>Operatore:</strong> ${operRil}</p>
+                </div>
+            </div>
+        `;
+
+        Object.keys(grouped).sort().forEach(ean => {
+            let item = grouped[ean];
+            let sortedColors = [...item.colors].sort((a,b) => String(a).localeCompare(String(b)));
+            let sortedSizes = [...item.sizes].sort(sortSizes);
+
+            html += `
+            <div class="packing-item">
+                <h5 class="bg-light p-2 border border-bottom-0 mb-0"><strong>${ean}</strong> - ${item.desc} <span class="float-end">Tot: ${item.tot} pz.</span></h5>
+                <table class="table table-bordered table-sm matrix-table border-top-0 mb-0">
+                    <thead class="table-secondary">
+                        <tr>
+                            <th class="color-col text-start ps-2">Colore \\ Misura</th>
+            `;
+            sortedSizes.forEach(s => html += `<th>${s}</th>`);
+            html += `<th class="tot-col">TOT</th></tr></thead><tbody>`;
+
+            sortedColors.forEach(c => {
+                let rowTot = 0;
+                html += `<tr><td class="color-col text-start ps-2">${c}</td>`;
+                sortedSizes.forEach(s => {
+                    let v = item.matrix[c][s] || 0;
+                    rowTot += v;
+                    let cStyle = v < 0 ? 'color:red;' : (v > 0 ? 'color:green;font-weight:bold;' : 'color:#ccc;');
+                    html += `<td style="${cStyle}">${v !== 0 ? v : '-'}</td>`;
+                });
+                let rtStyle = rowTot < 0 ? 'color:red;' : (rowTot > 0 ? 'color:green;font-weight:bold;' : '');
+                html += `<td class="tot-col" style="${rtStyle}">${rowTot !== 0 ? rowTot : '-'}</td></tr>`;
+            });
+
+            html += `<tr class="table-light"><th class="color-col text-start ps-2">TOT. MISURA</th>`;
+            let grandTot = 0;
+            sortedSizes.forEach(s => {
+                let colTot = 0;
+                sortedColors.forEach(c => colTot += (item.matrix[c][s] || 0));
+                grandTot += colTot;
+                let ctStyle = colTot < 0 ? 'color:red;' : (colTot > 0 ? 'color:green;font-weight:bold;' : '');
+                html += `<th style="${ctStyle}">${colTot !== 0 ? colTot : '-'}</th>`;
+            });
+            let gtStyle = grandTot < 0 ? 'color:red;' : (grandTot > 0 ? 'color:green;font-weight:bold;' : '');
+            html += `<th class="tot-col fs-6" style="${gtStyle}">${grandTot !== 0 ? grandTot : '-'}</th></tr></tbody></table></div>`;
+        });
+
+        document.getElementById('packingListBody').innerHTML = html;
+        let packingModal = new bootstrap.Modal(document.getElementById('packingListModal'));
+        packingModal.show();
+    });
+
+    function formatDetails(d) {
+        let colors = new Set(), sizes = new Set(), matrix = {};
+
+        d.details.forEach(det => {
+            let c = det.colore !== '' ? det.colore : 'N/D';
+            let m = det.misura !== '' ? det.misura : 'N/D';
+            colors.add(c);
+            sizes.add(m);
+            if (!matrix[c]) matrix[c] = {};
+            if (!matrix[c][m]) matrix[c][m] = 0;
+            matrix[c][m] += det.qta;
+        });
+
+        let sortedColors = [...colors].sort((a,b) => String(a).localeCompare(String(b)));
+        let sortedSizes = [...sizes].sort(sortSizes);
+
+        let html = '<div class="p-3 bg-white border rounded mb-3 shadow-sm">';
+        html += `<h6 class="text-primary mb-3"><i class="fas fa-th me-2"></i>Griglia Disponibilità: ${d.desc}</h6>`;
+        html += '<div class="table-responsive"><table class="table table-bordered matrix-table" style="font-size: 0.85rem; width: max-content; min-width: 50%;">';
+        
+        html += '<thead class="table-dark"><tr><th class="color-col text-white">Colore \\ Misura</th>';
+        sortedSizes.forEach(s => { html += `<th>${s}</th>`; });
+        html += '<th class="tot-col text-white bg-secondary">TOTALE</th></tr></thead><tbody>';
+        
+        sortedColors.forEach(c => {
+            let rowTot = 0;
+            html += `<tr><td class="color-col">${c}</td>`;
+            sortedSizes.forEach(s => {
+                let val = matrix[c][s] || 0;
+                rowTot += val;
+                let colorStyle = val < 0 ? 'color: red;' : (val > 0 ? 'color: green; font-weight:bold;' : 'color: #ccc;');
+                html += `<td style="${colorStyle}">${val !== 0 ? val : '-'}</td>`;
+            });
+            let totColorStyle = rowTot < 0 ? 'color: red;' : (rowTot > 0 ? 'color: green;' : '');
+            html += `<td class="tot-col" style="${totColorStyle}">${rowTot !== 0 ? rowTot : '-'}</td></tr>`;
+        });
+        
+        html += '</tbody><tfoot><tr class="table-secondary"><th class="color-col">TOTALE MISURA</th>';
+        let grandTot = 0;
+        sortedSizes.forEach(s => {
+            let colTot = 0;
+            sortedColors.forEach(c => { colTot += (matrix[c][s] || 0); });
+            grandTot += colTot;
+            let colTotStyle = colTot < 0 ? 'color: red;' : (colTot > 0 ? 'color: green;' : '');
+            html += `<th style="${colTotStyle}">${colTot !== 0 ? colTot : '-'}</th>`;
+        });
+        let gTotStyle = grandTot < 0 ? 'color: red;' : (grandTot > 0 ? 'color: green;' : '');
+        html += `<th class="tot-col" style="${gTotStyle}">${grandTot !== 0 ? grandTot : '-'}</th></tr></tfoot>`;
+        html += '</table></div></div>';
+
+        html += '<div class="p-3 bg-light border rounded"><h6 class="text-secondary mb-3"><i class="fas fa-list me-2"></i>Dettaglio Storico Movimenti</h6><table class="table table-sm table-bordered mb-0 bg-white" style="font-size: 0.85rem;">';
+        html += '<thead class="table-secondary"><tr><th>Data</th><th>ID Ril.</th><th>Destinazione</th><th>Tipo</th><th>Fornitore</th><th>Colore</th><th>Misura</th><th>Prezzo Unit.</th><th>Q.tà</th><th>Totale Riga</th></tr></thead><tbody>';
+        
+        d.details.forEach(det => {
+            let badgeClass = det.tipo === 'Punto Vendita Diretto' ? 'bg-primary' : 'bg-secondary';
+            let qtaColor = det.qta < 0 ? 'color: red; font-weight: bold;' : 'color: green; font-weight: bold;';
+            html += `<tr>
+                <td>${det.data}</td>
+                <td><small class="text-muted">${det.idril}</small></td>
+                <td><strong>${det.cliente}</strong></td>
+                <td><span class="badge ${badgeClass}">${det.tipo}</span></td>
+                <td>${det.forn}</td>
+                <td>${det.colore}</td>
+                <td><strong>${det.misura}</strong></td>
+                <td>${det.prezzo}</td>
+                <td style="${qtaColor}">${det.qta}</td>
+                <td>€ ${det.tot.toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+            </tr>`;
+        });
+        
+        html += '</tbody></table></div>';
+        return html;
+    }
+
+    function updateDashboard(data) {
+        let totalQta = 0, totalValore = 0;
+        let clientiSet = new Set();
+        let clientQtaMap = {}, artQtaMap = {}, groupedByEan = {};
+        
+        data.forEach(row => {
+            let qta = row._qta_num;
+            let tot = row._tot_num;
+            let cliente = row['CLI'] || row['MAG'] || 'Sconosciuto';
+            let art = row['DESCRIZIONE'] || 'Sconosciuto';
+            let ean = row['COD'] || 'SENZA CODICE';
+
+            totalQta += qta; 
+            totalValore += tot;
+            if(cliente !== 'Sconosciuto') clientiSet.add(cliente);
+
+            clientQtaMap[cliente] = (clientQtaMap[cliente] || 0) + qta;
+            artQtaMap[art] = (artQtaMap[art] || 0) + qta;
+
+            if(!groupedByEan[ean]) {
+                groupedByEan[ean] = { ean: ean, desc: art, qta: 0, tot: 0, details: [] };
+            }
+            
+            groupedByEan[ean].qta += qta; 
+            groupedByEan[ean].tot += tot;
+            groupedByEan[ean].details.push({
+                data: row['DATA'] || '',
+                idril: row._id_ril,
+                misura: row._misura,
+                colore: row._colore,
+                qta: qta,
+                prezzo: row['PREZZO'] || '',
+                tot: tot,
+                cliente: cliente,
+                tipo: row['_TipoDestinazione'],
+                oper: row['OPER'] || '',
+                forn: row['forn'] || ''
+            });
+        });
+
+        let tableData = Object.values(groupedByEan);
+
+        document.getElementById('kpi-rows').innerText = data.length.toLocaleString('it-IT');
+        document.getElementById('kpi-qta').innerText = totalQta.toLocaleString('it-IT');
+        document.getElementById('kpi-valore').innerText = '€ ' + totalValore.toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits:2});
+        document.getElementById('kpi-clienti').innerText = clientiSet.size.toLocaleString('it-IT');
+
+        let sortedClienti = Object.entries(clientQtaMap).sort((a,b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 10);
+        let sortedArt = Object.entries(artQtaMap).sort((a,b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 10);
+        
+        renderChart('chartClienti', 'bar', sortedClienti.map(x=>x[0]), sortedClienti.map(x=>x[1]), 'Saldo Volumi', '#3498db');
+        renderChart('chartArticoli', 'bar', sortedArt.map(x=>x[0]), sortedArt.map(x=>x[1]), 'Saldo Volumi', '#2ecc71', true);
+
+        if ($.fn.DataTable.isDataTable('#dataTable')) {
+            let table = $('#dataTable').DataTable();
+            table.clear().rows.add(tableData).draw();
+        } else {
+            let table = $('#dataTable').DataTable({
+                data: tableData,
+                columns: [
+                    {
+                        className: 'dt-control',
+                        orderable: false,
+                        data: null,
+                        defaultContent: '<i class="fas fa-plus-circle text-success fs-5"></i>'
+                    },
+                    { data: 'ean' },
+                    { data: 'desc' },
+                    { data: 'qta', render: $.fn.dataTable.render.number('.', ',', 0, '') },
+                    { data: 'tot', render: $.fn.dataTable.render.number('.', ',', 2, '€ ') }
+                ],
+                language: { url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/it-IT.json' },
+                order: [[1, 'asc']], 
+                pageLength: 25,
+                footerCallback: function (row, data, start, end, display) {
+                    let api = this.api();
+                    let sumQta = api.column(3, { search: 'applied' }).data().reduce((a, b) => a + b, 0);
+                    let sumTot = api.column(4, { search: 'applied' }).data().reduce((a, b) => a + b, 0);
+                    $(api.column(3).footer()).html(sumQta.toLocaleString('it-IT'));
+                    $(api.column(4).footer()).html('€ ' + sumTot.toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits:2}));
+                }
+            });
+
+            $('#dataTable tbody').on('click', 'td.dt-control', function () {
+                let tr = $(this).closest('tr');
+                let row = table.row(tr);
+                let icon = $(this).find('i');
+
+                if (row.child.isShown()) {
+                    row.child.hide();
+                    tr.removeClass('shown');
+                    icon.removeClass('fa-minus-circle text-danger').addClass('fa-plus-circle text-success');
+                } else {
+                    row.child(formatDetails(row.data())).show();
+                    tr.addClass('shown');
+                    icon.removeClass('fa-plus-circle text-success').addClass('fa-minus-circle text-danger');
+                }
+            });
+        }
+    }
+
+    function renderChart(canvasId, type, labels, data, label, color, horizontal=false) {
+        if(charts[canvasId]) charts[canvasId].destroy();
+        let ctx = document.getElementById(canvasId).getContext('2d');
+        charts[canvasId] = new Chart(ctx, {
+            type: type,
+            data: { labels: labels, datasets: [{ label: label, data: data, backgroundColor: function(context) {
+                let val = context.dataset.data[context.dataIndex];
+                return val < 0 ? '#e74c3c' : color; 
+            }}] },
+            options: {
+                indexAxis: horizontal ? 'y' : 'x',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+</script>
+</body>
+</html>
