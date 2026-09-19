@@ -33,26 +33,61 @@
         .matrix-table .color-col { text-align: left; font-weight: bold; background-color: #f8f9fa; width: 150px; }
         .matrix-table .tot-col { background-color: #f8f9fa; font-weight: bold; }
 
+        /* ========================================================= */
+        /* FIX STAMPA MULTI-PAGINA MODAL PACKING LIST                */
+        /* ========================================================= */
         @media print {
             @page { size: A4; margin: 15mm; }
+
+            html, body {
+                height: auto !important;
+                overflow: visible !important;
+            }
             body { font-size: 11pt; background-color: white; }
             body * { visibility: hidden; }
-            
+
             body.modal-open { overflow: visible !important; height: auto !important; }
-            #packingListModal { position: absolute; left: 0; top: 0; margin: 0; padding: 0; overflow: visible !important; display: block !important; }
+
+            /* Nasconde l'eventuale sfondo scuro del modal */
+            .modal-backdrop { display: none !important; }
+
+            /* Forza il modal a comportarsi come un normale blocco in flusso,
+               non più fisso/scrollabile: questo è ciò che permette al
+               contenuto di spezzarsi correttamente su più pagine */
+            #packingListModal,
+            #packingListModal .modal-dialog,
+            #packingListModal .modal-content,
+            #packingListModal .modal-body {
+                position: static !important;
+                display: block !important;
+                overflow: visible !important;
+                height: auto !important;
+                max-height: none !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                transform: none !important;
+                box-shadow: none !important;
+                border: none !important;
+            }
+
             #packingListModal * { visibility: visible; }
-            
-            .modal-dialog { max-width: 100%; margin: 0; padding: 0; }
-            .modal-content { border: none; box-shadow: none; }
+
             .modal-header, .modal-footer, .d-print-none { display: none !important; }
-            .modal-body { padding: 0 !important; }
 
             .matrix-table th { background-color: #e9ecef !important; -webkit-print-color-adjust: exact; color-adjust: exact; }
             .matrix-table td.color-col { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; color-adjust: exact; }
-            
-            .packing-item { page-break-inside: avoid; margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 15px; }
+
+            .packing-item {
+                page-break-inside: avoid;
+                break-inside: avoid;
+                margin-bottom: 20px;
+                border-bottom: 1px solid #ccc;
+                padding-bottom: 15px;
+            }
             thead { display: table-header-group; }
-            tr { page-break-inside: avoid; }
+            tr { page-break-inside: avoid; break-inside: avoid; }
         }
     </style>
 </head>
@@ -279,6 +314,7 @@
             </div>
             <div class="modal-footer d-print-none">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                <button type="button" class="btn btn-danger" id="btnExportPdf"><i class="fas fa-file-pdf me-2"></i> Esporta PDF</button>
                 <button type="button" class="btn btn-primary" onclick="window.print()"><i class="fas fa-print me-2"></i> Stampa in PDF / Carta</button>
             </div>
         </div>
@@ -292,6 +328,7 @@
 <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <script>
     const sheetID = "1OlxI1A6wuhvH0gnfo3VnkyQ58kWBgIfJAVIjUIuZw-I";
@@ -586,6 +623,37 @@
         document.getElementById('packingListBody').innerHTML = html;
         let packingModal = new bootstrap.Modal(document.getElementById('packingListModal'));
         packingModal.show();
+    });
+
+    // ESPORTAZIONE PACKING LIST IN PDF (html2pdf.js)
+    document.getElementById('btnExportPdf').addEventListener('click', function() {
+        let element = document.getElementById('packingListBody');
+        let idRil = document.getElementById('filter-idril').value;
+        let nomeFile = `PackingList_${idRil !== 'ALL' ? idRil : 'export'}.pdf`;
+
+        let btn = this;
+        let originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Generazione...';
+        btn.disabled = true;
+
+        let opt = {
+            margin:       [10, 8, 10, 8], // top, left, bottom, right (mm)
+            filename:     nomeFile,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:    { mode: ['avoid-all', 'css', 'legacy'], before: '.packing-item' }
+        };
+
+        html2pdf().set(opt).from(element).save().then(function() {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+        }).catch(function(err) {
+            console.error(err);
+            alert('Errore durante la generazione del PDF.');
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+        });
     });
 
     function formatDetails(d) {
