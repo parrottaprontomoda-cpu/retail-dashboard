@@ -81,13 +81,21 @@
 
             .packing-item {
                 page-break-inside: avoid;
-                break-inside: avoid;
+                break-inside: avoid-page;
                 margin-bottom: 20px;
                 border-bottom: 1px solid #ccc;
                 padding-bottom: 15px;
             }
+            /* Chrome a volte ignora "avoid" e spezza comunque l'elemento.
+               Forziamo un salto pagina PRIMA di ogni articolo (tranne il primo):
+               è una direttiva che i browser rispettano sempre, a differenza di "avoid". */
+            .packing-item:not(:first-of-type) {
+                page-break-before: always;
+                break-before: page;
+            }
             thead { display: table-header-group; }
-            tr { page-break-inside: avoid; break-inside: avoid; }
+            table { page-break-inside: avoid; break-inside: avoid-page; }
+            tr { page-break-inside: avoid; break-inside: avoid-page; }
         }
     </style>
 </head>
