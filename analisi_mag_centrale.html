@@ -29,9 +29,13 @@
         td.dt-control { text-align: center; cursor: pointer; }
         td.dt-control i { transition: transform 0.2s; }
         
-        .matrix-table th, .matrix-table td { vertical-align: middle; text-align: center; }
-        .matrix-table .color-col { text-align: left; font-weight: bold; background-color: #f8f9fa; width: 150px; }
+        .matrix-table th, .matrix-table td { vertical-align: middle; text-align: center; padding: 3px 6px; font-size: 0.8rem; }
+        .matrix-table .color-col { text-align: left; font-weight: bold; background-color: #f8f9fa; width: 120px; }
         .matrix-table .tot-col { background-color: #f8f9fa; font-weight: bold; }
+        #packingListBody { font-size: 0.85rem; }
+        #packingListBody h2 { font-size: 1.4rem; }
+        #packingListBody h5 { font-size: 0.95rem; }
+        .packing-item { margin-bottom: 12px !important; padding-bottom: 8px !important; }
 
         /* ========================================================= */
         /* FIX STAMPA MULTI-PAGINA MODAL PACKING LIST                */
@@ -43,13 +47,21 @@
                 height: auto !important;
                 overflow: visible !important;
             }
-            body { font-size: 11pt; background-color: white; }
-            body * { visibility: hidden; }
+            body { font-size: 10pt; background-color: white; }
 
             body.modal-open { overflow: visible !important; height: auto !important; }
 
             /* Nasconde l'eventuale sfondo scuro del modal */
             .modal-backdrop { display: none !important; }
+
+            /* Rimuove DAVVERO dal flusso tutto ciò che non è il modal
+               (navbar, filtri, grafici, tabella dashboard). visibility:hidden
+               nasconde solo visivamente ma lascia lo spazio occupato: è questo
+               che generava le pagine bianche prima dei dati. display:none
+               invece elimina del tutto lo spazio. */
+            body > *:not(#packingListModal) {
+                display: none !important;
+            }
 
             /* Forza il modal a comportarsi come un normale blocco in flusso,
                non più fisso/scrollabile: questo è ciò che permette al
@@ -72,9 +84,13 @@
                 border: none !important;
             }
 
-            #packingListModal * { visibility: visible; }
-
             .modal-header, .modal-footer, .d-print-none { display: none !important; }
+
+            /* Font ancora più compatti in stampa nativa */
+            #packingListBody { font-size: 8pt !important; }
+            #packingListBody h2 { font-size: 13pt !important; }
+            #packingListBody h5 { font-size: 8.5pt !important; }
+            .matrix-table th, .matrix-table td { padding: 2px 4px !important; font-size: 8pt !important; }
 
             .matrix-table th { background-color: #e9ecef !important; -webkit-print-color-adjust: exact; color-adjust: exact; }
             .matrix-table td.color-col { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; color-adjust: exact; }
@@ -82,9 +98,9 @@
             .packing-item {
                 page-break-inside: avoid;
                 break-inside: avoid-page;
-                margin-bottom: 20px;
+                margin-bottom: 10px;
                 border-bottom: 1px solid #ccc;
-                padding-bottom: 15px;
+                padding-bottom: 8px;
             }
             thead { display: table-header-group; }
             table { page-break-inside: avoid; break-inside: avoid-page; }
