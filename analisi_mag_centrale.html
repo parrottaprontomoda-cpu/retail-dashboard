@@ -86,13 +86,6 @@
                 border-bottom: 1px solid #ccc;
                 padding-bottom: 15px;
             }
-            /* Chrome a volte ignora "avoid" e spezza comunque l'elemento.
-               Forziamo un salto pagina PRIMA di ogni articolo (tranne il primo):
-               è una direttiva che i browser rispettano sempre, a differenza di "avoid". */
-            .packing-item:not(:first-of-type) {
-                page-break-before: always;
-                break-before: page;
-            }
             thead { display: table-header-group; }
             table { page-break-inside: avoid; break-inside: avoid-page; }
             tr { page-break-inside: avoid; break-inside: avoid-page; }
@@ -650,7 +643,11 @@
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['avoid-all', 'css', 'legacy'], before: '.packing-item' }
+            // 'avoid-all' rispetta la regola CSS page-break-inside:avoid già impostata
+            // su .packing-item: un prodotto che non entra viene spostato per intero
+            // alla pagina successiva, ma più prodotti piccoli restano impacchettati
+            // sulla stessa pagina invece di sprecare un foglio per ciascuno.
+            pagebreak:    { mode: ['avoid-all', 'css'] }
         };
 
         html2pdf().set(opt).from(element).save().then(function() {
