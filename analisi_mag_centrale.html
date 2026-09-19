@@ -732,14 +732,20 @@
                 let sortedSizes = [...item.sizes].sort(sortSizes);
                 let nCols = sortedSizes.length + 2; // colonna colore + misure + totale
 
-                // Titolo prodotto (riga unita, sfondo blu scuro, testo bianco)
+                // Titolo prodotto (riga unita, sfondo blu scuro, testo bianco) + Totale in colonna a destra
                 let titleRowIdx = currentRow;
-                sheet.mergeCells(titleRowIdx, 1, titleRowIdx, nCols);
+                sheet.mergeCells(titleRowIdx, 1, titleRowIdx, Math.max(nCols - 1, 1));
                 let titleCell = sheet.getCell(titleRowIdx, 1);
-                titleCell.value = `${ean} - ${item.desc}  (Tot: ${item.tot} pz.)`;
+                titleCell.value = `${ean} - ${item.desc}`;
                 titleCell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
                 titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_TITLE_BG } };
                 titleCell.alignment = { vertical: 'middle' };
+
+                let titleTotCell = sheet.getCell(titleRowIdx, nCols);
+                titleTotCell.value = `Tot: ${item.tot} pz.`;
+                titleTotCell.font = { bold: true, size: 12, color: { argb: item.tot < 0 ? 'FFFFC0C0' : 'FFC0FFC0' } };
+                titleTotCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_TITLE_BG } };
+                titleTotCell.alignment = { horizontal: 'right', vertical: 'middle' };
                 currentRow++;
 
                 // Riga intestazione: Colore \ Misura | misura1 | misura2 | ... | TOT
