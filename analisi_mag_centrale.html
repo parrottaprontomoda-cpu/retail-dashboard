@@ -331,6 +331,7 @@
             </div>
             <div class="modal-footer d-print-none">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                <button type="button" class="btn btn-success" id="btnExportExcel"><i class="fas fa-file-excel me-2"></i> Esporta Excel</button>
                 <button type="button" class="btn btn-danger" id="btnExportPdf"><i class="fas fa-file-pdf me-2"></i> Esporta PDF</button>
                 <button type="button" class="btn btn-primary" onclick="window.print()"><i class="fas fa-print me-2"></i> Stampa in PDF / Carta</button>
             </div>
@@ -346,6 +347,7 @@
 <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 
 <script>
     const sheetID = "1OlxI1A6wuhvH0gnfo3VnkyQ58kWBgIfJAVIjUIuZw-I";
@@ -366,6 +368,7 @@
     let globalData = [];
     let globalCols = [];
     let charts = {};
+    let currentPackingData = null; // dati dell'ultima Packing List generata, riusati dall'export Excel
 
     document.getElementById('btnLoadData').addEventListener('click', function() {
         let y = document.getElementById('select-year').value;
@@ -638,6 +641,9 @@
         });
 
         document.getElementById('packingListBody').innerHTML = html;
+
+        currentPackingData = { idRil, dataRil, operRil, clienteRil, grouped };
+
         let packingModal = new bootstrap.Modal(document.getElementById('packingListModal'));
         packingModal.show();
     });
@@ -675,6 +681,169 @@
             btn.innerHTML = originalHtml;
             btn.disabled = false;
         });
+    });
+
+    // ESPORTAZIONE PACKING LIST IN EXCEL (ExcelJS) - matrice Colore (righe) x Misura (colonne), colorata
+    document.getElementById('btnExportExcel').addEventListener('click', async function() {
+        if (!currentPackingData) {
+            alert("Genera prima una Packing List.");
+            return;
+        }
+        let btn = this;
+        let originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Generazione...';
+        btn.disabled = true;
+
+        try {
+            let { idRil, dataRil, operRil, clienteRil, grouped } = currentPackingData;
+
+            const workbook = new ExcelJS.Workbook();
+            const sheet = workbook.addWorksheet('Packing List');
+
+            const COLOR_TITLE_BG = 'FF2C3E50';   // blu scuro intestazione prodotto
+            const COLOR_HEADER_BG = 'FFE9ECEF';  // grigio intestazione colonne
+            const COLOR_LABEL_BG = 'FFF8F9FA';   // grigio chiaro colonna colore / riga totali
+            const COLOR_POS = 'FF008000';        // verde valori positivi
+            const COLOR_NEG = 'FFFF0000';         // rosso valori negativi
+            const COLOR_ZERO = 'FFBBBBBB';        // grigio valori a zero
+            const thinBorder = { style: 'thin', color: { argb: 'FFB0B0B0' } };
+            const fullBorder = { top: thinBorder, left: thinBorder, bottom: thinBorder, right: thinBorder };
+
+            // --- Intestazione generale del documento ---
+            sheet.mergeCells('A1:F1');
+            sheet.getCell('A1').value = 'PACKING LIST';
+            sheet.getCell('A1').font = { bold: true, size: 16 };
+
+            sheet.getCell('A2').value = 'ID Rilevamento:';
+            sheet.getCell('B2').value = idRil;
+            sheet.getCell('A3').value = 'Cliente:';
+            sheet.getCell('B3').value = clienteRil;
+            sheet.getCell('A4').value = 'Data:';
+            sheet.getCell('B4').value = String(dataRil).split(' ')[0];
+            sheet.getCell('A5').value = 'Operatore:';
+            sheet.getCell('B5').value = operRil;
+            ['A2', 'A3', 'A4', 'A5'].forEach(c => sheet.getCell(c).font = { bold: true });
+
+            let currentRow = 7;
+
+            Object.keys(grouped).sort().forEach(ean => {
+                let item = grouped[ean];
+                let sortedColors = [...item.colors].sort((a, b) => String(a).localeCompare(String(b)));
+                let sortedSizes = [...item.sizes].sort(sortSizes);
+                let nCols = sortedSizes.length + 2; // colonna colore + misure + totale
+
+                // Titolo prodotto (riga unita, sfondo blu scuro, testo bianco)
+                let titleRowIdx = currentRow;
+                sheet.mergeCells(titleRowIdx, 1, titleRowIdx, nCols);
+                let titleCell = sheet.getCell(titleRowIdx, 1);
+                titleCell.value = `${ean} - ${item.desc}  (Tot: ${item.tot} pz.)`;
+                titleCell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+                titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_TITLE_BG } };
+                titleCell.alignment = { vertical: 'middle' };
+                currentRow++;
+
+                // Riga intestazione: Colore \ Misura | misura1 | misura2 | ... | TOT
+                let headerRowIdx = currentRow;
+                let headerRow = sheet.getRow(headerRowIdx);
+                headerRow.getCell(1).value = 'Colore \\ Misura';
+                sortedSizes.forEach((s, i) => { headerRow.getCell(2 + i).value = s; });
+                headerRow.getCell(nCols).value = 'TOT';
+                for (let c = 1; c <= nCols; c++) {
+                    let cell = headerRow.getCell(c);
+                    cell.font = { bold: true };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_HEADER_BG } };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    cell.border = fullBorder;
+                }
+                headerRow.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
+                currentRow++;
+
+                // Righe colore (una per colore, misure in orizzontale)
+                sortedColors.forEach(c => {
+                    let rowIdx = currentRow;
+                    let row = sheet.getRow(rowIdx);
+                    row.getCell(1).value = c;
+                    row.getCell(1).font = { bold: true };
+                    row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_LABEL_BG } };
+                    row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
+                    row.getCell(1).border = fullBorder;
+
+                    let rowTot = 0;
+                    sortedSizes.forEach((s, i) => {
+                        let v = item.matrix[c][s] || 0;
+                        rowTot += v;
+                        let cell = row.getCell(2 + i);
+                        cell.value = v !== 0 ? v : '-';
+                        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                        cell.border = fullBorder;
+                        cell.font = { bold: v !== 0, color: { argb: v > 0 ? COLOR_POS : (v < 0 ? COLOR_NEG : COLOR_ZERO) } };
+                    });
+
+                    let totCell = row.getCell(nCols);
+                    totCell.value = rowTot !== 0 ? rowTot : '-';
+                    totCell.font = { bold: true, color: { argb: rowTot > 0 ? COLOR_POS : (rowTot < 0 ? COLOR_NEG : COLOR_ZERO) } };
+                    totCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_LABEL_BG } };
+                    totCell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    totCell.border = fullBorder;
+
+                    currentRow++;
+                });
+
+                // Riga totale per misura (somma colonne)
+                let footRowIdx = currentRow;
+                let footRow = sheet.getRow(footRowIdx);
+                footRow.getCell(1).value = 'TOT. MISURA';
+                footRow.getCell(1).font = { bold: true };
+                footRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_HEADER_BG } };
+                footRow.getCell(1).border = fullBorder;
+
+                let grandTot = 0;
+                sortedSizes.forEach((s, i) => {
+                    let colTot = 0;
+                    sortedColors.forEach(c => colTot += (item.matrix[c][s] || 0));
+                    grandTot += colTot;
+                    let cell = footRow.getCell(2 + i);
+                    cell.value = colTot !== 0 ? colTot : '-';
+                    cell.font = { bold: true, color: { argb: colTot > 0 ? COLOR_POS : (colTot < 0 ? COLOR_NEG : COLOR_ZERO) } };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_HEADER_BG } };
+                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    cell.border = fullBorder;
+                });
+                let gtCell = footRow.getCell(nCols);
+                gtCell.value = grandTot !== 0 ? grandTot : '-';
+                gtCell.font = { bold: true, color: { argb: grandTot > 0 ? COLOR_POS : (grandTot < 0 ? COLOR_NEG : COLOR_ZERO) } };
+                gtCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_HEADER_BG } };
+                gtCell.alignment = { horizontal: 'center', vertical: 'middle' };
+                gtCell.border = fullBorder;
+
+                currentRow += 2; // riga vuota di separazione tra un prodotto e l'altro
+            });
+
+            // Larghezza colonne: colonna colore più larga, colonne misura strette, tutte fino alla più larga usata
+            let maxCols = Math.max(...Object.values(grouped).map(it => it.sizes.size + 2), 5);
+            sheet.getColumn(1).width = 22;
+            for (let c = 2; c <= maxCols; c++) {
+                sheet.getColumn(c).width = 10;
+            }
+
+            let nomeFile = `PackingList_${idRil !== 'ALL' ? idRil : 'export'}.xlsx`;
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/octet-stream' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = nomeFile;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error(err);
+            alert('Errore durante la generazione del file Excel.');
+        } finally {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+        }
     });
 
     function formatDetails(d) {
