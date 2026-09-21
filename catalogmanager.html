@@ -88,7 +88,6 @@
   #report-view .report-date { color: #666; font-size: 13px; margin-bottom: 24px; border-bottom: 2px solid var(--dark); padding-bottom: 10px; }
   
   .report-card { display: flex; flex-direction: row; gap: 24px; border: 1px solid #ddd; border-radius: 12px; padding: 24px; margin-bottom: 24px; page-break-inside: avoid; align-items: center; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
-  /* L'immagine ora è molto più grande e si incastra perfettamente (contain) */
   .report-card img { width: 260px; height: 320px; object-fit: contain; border-radius: 8px; background: #f9f9f9; border: 1px solid var(--border); padding: 8px; }
   
   .report-card-info { flex: 1; }
@@ -96,11 +95,23 @@
   .report-card-info p { margin: 0 0 6px 0; font-size: 14px; color: #555; }
   .report-matrix-wrap { margin-top: 16px; background: #fafafa; padding: 12px; border-radius: 6px; display: inline-block; }
   
-  /* Cella report (non interattiva) */
   .report-cell { display: inline-block; padding: 4px 8px; background: #fff; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; min-width: 28px; text-align: center; font-weight: bold; }
   .report-cell.out { color: #d32f2f; text-decoration: line-through; background: #fbe9e9; border-color: #f5c6c6; font-weight: normal; }
   
-  .report-order-btn { display: inline-block; background: var(--primary); color: #fff !important; padding: 10px 20px; border-radius: 20px; font-size: 14px; text-decoration: none; font-weight: bold; margin-top: 16px; }
+  /* Forza la visualizzazione del colore anche in stampa/PDF per il bottone */
+  .report-order-btn { 
+    display: inline-block; 
+    background: var(--primary) !important; 
+    color: #fff !important; 
+    padding: 10px 20px; 
+    border-radius: 20px; 
+    font-size: 14px; 
+    text-decoration: none; 
+    font-weight: bold; 
+    margin-top: 16px; 
+    -webkit-print-color-adjust: exact; 
+    print-color-adjust: exact;
+  }
 
   #report-actions { max-width: 900px; margin: 20px auto; display: flex; gap: 12px; padding: 0 20px; }
   #report-actions button { padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; font-size: 14px; }
@@ -112,11 +123,12 @@
     .report-card img { width: 100%; height: 300px; }
   }
 
+  /* REGOLE DI STAMPA PDF MODIFICATE */
   @media print {
     header, .controls, .cats, #grid, #cart-panel, #overlay, #report-actions, .cat-label { display: none !important; }
     #report-view { display: block !important; box-shadow: none; padding: 0; }
     .report-card { border: none; border-bottom: 2px solid #eee; box-shadow: none; padding: 16px 0; }
-    .report-order-btn { display: none !important; }
+    /* Il bottone report-order-btn ORA RIMANE VISIBILE anche sul PDF stampato */
     body { background: #fff; }
   }
 </style>
@@ -416,7 +428,6 @@
 
 
   // ==================== REPORT DISPONIBILITÀ (PDF / STAMPA) ====================
-  // Genera la griglia in modalità "Sola Lettura" per la stampa
   function renderReportMatrix(g) {
     const misure = sortSizes([...new Set(g.variants.map(v => v.misura).filter(Boolean))]);
     const colori = [...new Set(g.variants.map(v => v.colore).filter(Boolean))].sort();
@@ -446,7 +457,6 @@
   }
 
   function openReport() {
-    // Ricarichiamo sempre per avere lo stock reale
     fetch(API_URL + '?action=products')
       .then(r => r.json())
       .then(data => {
@@ -483,7 +493,6 @@
         document.getElementById('report-view').classList.add('show');
         document.getElementById('report-actions').style.display = 'flex';
         
-        // Nascondi interfaccia normale
         document.querySelector('header').style.display = 'none';
         document.querySelector('.controls').style.display = 'none';
         document.querySelector('.cats').style.display = 'none';
@@ -496,7 +505,6 @@
     document.getElementById('report-view').classList.remove('show');
     document.getElementById('report-actions').style.display = 'none';
     
-    // Ripristina interfaccia
     document.querySelector('header').style.display = 'flex';
     document.querySelector('.controls').style.display = 'flex';
     document.querySelector('.cats').style.display = 'flex';
