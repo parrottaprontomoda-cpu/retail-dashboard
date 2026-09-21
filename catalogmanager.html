@@ -46,7 +46,9 @@
   .card-body { padding: 10px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
   .card-body h3 { font-size: 14px; margin: 0; }
   .card-body p { font-size: 12px; color: #666; margin: 0; flex: 1; }
+  
   .price { font-weight: bold; font-size: 14px; }
+  .iva-label { font-size: 11px; color: #888; font-weight: normal; margin-left: 2px; }
   
   .variant-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .variant-chip { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: #fff; font-size: 11px; cursor: pointer; font-weight: 600; text-align: center;}
@@ -85,8 +87,9 @@
   
   #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; z-index: 15; }
   #overlay.show { display: block; }
-  #empty-msg, #loading-msg, #error-msg { text-align: center; padding: 40px; color: #888; }
+  #empty-msg, #loading-msg, #error-msg { text-align: center; padding: 40px; color: #888; font-size: 16px; }
 
+  /* ===== REPORT PDF (OTTIMIZZATO) ===== */
   #report-container { display: none; background: #f0f0f0; padding: 20px 0; }
   #report-container.show { display: block; }
   #report-view { background: #fff; padding: 40px; max-width: 900px; margin: 0 auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
@@ -132,14 +135,14 @@
 </header>
 
 <div class="controls">
-  <input type="text" id="search" placeholder="Cerca per nome o codice..." oninput="renderGrid()">
+  <input type="text" id="search" placeholder="Cerca per nome o codice..." oninput="updateFilters()">
 </div>
 <div class="cat-label">Cataloghi</div>
 <div class="cats" id="catalog-tabs"></div>
 <div class="cat-label">Categorie</div>
 <div class="cats" id="cats"></div>
 
-<div id="loading-msg">Caricamento prodotti in corso...</div>
+<div id="loading-msg">Elaborazione dati dal magazzino in corso...</div>
 <div id="error-msg" style="display:none;"></div>
 <div id="grid"></div>
 
@@ -161,44 +164,44 @@
   </div>
   <div id="cart-items"></div>
   <div id="cart-footer">
-    <div id="cart-total">Totale: € 0.00</div>
+    <div id="cart-total">Totale: € 0.00 <span class="iva-label">+ IVA</span></div>
     <button id="whatsapp-btn" onclick="sendWhatsApp()">Invia Ordine su WhatsApp</button>
     <button id="clear-cart-btn" onclick="clearCart()">🗑️ Svuota Carrello</button>
   </div>
 </div>
 
 <script>
-  // ==================== CONFIGURAZIONE ====================
   const API_URL = 'https://script.google.com/macros/s/AKfycbx09XG2XA-PrkoaueaWySeYOm8IxKX4BtNv7oTGJqxBkqkUWJOoZsSKabh1RlXFBcKVIw/exec';
   const WHATSAPP_NUMBER = '39096421546';
 
-  // SCORPORO IVA: 
-  // Imposta 1.22 se i prezzi nel foglio includono l'IVA (e vuoi mostrarli netti).
-  // Imposta 1 se i prezzi nel foglio sono già senza IVA.
+  // ==================== SCORPORO IVA ====================
   const DIVISORE_IVA = 1.22;
 
+  // Variabili Dati Globali
   let PRODUCTS = [];
   let CART = {};
   let ACTIVE_CAT = 'Tutti';
   let ACTIVE_CATALOGS = new Set();
 
-  // ==================== ATTIVAZIONE MODALITÀ CONDIVISIONE ====================
+  // ==================== MOTORE DI PAGINAZIONE (OTTIMIZZAZIONE RAM) ====================
+  // Memorizza i prodotti già processati e pronti da disegnare
+  let filteredGroups = []; 
+  // Quanti prodotti mostrare al primo colpo e ogni volta che si preme "Carica Altri"
+  const ITEMS_PER_PAGE = 24; 
+  // Tiene il conto di quanti prodotti sono attualmente disegnati sullo schermo
+  let currentDisplayed = 0; 
+  // ====================================================================================
+
   const urlParams = new URLSearchParams(window.location.search);
   const paramCatalogo = urlParams.get('catalogo');
   const paramCategoria = urlParams.get('categoria');
   
-  if (paramCatalogo) {
-    ACTIVE_CATALOGS.add(paramCatalogo);
-  }
-  if (paramCategoria) {
-    ACTIVE_CAT = paramCategoria;
-  }
+  if (paramCatalogo) ACTIVE_CATALOGS.add(paramCatalogo);
+  if (paramCategoria) ACTIVE_CAT = paramCategoria;
 
-  // Se c'è un filtro URL (link inviato al cliente), blindiamo la pagina nascondendo i bottoni di gestione
   if (paramCatalogo || paramCategoria) {
     document.body.classList.add('shared-mode');
   }
-  // ===========================================================================
 
   function loadProducts() {
     document.getElementById('loading-msg').style.display = 'block';
@@ -213,7 +216,9 @@
         
         renderCatalogTabs();
         renderCategories();
-        renderGrid();
+        
+        // Avvia il filtro e il render del primo lotto di prodotti
+        updateFilters(); 
       })
       .catch(err => {
         document.getElementById('loading-msg').style.display = 'none';
@@ -232,7 +237,7 @@
     ).join('');
   }
 
-  function setCat(c) { ACTIVE_CAT = c; renderCategories(); renderGrid(); }
+  function setCat(c) { ACTIVE_CAT = c; renderCategories(); updateFilters(); }
 
   function renderCatalogTabs() {
     const catalogs = [...new Set(PRODUCTS.map(p => p.catalogo))].sort();
@@ -251,17 +256,31 @@
     else if (ACTIVE_CATALOGS.has(c)) ACTIVE_CATALOGS.delete(c);
     else ACTIVE_CATALOGS.add(c);
     renderCatalogTabs();
-    renderGrid();
+    updateFilters();
   }
 
-  function applyFilters(list) {
+  // === AGGIORNAMENTO FILTRI E AVVIO PAGINAZIONE ===
+  function updateFilters() {
     const search = document.getElementById('search').value.toLowerCase();
-    return list.filter(p => {
+    const filteredRaw = PRODUCTS.filter(p => {
       const matchCat = ACTIVE_CAT === 'Tutti' || p.categoria === ACTIVE_CAT;
       const matchCatalog = ACTIVE_CATALOGS.size === 0 || ACTIVE_CATALOGS.has(p.catalogo);
       const matchSearch = p.nome.toLowerCase().includes(search) || (p.descrizione || '').toLowerCase().includes(search) || (p.codiceProdotto || '').toLowerCase().includes(search);
       return matchCat && matchCatalog && matchSearch;
     });
+    
+    // Raggruppa i prodotti e salva nella variabile globale del motore di paginazione
+    filteredGroups = groupProducts(filteredRaw);
+    // Resetta la visualizzazione alla prima pagina
+    currentDisplayed = ITEMS_PER_PAGE; 
+    
+    renderGrid();
+  }
+
+  // === CARICA ALTRI (PAGINAZIONE) ===
+  function loadMore() {
+    currentDisplayed += ITEMS_PER_PAGE;
+    renderGrid();
   }
 
   function groupProducts(list) {
@@ -329,17 +348,19 @@
     return `<div class="variant-matrix-wrap"><table class="variant-matrix"><thead>${header}</thead><tbody>${rows}</tbody></table></div>`;
   }
 
+  // === RENDER GRID OTTIMIZZATO PER DISEGNARE SOLO UNA PORZIONE ===
   function renderGrid() {
     const grid = document.getElementById('grid');
-    const filtered = applyFilters(PRODUCTS);
-    const groups = groupProducts(filtered);
 
-    if (groups.length === 0) {
-      grid.innerHTML = '<div id="empty-msg">Nessun prodotto trovato.</div>';
+    if (filteredGroups.length === 0) {
+      grid.innerHTML = '<div id="empty-msg">Nessun prodotto trovato in base ai filtri selezionati.</div>';
       return;
     }
 
-    grid.innerHTML = groups.map(g => {
+    // Prendi solo i gruppi dall'indice 0 fino a currentDisplayed
+    const visibleGroups = filteredGroups.slice(0, currentDisplayed);
+
+    let html = visibleGroups.map(g => {
       const img = g.immagine || 'https://via.placeholder.com/300x200?text=Foto+non+disponibile';
       return `
         <div class="card">
@@ -348,11 +369,24 @@
             <h3>${g.nome}</h3>
             <p style="font-size:11px;color:#999;margin-bottom:2px;">${g.catalogo || ''}${g.codiceProdotto ? ' · Cod. ' + g.codiceProdotto : ''}</p>
             <p>${g.descrizione || ''}</p>
-            <div class="price">€ ${(g.prezzo / DIVISORE_IVA).toFixed(2)} <span style="font-size:11px; color:#888; font-weight:normal;">+ IVA</span></div>
+            <div class="price">€ ${(g.prezzo / DIVISORE_IVA).toFixed(2)} <span class="iva-label">+ IVA</span></div>
             ${renderVariantMatrix(g)}
           </div>
         </div>`;
     }).join('');
+
+    // Se ci sono ancora prodotti da mostrare rispetto al totale filtrato, aggiungi il tasto CARICA ALTRI
+    if (currentDisplayed < filteredGroups.length) {
+      const remaining = filteredGroups.length - currentDisplayed;
+      html += `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 30px 10px;">
+          <button onclick="loadMore()" style="background:var(--dark); color:#fff; padding:14px 28px; border:none; border-radius:24px; font-weight:bold; cursor:pointer; font-size:15px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+            ⬇️ Carica altri articoli (${remaining} rimanenti)
+          </button>
+        </div>`;
+    }
+
+    grid.innerHTML = html;
   }
 
   function changeQty(id, delta) {
@@ -366,6 +400,7 @@
       if (CART[id].qty > 1) CART[id].qty = 1; 
       if (CART[id].qty <= 0) delete CART[id];
     }
+    // Ridisegna la griglia mantenendo aperta la paginazione in cui si trova l'utente
     renderGrid(); 
     renderCart();
   }
@@ -390,7 +425,7 @@
         <div class="cart-item">
           <div class="cart-item-info">
             <div style="font-weight:600;">${i.product.nome}</div>
-            <div class="cart-item-variant">${variantLabel(i.product)} — € ${((i.qty * i.product.prezzo) / DIVISORE_IVA).toFixed(2)} <span style="font-size:10px">+ IVA</span></div>
+            <div class="cart-item-variant">${variantLabel(i.product)} — € ${((i.qty * i.product.prezzo) / DIVISORE_IVA).toFixed(2)} <span class="iva-label">+ IVA</span></div>
           </div>
           <div class="cart-item-controls">
             <button onclick="changeQty('${i.product.id}', -1)">-</button>
@@ -400,7 +435,7 @@
     }
     
     const total = items.reduce((s, i) => s + i.qty * i.product.prezzo, 0);
-    document.getElementById('cart-total').innerHTML = 'Totale: € ' + (total / DIVISORE_IVA).toFixed(2) + ' <span style="font-size:12px; color:#888; font-weight:normal;">+ IVA</span>';
+    document.getElementById('cart-total').innerHTML = 'Totale: € ' + (total / DIVISORE_IVA).toFixed(2) + ' <span class="iva-label">+ IVA</span>';
   }
 
   function toggleCart(open) {
@@ -455,8 +490,17 @@
       .then(r => r.json())
       .then(data => {
         PRODUCTS = data.products || PRODUCTS; 
-        const products = applyFilters(data.products || []);
-        const groups = groupProducts(products);
+        
+        // Nel PDF ignoriamo la paginazione di 24 e carichiamo l'elenco filtrato COMPLETO
+        const search = document.getElementById('search').value.toLowerCase();
+        const productsPerReport = PRODUCTS.filter(p => {
+          const matchCat = ACTIVE_CAT === 'Tutti' || p.categoria === ACTIVE_CAT;
+          const matchCatalog = ACTIVE_CATALOGS.size === 0 || ACTIVE_CATALOGS.has(p.catalogo);
+          const matchSearch = p.nome.toLowerCase().includes(search) || (p.descrizione || '').toLowerCase().includes(search) || (p.codiceProdotto || '').toLowerCase().includes(search);
+          return matchCat && matchCatalog && matchSearch;
+        });
+
+        const groups = groupProducts(productsPerReport);
         const now = new Date();
         const dateStr = now.toLocaleDateString('it-IT') + ' alle ' + now.toLocaleTimeString('it-IT');
         const catalogLabel = ACTIVE_CATALOGS.size === 0 ? 'Tutti i cataloghi' : [...ACTIVE_CATALOGS].join(', ');
@@ -487,8 +531,6 @@
         document.getElementById('report-container').classList.add('show');
         document.querySelector('header').style.display = 'none';
         document.querySelector('.controls').style.display = 'none';
-        
-        // Non occorre forzare l'invisibilità di tabs qua perché la classe shared-mode lo fa già
         document.getElementById('grid').style.display = 'none';
       });
   }
