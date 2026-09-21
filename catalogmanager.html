@@ -191,7 +191,9 @@
     return list.filter(p => {
       const matchCat = ACTIVE_CAT === 'Tutti' || p.categoria === ACTIVE_CAT;
       const matchCatalog = ACTIVE_CATALOGS.size === 0 || ACTIVE_CATALOGS.has(p.catalogo);
-      const matchSearch = p.nome.toLowerCase().includes(search) || (p.descrizione || '').toLowerCase().includes(search);
+      const matchSearch = p.nome.toLowerCase().includes(search)
+        || (p.descrizione || '').toLowerCase().includes(search)
+        || (p.codiceProdotto || '').toLowerCase().includes(search);
       return matchCat && matchCatalog && matchSearch;
     });
   }
@@ -214,8 +216,9 @@
           <img src="${img}" loading="lazy" onerror="this.src='https://via.placeholder.com/300x200?text=Foto+non+disponibile'">
           <div class="card-body">
             <h3>${p.nome}</h3>
-            <p style="font-size:11px;color:#999;margin-bottom:2px;">${p.catalogo || ''}</p>
+            <p style="font-size:11px;color:#999;margin-bottom:2px;">${p.catalogo || ''}${p.codiceProdotto ? ' · Cod. ' + p.codiceProdotto : ''}</p>
             <p>${p.descrizione || ''}</p>
+            ${(p.misura || p.colore) ? `<p style="font-size:11px;color:#555;margin:0;">${p.misura ? 'Taglia ' + p.misura : ''}${p.misura && p.colore ? ' · ' : ''}${p.colore || ''}</p>` : ''}
             <div class="price">€ ${p.prezzo.toFixed(2)}</div>
             <div class="stock">${stockLabel}</div>
             ${qty === 0
@@ -295,9 +298,11 @@
 
         const rows = products.map(p => `
           <tr class="${p.disponibile ? '' : 'out-of-stock'}">
+            <td>${p.codiceProdotto || '-'}</td>
             <td>${p.nome}</td>
             <td>${p.catalogo}</td>
-            <td>${p.categoria}</td>
+            <td>${p.misura || '-'}</td>
+            <td>${p.colore || '-'}</td>
             <td>€ ${p.prezzo.toFixed(2)}</td>
             <td>${p.disponibile ? p.quantita : 'Esaurito'}</td>
           </tr>`).join('');
@@ -306,7 +311,7 @@
           <h2>Report Disponibilità Prodotti</h2>
           <div class="report-date">Catalogo: ${catalogLabel} — Aggiornato il ${dateStr}</div>
           <table>
-            <thead><tr><th>Prodotto</th><th>Catalogo</th><th>Categoria</th><th>Prezzo</th><th>Disponibilità</th></tr></thead>
+            <thead><tr><th>Cod. Prodotto</th><th>Prodotto</th><th>Catalogo</th><th>Taglia</th><th>Colore</th><th>Prezzo</th><th>Disponibilità</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>`;
 
