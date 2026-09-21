@@ -14,84 +14,101 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--dark); }
+  
   header { background: var(--dark); color: #fff; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; gap: 8px; flex-wrap: wrap; }
   header h1 { font-size: 18px; margin: 0; }
   .header-actions { display: flex; gap: 8px; }
   .header-actions button { border: none; padding: 8px 14px; border-radius: 20px; font-weight: bold; cursor: pointer; }
   #cart-btn { background: var(--primary); color: #fff; }
   #report-btn { background: #fff; color: var(--dark); }
+  
   .controls { padding: 14px 20px 0; display: flex; gap: 8px; flex-wrap: wrap; }
   .controls input { flex: 1; min-width: 160px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+  
   .cats { padding: 10px 20px 0; display: flex; gap: 8px; overflow-x: auto; }
   .cat-chip { padding: 6px 14px; border-radius: 16px; background: #fff; border: 1px solid var(--border); white-space: nowrap; cursor: pointer; font-size: 13px; }
   .cat-chip.active { background: var(--dark); color: #fff; border-color: var(--dark); }
   .cat-label { padding: 10px 20px 0; font-size: 12px; color: #888; font-weight: bold; text-transform: uppercase; }
   .cat-chip.catalog-chip.active { background: var(--primary); border-color: var(--primary); }
-  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; padding: 16px 20px 100px; }
+  
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; padding: 16px 20px 100px; }
   .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-  .card img { width: 100%; height: 130px; object-fit: cover; background: #eee; }
+  .card img { width: 100%; height: 160px; object-fit: cover; background: #eee; }
   .card-body { padding: 10px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
   .card-body h3 { font-size: 14px; margin: 0; }
   .card-body p { font-size: 12px; color: #666; margin: 0; flex: 1; }
   .price { font-weight: bold; font-size: 14px; }
-  .stock { font-size: 11px; color: #888; }
-  .variant-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .variant-chip { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: #fff; font-size: 11px; cursor: pointer; font-weight: 600; }
-  .variant-chip.out { opacity: 0.4; text-decoration: line-through; cursor: not-allowed; }
-  .variant-chip.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); }
   
-  /* Griglia taglie (orizzontale) × colori (verticale) */
+  /* Gestione Varianti (Taglie/Colori) */
+  .variant-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .variant-chip { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: #fff; font-size: 11px; cursor: pointer; font-weight: 600; text-align: center;}
+  .variant-chip.out { opacity: 0.4; text-decoration: line-through; cursor: not-allowed; }
+  .variant-chip.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; gap: 8px;}
+  
   .variant-matrix-wrap { overflow-x: auto; margin-top: 8px; }
-  .variant-matrix { border-collapse: collapse; font-size: 11px; }
+  .variant-matrix { border-collapse: collapse; font-size: 11px; width: 100%; }
   .variant-matrix th, .variant-matrix td { padding: 3px; text-align: center; }
   .variant-matrix thead th { font-weight: 600; color: #666; font-size: 10px; }
   .variant-matrix th.color-label { text-align: right; padding-right: 6px; font-weight: 600; color: #444; white-space: nowrap; }
-  .variant-cell { width: 30px; height: 26px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; }
+  
+  .variant-cell { min-width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; padding: 0 4px; }
   .variant-cell.out { opacity: 0.4; cursor: not-allowed; }
-  .variant-cell.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); }
   .variant-cell.empty { border: none; background: none; color: #ddd; cursor: default; }
-  .variant-cell-wrap { position: relative; display: inline-block; }
-  .cell-minus { position: absolute; top: -7px; right: -7px; width: 15px; height: 15px; border-radius: 50%; background: #b00; color: #fff; font-size: 11px; line-height: 15px; text-align: center; cursor: pointer; border: none; padding: 0; z-index: 2; }
   
-  .cart-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; gap: 6px; }
-  .cart-item-info { flex: 1; min-width: 0; }
-  .cart-item-variant { font-size: 11px; color: #888; }
-  .cart-item-controls { display: flex; align-items: center; gap: 6px; }
-  .cart-item-controls button { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border); background: #fff; cursor: pointer; font-size: 12px; }
-  
-  .report-order-btn { display: inline-block; background: var(--primary); color: #fff !important; padding: 6px 12px; border-radius: 14px; font-size: 12px; text-decoration: none; font-weight: bold; white-space: nowrap; }
+  /* Stile speciale quando la variante è nel carrello (mostra i bottoni + e -) */
+  .variant-cell.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); padding: 0; cursor: default; overflow: hidden; width: auto; min-width: 60px; }
+  .cart-qty-btn { background: rgba(0,0,0,0.15); color: #fff; border: none; width: 24px; height: 32px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; }
+  .cart-qty-btn:hover { background: rgba(0,0,0,0.25); }
+  .cart-qty-val { flex: 1; text-align: center; font-size: 12px; padding: 0 4px; min-width: 16px; }
 
-  #cart-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 320px; max-width: 90vw; background: #fff; box-shadow: -4px 0 16px rgba(0,0,0,0.15); transform: translateX(100%); transition: transform 0.25s ease; z-index: 20; display: flex; flex-direction: column; }
+  /* Elementi del Carrello laterale */
+  #cart-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 340px; max-width: 90vw; background: #fff; box-shadow: -4px 0 16px rgba(0,0,0,0.15); transform: translateX(100%); transition: transform 0.25s ease; z-index: 20; display: flex; flex-direction: column; }
   #cart-panel.open { transform: translateX(0); }
   #cart-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
   #cart-items { flex: 1; overflow-y: auto; padding: 10px 16px; }
-  #cart-footer { padding: 16px; border-top: 1px solid var(--border); }
-  #cart-total { font-weight: bold; font-size: 16px; margin-bottom: 10px; }
-  #whatsapp-btn { width: 100%; background: var(--primary); color: #fff; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; }
-  #clear-cart-btn { width: 100%; background: none; color: #b00; border: 1px solid #b00; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 13px; cursor: pointer; margin-top: 8px; }
-  #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: none; z-index: 15; }
+  .cart-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; gap: 8px; }
+  .cart-item-info { flex: 1; min-width: 0; }
+  .cart-item-variant { font-size: 11px; color: #888; }
+  .cart-item-controls { display: flex; align-items: center; gap: 8px; }
+  .cart-item-controls button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border); background: #f7f7f7; cursor: pointer; font-size: 14px; font-weight: bold; }
+  
+  #cart-footer { padding: 16px; border-top: 1px solid var(--border); background: #fafafa; }
+  #cart-total { font-weight: bold; font-size: 18px; margin-bottom: 12px; }
+  #whatsapp-btn { width: 100%; background: var(--primary); color: #fff; border: none; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; }
+  #clear-cart-btn { width: 100%; background: transparent; color: #d32f2f; border: 1px solid #d32f2f; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 13px; cursor: pointer; margin-top: 10px; }
+  
+  #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; z-index: 15; }
   #overlay.show { display: block; }
   #empty-msg, #loading-msg, #error-msg { text-align: center; padding: 40px; color: #888; }
 
   /* ===== REPORT STAMPABILE & PDF ===== */
-  #report-view { display: none; background: #fff; padding: 30px; max-width: 900px; margin: 0 auto; }
+  #report-view { display: none; background: #fff; padding: 20px; max-width: 900px; margin: 0 auto; }
   #report-view.show { display: block; }
-  #report-view h2 { margin-bottom: 0; }
-  #report-view .report-date { color: #666; font-size: 13px; margin-bottom: 20px; }
-  .report-card { display: flex; gap: 15px; border-bottom: 1px solid #ddd; padding: 15px 0; align-items: center; }
-  .report-card img { width: 70px; height: 70px; object-fit: cover; border-radius: 8px; background: #eee; border: 1px solid var(--border); }
-  .report-card-info { flex: 1; }
-  .report-card-info h4 { margin: 0 0 4px 0; font-size: 15px; }
-  .report-card-info p { margin: 0; font-size: 12px; color: #666; }
+  #report-view h2 { margin-bottom: 4px; }
+  #report-view .report-date { color: #666; font-size: 13px; margin-bottom: 24px; border-bottom: 2px solid var(--dark); padding-bottom: 10px; }
   
-  #report-actions { max-width: 900px; margin: 16px auto; display: flex; gap: 10px; padding: 0 20px; }
-  #report-actions button { padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; }
-  #close-report-btn { background: #eee; }
+  .report-card { display: flex; gap: 16px; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; page-break-inside: avoid; }
+  .report-card img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; background: #f0f0f0; border: 1px solid var(--border); }
+  .report-card-info { flex: 1; }
+  .report-card-info h4 { margin: 0 0 6px 0; font-size: 16px; }
+  .report-card-info p { margin: 0 0 4px 0; font-size: 13px; color: #555; }
+  .report-matrix-wrap { margin-top: 12px; background: #fafafa; padding: 8px; border-radius: 6px; }
+  
+  /* Cella report (non interattiva) */
+  .report-cell { display: inline-block; padding: 4px 8px; background: #fff; border: 1px solid #ccc; border-radius: 4px; font-size: 11px; min-width: 28px; text-align: center; }
+  .report-cell.out { color: #d32f2f; text-decoration: line-through; background: #fbe9e9; border-color: #f5c6c6; }
+  
+  .report-order-btn { display: inline-block; background: var(--primary); color: #fff !important; padding: 8px 16px; border-radius: 20px; font-size: 13px; text-decoration: none; font-weight: bold; margin-top: 12px; }
+
+  #report-actions { max-width: 900px; margin: 20px auto; display: flex; gap: 12px; padding: 0 20px; }
+  #report-actions button { padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; font-size: 14px; }
+  #close-report-btn { background: #e0e0e0; color: var(--dark); }
   #print-report-btn { background: var(--dark); color: #fff; }
 
   @media print {
-    header, .controls, .cats, #grid, #cart-panel, #overlay, #report-actions { display: none !important; }
+    header, .controls, .cats, #grid, #cart-panel, #overlay, #report-actions, .cat-label { display: none !important; }
     #report-view { display: block !important; box-shadow: none; padding: 0; }
+    .report-order-btn { display: none !important; } /* Nascondi pulsante WA in stampa cartacea */
     body { background: #fff; }
   }
 </style>
@@ -101,47 +118,47 @@
 <header>
   <h1>🛍️ Catalogo Prodotti</h1>
   <div class="header-actions">
-    <button id="report-btn" onclick="openReport()">📄 Report disponibilità</button>
+    <button id="report-btn" onclick="openReport()">📄 Report PDF</button>
     <button id="cart-btn" onclick="toggleCart(true)">🛒 <span id="cart-count">0</span></button>
   </div>
 </header>
 
 <div class="controls">
-  <input type="text" id="search" placeholder="Cerca un prodotto..." oninput="renderGrid()">
+  <input type="text" id="search" placeholder="Cerca per nome o codice..." oninput="renderGrid()">
 </div>
 <div class="cat-label">Cataloghi</div>
 <div class="cats" id="catalog-tabs"></div>
 <div class="cat-label">Categorie</div>
 <div class="cats" id="cats"></div>
 
-<div id="loading-msg">Caricamento prodotti e disponibilità in tempo reale...</div>
+<div id="loading-msg">Caricamento prodotti in corso...</div>
 <div id="error-msg" style="display:none;"></div>
 <div id="grid"></div>
 
-<!-- REPORT -->
+<!-- SEZIONE REPORT -->
 <div id="report-actions" style="display:none;">
   <button id="close-report-btn" onclick="closeReport()">← Torna al catalogo</button>
   <button id="print-report-btn" onclick="window.print()">🖨️ Stampa / Salva PDF</button>
 </div>
 <div id="report-view"></div>
 
+<!-- CARRELLO & OVERLAY -->
 <div id="overlay" onclick="toggleCart(false)"></div>
 <div id="cart-panel">
   <div id="cart-header">
     <strong>Il tuo ordine</strong>
-    <div style="display:flex;align-items:center;gap:10px;">
-      <button onclick="toggleCart(false)" style="border:none;background:none;font-size:18px;cursor:pointer;">✕</button>
-    </div>
+    <button onclick="toggleCart(false)" style="border:none;background:none;font-size:20px;cursor:pointer;">✕</button>
   </div>
   <div id="cart-items"></div>
   <div id="cart-footer">
     <div id="cart-total">Totale: € 0.00</div>
-    <button id="whatsapp-btn" onclick="sendWhatsApp()">Ordina su WhatsApp</button>
-    <button id="clear-cart-btn" onclick="clearCart()">Svuota carrello</button>
+    <button id="whatsapp-btn" onclick="sendWhatsApp()">Invia Ordine su WhatsApp</button>
+    <button id="clear-cart-btn" onclick="clearCart()">🗑️ Svuota Carrello</button>
   </div>
 </div>
 
 <script>
+  // ==================== CONFIGURAZIONE ====================
   const API_URL = 'https://script.google.com/macros/s/AKfycbx09XG2XA-PrkoaueaWySeYOm8IxKX4BtNv7oTGJqxBkqkUWJOoZsSKabh1RlXFBcKVIw/exec';
   const WHATSAPP_NUMBER = '39096421546';
 
@@ -168,12 +185,13 @@
         document.getElementById('loading-msg').style.display = 'none';
         const el = document.getElementById('error-msg');
         el.style.display = 'block';
-        el.innerText = 'Impossibile caricare il catalogo. Controlla API_URL nel file HTML. (' + err.message + ')';
+        el.innerText = 'Impossibile caricare il catalogo. Errore: ' + err.message;
       });
   }
 
   loadProducts();
 
+  // ----- FILTRI -----
   function renderCategories() {
     const cats = ['Tutti', ...new Set(PRODUCTS.map(p => p.categoria))];
     document.getElementById('cats').innerHTML = cats.map(c =>
@@ -196,13 +214,9 @@
   }
 
   function toggleCatalog(c) {
-    if (c === '__ALL__') {
-      ACTIVE_CATALOGS.clear();
-    } else if (ACTIVE_CATALOGS.has(c)) {
-      ACTIVE_CATALOGS.delete(c);
-    } else {
-      ACTIVE_CATALOGS.add(c);
-    }
+    if (c === '__ALL__') ACTIVE_CATALOGS.clear();
+    else if (ACTIVE_CATALOGS.has(c)) ACTIVE_CATALOGS.delete(c);
+    else ACTIVE_CATALOGS.add(c);
     renderCatalogTabs();
     renderGrid();
   }
@@ -212,37 +226,25 @@
     return list.filter(p => {
       const matchCat = ACTIVE_CAT === 'Tutti' || p.categoria === ACTIVE_CAT;
       const matchCatalog = ACTIVE_CATALOGS.size === 0 || ACTIVE_CATALOGS.has(p.catalogo);
-      const matchSearch = p.nome.toLowerCase().includes(search)
-        || (p.descrizione || '').toLowerCase().includes(search)
-        || (p.codiceProdotto || '').toLowerCase().includes(search);
+      const matchSearch = p.nome.toLowerCase().includes(search) || (p.descrizione || '').toLowerCase().includes(search) || (p.codiceProdotto || '').toLowerCase().includes(search);
       return matchCat && matchCatalog && matchSearch;
     });
   }
 
+  // Raggruppa le varianti
   function groupProducts(list) {
     const map = {};
     list.forEach(p => {
       const key = p.codiceProdotto || p.id;
       if (!map[key]) {
-        map[key] = {
-          codiceProdotto: p.codiceProdotto,
-          nome: p.nome,
-          descrizione: p.descrizione,
-          prezzo: p.prezzo,
-          categoria: p.categoria,
-          catalogo: p.catalogo,
-          immagine: p.immagine,
-          variants: []
-        };
+        map[key] = { codiceProdotto: p.codiceProdotto, nome: p.nome, descrizione: p.descrizione, prezzo: p.prezzo, categoria: p.categoria, catalogo: p.catalogo, immagine: p.immagine, variants: [] };
       }
       map[key].variants.push(p);
     });
     return Object.values(map);
   }
 
-  function variantLabel(v) {
-    return [v.misura, v.colore].filter(Boolean).join(' / ') || 'Standard';
-  }
+  function variantLabel(v) { return [v.misura, v.colore].filter(Boolean).join(' / ') || 'Standard'; }
 
   const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '3XL', '4XL'];
   function sortSizes(sizes) {
@@ -256,21 +258,25 @@
     });
   }
 
+  // Genera griglia INTERATTIVA per il catalogo
   function renderVariantMatrix(g) {
     const misure = sortSizes([...new Set(g.variants.map(v => v.misura).filter(Boolean))]);
     const colori = [...new Set(g.variants.map(v => v.colore).filter(Boolean))].sort();
 
+    // Se è un prodotto standard senza griglia complessa
     if (misure.length === 0 && colori.length === 0) {
       return `<div class="variant-grid">${g.variants.map(v => {
         const inCart = CART[v.id] ? CART[v.id].qty : 0;
-        const label = variantLabel(v) + (inCart > 0 ? ` ×${inCart}` : '');
-        const cls = 'variant-chip' + (!v.disponibile ? ' out' : (inCart > 0 ? ' in-cart' : ''));
-        const title = v.disponibile ? `Disponibili: ${v.quantita}` : 'Esaurito';
-        if (!v.disponibile) return `<span class="${cls}" title="${title}">${label}</span>`;
-        const minusBtn = inCart > 0
-          ? `<button class="cell-minus" title="Togli un pezzo" onclick="event.stopPropagation(); changeQty('${v.id}', -1)">−</button>`
-          : '';
-        return `<span class="variant-cell-wrap"><button class="${cls}" title="${title}" onclick="addToCart('${v.id}')">${label}</button>${minusBtn}</span>`;
+        if (!v.disponibile) return `<div class="variant-chip out">Esaurito</div>`;
+        if (inCart > 0) {
+          return `
+          <div class="variant-chip in-cart">
+            <button class="cart-qty-btn" onclick="changeQty('${v.id}', -1)">-</button>
+            <span class="cart-qty-val">${inCart}</span>
+            <button class="cart-qty-btn" onclick="changeQty('${v.id}', 1)">+</button>
+          </div>`;
+        }
+        return `<div class="variant-chip" onclick="changeQty('${v.id}', 1)">Standard (Disponibili: ${v.quantita})</div>`;
       }).join('')}</div>`;
     }
 
@@ -282,15 +288,23 @@
       const cells = misure.map(m => {
         const v = map[m + '|' + col];
         if (!v) return `<td><span class="variant-cell empty">—</span></td>`;
+        
         const inCart = CART[v.id] ? CART[v.id].qty : 0;
-        const cls = 'variant-cell' + (!v.disponibile ? ' out' : (inCart > 0 ? ' in-cart' : ''));
-        const title = v.disponibile ? `Disponibili: ${v.quantita}` : 'Esaurito';
-        const label = v.disponibile ? (inCart > 0 ? `${v.quantita}·${inCart}` : v.quantita) : '×';
-        if (!v.disponibile) return `<td><span class="${cls}" title="${title}">${label}</span></td>`;
-        const minusBtn = inCart > 0
-          ? `<button class="cell-minus" title="Togli un pezzo" onclick="event.stopPropagation(); changeQty('${v.id}', -1)">−</button>`
-          : '';
-        return `<td><span class="variant-cell-wrap"><button class="${cls}" title="${title}" onclick="addToCart('${v.id}')">${label}</button>${minusBtn}</span></td>`;
+        if (!v.disponibile) return `<td><div class="variant-cell out" title="Esaurito">×</div></td>`;
+        
+        // Cella interattiva: se c'è nel carrello mostra controlli + e -, altrimenti clicchi per aggiungere
+        if (inCart > 0) {
+          return `
+          <td>
+            <div class="variant-cell in-cart">
+              <button class="cart-qty-btn" onclick="changeQty('${v.id}', -1)">-</button>
+              <div class="cart-qty-val" title="Nel carrello">${inCart}</div>
+              <button class="cart-qty-btn" onclick="changeQty('${v.id}', 1)">+</button>
+            </div>
+          </td>`;
+        }
+        
+        return `<td><div class="variant-cell" title="Disponibili: ${v.quantita}" onclick="changeQty('${v.id}', 1)">${v.quantita}</div></td>`;
       }).join('');
       return `<tr><th class="color-label">${col}</th>${cells}</tr>`;
     }).join('');
@@ -310,65 +324,65 @@
 
     grid.innerHTML = groups.map(g => {
       const img = g.immagine || 'https://via.placeholder.com/300x200?text=Foto+non+disponibile';
-      const variantsHtml = renderVariantMatrix(g);
-
       return `
         <div class="card">
-          <img src="${img}" loading="lazy" onerror="this.src='https://via.placeholder.com/300x200?text=Foto+non+disponibile'">
+          <img src="${img}" loading="lazy" onerror="this.src='https://via.placeholder.com/300x200?text=Foto+Mancante'">
           <div class="card-body">
             <h3>${g.nome}</h3>
             <p style="font-size:11px;color:#999;margin-bottom:2px;">${g.catalogo || ''}${g.codiceProdotto ? ' · Cod. ' + g.codiceProdotto : ''}</p>
             <p>${g.descrizione || ''}</p>
             <div class="price">€ ${g.prezzo.toFixed(2)}</div>
-            ${variantsHtml}
+            ${renderVariantMatrix(g)}
           </div>
         </div>`;
     }).join('');
   }
 
-  function addToCart(id) {
+  // ==================== CARRELLO ====================
+  function changeQty(id, delta) {
     const p = PRODUCTS.find(x => x.id == id);
     if (!p || !p.disponibile) return;
+    
     if (!CART[id]) {
-      CART[id] = { product: p, qty: 1 };
+      if (delta > 0) CART[id] = { product: p, qty: delta };
     } else {
-      CART[id].qty += 1;
+      CART[id].qty += delta;
+      if (CART[id].qty <= 0) delete CART[id];
     }
-    renderGrid(); renderCart();
-  }
-
-  function changeQty(id, delta) {
-    if (!CART[id]) return;
-    CART[id].qty += delta;
-    if (CART[id].qty <= 0) delete CART[id];
-    renderGrid(); renderCart();
+    renderGrid(); 
+    renderCart();
   }
 
   function clearCart() {
     if (Object.keys(CART).length === 0) return;
-    if (!confirm('Svuotare il carrello?')) return;
+    if (!confirm('Sei sicuro di voler svuotare tutto il carrello?')) return;
     CART = {};
-    renderGrid(); renderCart();
+    renderGrid();
+    renderCart();
   }
 
   function renderCart() {
     const items = Object.values(CART);
     document.getElementById('cart-count').innerText = items.reduce((s, i) => s + i.qty, 0);
     const itemsEl = document.getElementById('cart-items');
-    itemsEl.innerHTML = items.length === 0
-      ? '<p style="color:#888;text-align:center;margin-top:20px;">Il carrello è vuoto</p>'
-      : items.map(i => `
-          <div class="cart-item">
-            <div class="cart-item-info">
-              <div>${i.product.nome}</div>
-              <div class="cart-item-variant">${variantLabel(i.product)} — € ${(i.qty * i.product.prezzo).toFixed(2)}</div>
-            </div>
-            <div class="cart-item-controls">
-              <button onclick="changeQty('${i.product.id}', -1)">−</button>
-              <span>${i.qty}</span>
-              <button onclick="changeQty('${i.product.id}', 1)">+</button>
-            </div>
-          </div>`).join('');
+    
+    if (items.length === 0) {
+      itemsEl.innerHTML = '<p style="color:#888;text-align:center;margin-top:30px;">Il carrello è vuoto</p>';
+    } else {
+      itemsEl.innerHTML = items.map(i => `
+        <div class="cart-item">
+          <div class="cart-item-info">
+            <div style="font-weight:600;">${i.product.nome}</div>
+            <div class="cart-item-variant">${variantLabel(i.product)} — € ${(i.qty * i.product.prezzo).toFixed(2)}</div>
+          </div>
+          <div class="cart-item-controls">
+            <button onclick="changeQty('${i.product.id}', -1)">-</button>
+            <span style="font-weight:bold;min-width:14px;text-align:center;">${i.qty}</span>
+            <button onclick="changeQty('${i.product.id}', 1)">+</button>
+          </div>
+        </div>`).join('');
+    }
+    
     const total = items.reduce((s, i) => s + i.qty * i.product.prezzo, 0);
     document.getElementById('cart-total').innerText = 'Totale: € ' + total.toFixed(2);
   }
@@ -380,24 +394,55 @@
 
   function sendWhatsApp() {
     const items = Object.values(CART);
-    if (items.length === 0) { alert('Il carrello è vuoto. Aggiungi almeno un prodotto.'); return; }
-    let msg = 'Ciao! Vorrei ordinare:%0A%0A';
+    if (items.length === 0) { alert('Il carrello è vuoto!'); return; }
+    let msg = 'Ciao! Vorrei ordinare i seguenti articoli:%0A%0A';
     let total = 0;
     items.forEach(i => {
-      const subtotal = i.qty * i.product.prezzo;
-      total += subtotal;
-      msg += `${i.qty}x ${i.product.nome} (${variantLabel(i.product)}) - € ${subtotal.toFixed(2)}%0A`;
+      const sub = i.qty * i.product.prezzo;
+      total += sub;
+      msg += `▪️ ${i.qty}x ${i.product.nome} (${variantLabel(i.product)}) - € ${sub.toFixed(2)}%0A`;
     });
-    msg += `%0ATotale: € ${total.toFixed(2)}`;
+    msg += `%0A*Totale: € ${total.toFixed(2)}*`;
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
   }
 
-  // ==================== REPORT DISPONIBILITÀ ====================
+
+  // ==================== REPORT DISPONIBILITÀ (PDF / STAMPA) ====================
+  // Genera la griglia in modalità "Sola Lettura" per la stampa
+  function renderReportMatrix(g) {
+    const misure = sortSizes([...new Set(g.variants.map(v => v.misura).filter(Boolean))]);
+    const colori = [...new Set(g.variants.map(v => v.colore).filter(Boolean))].sort();
+
+    if (misure.length === 0 && colori.length === 0) {
+      return g.variants.map(v => {
+        if (!v.disponibile) return `<span class="report-cell out">Esaurito</span>`;
+        return `<span class="report-cell">Q.tà: ${v.quantita}</span>`;
+      }).join(' ');
+    }
+
+    const map = {};
+    g.variants.forEach(v => { map[(v.misura || '') + '|' + (v.colore || '')] = v; });
+
+    const header = `<tr><th></th>${misure.map(m => `<th>${m}</th>`).join('')}</tr>`;
+    const rows = colori.map(col => {
+      const cells = misure.map(m => {
+        const v = map[m + '|' + col];
+        if (!v) return `<td><span class="report-cell" style="border:none;background:none;color:#ddd;">—</span></td>`;
+        if (!v.disponibile) return `<td><div class="report-cell out">×</div></td>`;
+        return `<td><div class="report-cell">${v.quantita}</div></td>`;
+      }).join('');
+      return `<tr><th class="color-label">${col}</th>${cells}</tr>`;
+    }).join('');
+
+    return `<table class="variant-matrix" style="max-width:400px;"><thead>${header}</thead><tbody>${rows}</tbody></table>`;
+  }
+
   function openReport() {
+    // Ricarichiamo sempre per avere lo stock reale
     fetch(API_URL + '?action=products')
       .then(r => r.json())
       .then(data => {
-        PRODUCTS = data.products || PRODUCTS;
+        PRODUCTS = data.products || PRODUCTS; 
         const products = applyFilters(data.products || []);
         const groups = groupProducts(products);
         const now = new Date();
@@ -405,35 +450,35 @@
         const catalogLabel = ACTIVE_CATALOGS.size === 0 ? 'Tutti i cataloghi' : [...ACTIVE_CATALOGS].join(', ');
 
         const cardsHtml = groups.map(g => {
-          const img = g.immagine || 'https://via.placeholder.com/300x200?text=Foto+non+disponibile';
-          const variantsHtml = renderVariantMatrix(g);
-          
-          const waText = encodeURIComponent(`Ciao! Vorrei ordinare il prodotto: ${g.nome} (Cod. ${g.codiceProdotto || '-'})`);
-          const orderBtn = `<a class="report-order-btn" href="https://wa.me/${WHATSAPP_NUMBER}?text=${waText}" target="_blank">Ordina su WhatsApp</a>`;
+          const img = g.immagine || 'https://via.placeholder.com/300x200?text=Foto+Mancante';
+          const matrixHtml = renderReportMatrix(g);
+          const waText = encodeURIComponent(`Ciao! Vorrei chiedere informazioni / ordinare il prodotto: ${g.nome} (Cod. ${g.codiceProdotto || '-'})`);
 
           return `
             <div class="report-card">
               <img src="${img}" onerror="this.src='https://via.placeholder.com/300x200?text=Foto'">
               <div class="report-card-info">
                 <h4>${g.nome}</h4>
-                <p><strong>Catalogo:</strong> ${g.catalogo || '-'} | <strong>Codice:</strong> ${g.codiceProdotto || '-'} | <strong>Prezzo:</strong> € ${g.prezzo.toFixed(2)}</p>
-                <p>${g.descrizione || ''}</p>
-                <div style="margin-top:6px;">${variantsHtml}</div>
-                <div style="margin-top:8px;">${orderBtn}</div>
+                <p><strong>Codice:</strong> ${g.codiceProdotto || '-'} | <strong>Catalogo:</strong> ${g.catalogo || '-'} | <strong>Prezzo:</strong> € ${g.prezzo.toFixed(2)}</p>
+                <div class="report-matrix-wrap">${matrixHtml}</div>
+                <a class="report-order-btn" href="https://wa.me/${WHATSAPP_NUMBER}?text=${waText}" target="_blank">Ordina Articolo su WhatsApp</a>
               </div>
             </div>`;
         }).join('');
 
         document.getElementById('report-view').innerHTML = `
-          <h2>Report Disponibilità Prodotti</h2>
-          <div class="report-date">Catalogo: ${catalogLabel} — Aggiornato il ${dateStr}</div>
-          <div style="margin-top: 15px;">${cardsHtml}</div>`;
+          <h2>Report Magazzino e Disponibilità</h2>
+          <div class="report-date">Filtro attivo: ${catalogLabel} — Generato il ${dateStr}</div>
+          <div>${cardsHtml}</div>`;
 
         document.getElementById('report-view').classList.add('show');
         document.getElementById('report-actions').style.display = 'flex';
+        
+        // Nascondi interfaccia normale
         document.querySelector('header').style.display = 'none';
         document.querySelector('.controls').style.display = 'none';
         document.querySelector('.cats').style.display = 'none';
+        document.querySelectorAll('.cat-label').forEach(el => el.style.display = 'none');
         document.getElementById('grid').style.display = 'none';
       });
   }
@@ -441,9 +486,12 @@
   function closeReport() {
     document.getElementById('report-view').classList.remove('show');
     document.getElementById('report-actions').style.display = 'none';
+    
+    // Ripristina interfaccia
     document.querySelector('header').style.display = 'flex';
     document.querySelector('.controls').style.display = 'flex';
     document.querySelector('.cats').style.display = 'flex';
+    document.querySelectorAll('.cat-label').forEach(el => el.style.display = 'block');
     document.getElementById('grid').style.display = 'grid';
   }
 </script>
