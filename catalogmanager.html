@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Catalogo Prodotti</title>
+<!-- LIBRERIA PER GENERARE IL PDF DIRETTAMENTE -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
 <style>
   :root {
     --primary: #25D366;
@@ -39,7 +42,7 @@
   .card-body p { font-size: 12px; color: #666; margin: 0; flex: 1; }
   .price { font-weight: bold; font-size: 14px; }
   
-  /* Gestione Varianti (Taglie/Colori) */
+  /* Gestione Varianti */
   .variant-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .variant-chip { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: #fff; font-size: 11px; cursor: pointer; font-weight: 600; text-align: center;}
   .variant-chip.out { opacity: 0.4; text-decoration: line-through; cursor: not-allowed; }
@@ -55,7 +58,6 @@
   .variant-cell.out { opacity: 0.4; cursor: not-allowed; }
   .variant-cell.empty { border: none; background: none; color: #ddd; cursor: default; }
   
-  /* Stile speciale quando la variante è nel carrello */
   .variant-cell.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); padding: 0; cursor: default; overflow: hidden; width: auto; min-width: 48px; }
   .cart-qty-btn { background: rgba(0,0,0,0.15); color: #fff; border: none; width: 24px; height: 32px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; }
   .cart-qty-btn:hover { background: rgba(0,0,0,0.25); }
@@ -81,13 +83,14 @@
   #overlay.show { display: block; }
   #empty-msg, #loading-msg, #error-msg { text-align: center; padding: 40px; color: #888; }
 
-  /* ===== REPORT STAMPABILE & PDF (OTTIMIZZATO PER VENDITA) ===== */
-  #report-view { display: none; background: #fff; padding: 20px; max-width: 900px; margin: 0 auto; }
-  #report-view.show { display: block; }
+  /* ===== REPORT PDF (OTTIMIZZATO) ===== */
+  #report-container { display: none; background: #f0f0f0; padding: 20px 0; }
+  #report-container.show { display: block; }
+  #report-view { background: #fff; padding: 40px; max-width: 900px; margin: 0 auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
   #report-view h2 { margin-bottom: 4px; }
   #report-view .report-date { color: #666; font-size: 13px; margin-bottom: 24px; border-bottom: 2px solid var(--dark); padding-bottom: 10px; }
   
-  .report-card { display: flex; flex-direction: row; gap: 24px; border: 1px solid #ddd; border-radius: 12px; padding: 24px; margin-bottom: 24px; page-break-inside: avoid; align-items: center; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+  .report-card { display: flex; flex-direction: row; gap: 24px; border: 1px solid #ddd; border-radius: 12px; padding: 24px; margin-bottom: 24px; align-items: center; background: #fff; }
   .report-card img { width: 260px; height: 320px; object-fit: contain; border-radius: 8px; background: #f9f9f9; border: 1px solid var(--border); padding: 8px; }
   
   .report-card-info { flex: 1; }
@@ -98,38 +101,32 @@
   .report-cell { display: inline-block; padding: 4px 8px; background: #fff; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; min-width: 28px; text-align: center; font-weight: bold; }
   .report-cell.out { color: #d32f2f; text-decoration: line-through; background: #fbe9e9; border-color: #f5c6c6; font-weight: normal; }
   
-  /* Forza la visualizzazione del colore anche in stampa/PDF per il bottone */
+  /* Stile Pulsante Ordina nel PDF */
   .report-order-btn { 
     display: inline-block; 
-    background: var(--primary) !important; 
-    color: #fff !important; 
+    background-color: var(--primary); 
+    color: #ffffff; 
     padding: 10px 20px; 
     border-radius: 20px; 
     font-size: 14px; 
     text-decoration: none; 
     font-weight: bold; 
     margin-top: 16px; 
-    -webkit-print-color-adjust: exact; 
-    print-color-adjust: exact;
   }
 
-  #report-actions { max-width: 900px; margin: 20px auto; display: flex; gap: 12px; padding: 0 20px; }
+  #report-actions { max-width: 900px; margin: 20px auto; display: flex; justify-content: space-between; gap: 12px; padding: 0 20px; }
+  .action-buttons { display: flex; gap: 12px; }
   #report-actions button { padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; font-size: 14px; }
   #close-report-btn { background: #e0e0e0; color: var(--dark); }
   #print-report-btn { background: var(--dark); color: #fff; }
+  
+  /* Classi per html2pdf per evitare tagli delle pagine a metà card */
+  .html2pdf__page-break { page-break-inside: avoid; break-inside: avoid; }
 
   @media (max-width: 600px) {
     .report-card { flex-direction: column; text-align: center; }
     .report-card img { width: 100%; height: 300px; }
-  }
-
-  /* REGOLE DI STAMPA PDF MODIFICATE */
-  @media print {
-    header, .controls, .cats, #grid, #cart-panel, #overlay, #report-actions, .cat-label { display: none !important; }
-    #report-view { display: block !important; box-shadow: none; padding: 0; }
-    .report-card { border: none; border-bottom: 2px solid #eee; box-shadow: none; padding: 16px 0; }
-    /* Il bottone report-order-btn ORA RIMANE VISIBILE anche sul PDF stampato */
-    body { background: #fff; }
+    #report-actions { flex-direction: column; }
   }
 </style>
 </head>
@@ -155,12 +152,19 @@
 <div id="error-msg" style="display:none;"></div>
 <div id="grid"></div>
 
-<!-- SEZIONE REPORT -->
-<div id="report-actions" style="display:none;">
-  <button id="close-report-btn" onclick="closeReport()">← Torna al catalogo</button>
-  <button id="print-report-btn" onclick="window.print()">🖨️ Stampa / Salva PDF</button>
+<!-- SEZIONE REPORT E TASTI DOWNLOAD PDF -->
+<div id="report-container">
+  <div id="report-actions">
+    <button id="close-report-btn" onclick="closeReport()">← Torna al catalogo</button>
+    <div class="action-buttons">
+      <!-- QUESTO TASTO ORA GENERA E SCARICA DIRETTAMENTE IL PDF -->
+      <button id="print-report-btn" onclick="generateInteractivePDF()">⬇️ Scarica PDF Interattivo</button>
+    </div>
+  </div>
+  
+  <!-- L'area che verrà convertita in PDF digitale -->
+  <div id="report-view"></div>
 </div>
-<div id="report-view"></div>
 
 <!-- CARRELLO & OVERLAY -->
 <div id="overlay" onclick="toggleCart(false)"></div>
@@ -211,7 +215,6 @@
 
   loadProducts();
 
-  // ----- FILTRI -----
   function renderCategories() {
     const cats = ['Tutti', ...new Set(PRODUCTS.map(p => p.categoria))];
     document.getElementById('cats').innerHTML = cats.map(c =>
@@ -251,7 +254,6 @@
     });
   }
 
-  // Raggruppa le varianti
   function groupProducts(list) {
     const map = {};
     list.forEach(p => {
@@ -278,22 +280,16 @@
     });
   }
 
-  // Genera griglia INTERATTIVA per il catalogo
   function renderVariantMatrix(g) {
     const misure = sortSizes([...new Set(g.variants.map(v => v.misura).filter(Boolean))]);
     const colori = [...new Set(g.variants.map(v => v.colore).filter(Boolean))].sort();
 
-    // Se è un prodotto standard senza griglia
     if (misure.length === 0 && colori.length === 0) {
       return `<div class="variant-grid">${g.variants.map(v => {
         const inCart = CART[v.id] ? CART[v.id].qty : 0;
         if (!v.disponibile) return `<div class="variant-chip out">Esaurito</div>`;
         if (inCart > 0) {
-          return `
-          <div class="variant-chip in-cart">
-            <button class="cart-qty-btn" style="border-radius:4px 0 0 4px;" onclick="changeQty('${v.id}', -1)">-</button>
-            <span class="cart-qty-val">1 In Carrello</span>
-          </div>`;
+          return `<div class="variant-chip in-cart"><button class="cart-qty-btn" style="border-radius:4px 0 0 4px;" onclick="changeQty('${v.id}', -1)">-</button><span class="cart-qty-val">1 In Carrello</span></div>`;
         }
         return `<div class="variant-chip" onclick="changeQty('${v.id}', 1)">Disp: ${v.quantita} (Clicca x ordinare)</div>`;
       }).join('')}</div>`;
@@ -311,18 +307,10 @@
         const inCart = CART[v.id] ? CART[v.id].qty : 0;
         if (!v.disponibile) return `<td><div class="variant-cell out" title="Esaurito">×</div></td>`;
         
-        // Se c'è nel carrello mostriamo SOLO 1 e il tasto per rimuoverlo (no tasto +)
         if (inCart > 0) {
-          return `
-          <td>
-            <div class="variant-cell in-cart" title="Nel carrello (Max 1)">
-              <button class="cart-qty-btn" style="border-radius:6px 0 0 6px;" onclick="changeQty('${v.id}', -1)">-</button>
-              <div class="cart-qty-val" title="Nel carrello">1</div>
-            </div>
-          </td>`;
+          return `<td><div class="variant-cell in-cart" title="Nel carrello (Max 1)"><button class="cart-qty-btn" style="border-radius:6px 0 0 6px;" onclick="changeQty('${v.id}', -1)">-</button><div class="cart-qty-val" title="Nel carrello">1</div></div></td>`;
         }
         
-        // Se NON è nel carrello mostra la quantità reale presa da magazzino
         return `<td><div class="variant-cell" title="Disponibili: ${v.quantita}" onclick="changeQty('${v.id}', 1)">${v.quantita}</div></td>`;
       }).join('');
       return `<tr><th class="color-label">${col}</th>${cells}</tr>`;
@@ -357,16 +345,15 @@
     }).join('');
   }
 
-  // ==================== CARRELLO ====================
   function changeQty(id, delta) {
     const p = PRODUCTS.find(x => x.id == id);
     if (!p || !p.disponibile) return;
     
     if (!CART[id]) {
-      if (delta > 0) CART[id] = { product: p, qty: 1 }; // Forza a 1 alla creazione
+      if (delta > 0) CART[id] = { product: p, qty: 1 };
     } else {
       CART[id].qty += delta;
-      if (CART[id].qty > 1) CART[id].qty = 1; // LIMITE RIGIDO A 1
+      if (CART[id].qty > 1) CART[id].qty = 1; 
       if (CART[id].qty <= 0) delete CART[id];
     }
     renderGrid(); 
@@ -398,7 +385,6 @@
           <div class="cart-item-controls">
             <button onclick="changeQty('${i.product.id}', -1)">-</button>
             <span style="font-weight:bold;min-width:14px;text-align:center;">${i.qty}</span>
-            <!-- Il tasto + è stato rimosso dal carrello per forzare max 1 -->
           </div>
         </div>`).join('');
     }
@@ -426,8 +412,7 @@
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
   }
 
-
-  // ==================== REPORT DISPONIBILITÀ (PDF / STAMPA) ====================
+  // ==================== REPORT E GENERAZIONE PDF DIGITALE ====================
   function renderReportMatrix(g) {
     const misure = sortSizes([...new Set(g.variants.map(v => v.misura).filter(Boolean))]);
     const colori = [...new Set(g.variants.map(v => v.colore).filter(Boolean))].sort();
@@ -472,15 +457,16 @@
           const matrixHtml = renderReportMatrix(g);
           const waText = encodeURIComponent(`Ciao! Vorrei chiedere informazioni / ordinare il prodotto: ${g.nome} (Cod. ${g.codiceProdotto || '-'})`);
 
+          // "html2pdf__page-break" evita che la scheda venga spezzata su due pagine nel PDF
           return `
-            <div class="report-card">
+            <div class="report-card html2pdf__page-break">
               <img src="${img}" onerror="this.src='https://via.placeholder.com/300x400?text=Foto'">
               <div class="report-card-info">
                 <h4>${g.nome}</h4>
                 <p><strong>Codice:</strong> ${g.codiceProdotto || '-'} | <strong>Catalogo:</strong> ${g.catalogo || '-'} | <strong>Prezzo:</strong> € ${g.prezzo.toFixed(2)}</p>
                 <div class="report-matrix-wrap">${matrixHtml}</div>
                 <br>
-                <a class="report-order-btn" href="https://wa.me/${WHATSAPP_NUMBER}?text=${waText}" target="_blank">Ordina Articolo su WhatsApp</a>
+                <a class="report-order-btn" href="https://wa.me/${WHATSAPP_NUMBER}?text=${waText}">Ordina Articolo su WhatsApp</a>
               </div>
             </div>`;
         }).join('');
@@ -490,8 +476,7 @@
           <div class="report-date">Filtro attivo: ${catalogLabel} — Generato il ${dateStr}</div>
           <div>${cardsHtml}</div>`;
 
-        document.getElementById('report-view').classList.add('show');
-        document.getElementById('report-actions').style.display = 'flex';
+        document.getElementById('report-container').classList.add('show');
         
         document.querySelector('header').style.display = 'none';
         document.querySelector('.controls').style.display = 'none';
@@ -502,14 +487,44 @@
   }
 
   function closeReport() {
-    document.getElementById('report-view').classList.remove('show');
-    document.getElementById('report-actions').style.display = 'none';
+    document.getElementById('report-container').classList.remove('show');
     
     document.querySelector('header').style.display = 'flex';
     document.querySelector('.controls').style.display = 'flex';
     document.querySelector('.cats').style.display = 'flex';
     document.querySelectorAll('.cat-label').forEach(el => el.style.display = 'block');
     document.getElementById('grid').style.display = 'grid';
+  }
+
+  // --- FUNZIONE PER CREARE E SCARICARE DIRETTAMENTE IL PDF ---
+  function generateInteractivePDF() {
+    const btn = document.getElementById('print-report-btn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '⏳ Generazione PDF... attendere';
+    btn.disabled = true;
+
+    // Seleziona il div contenente il report visivo
+    const element = document.getElementById('report-view');
+
+    // Impostazioni della libreria html2pdf
+    const opt = {
+      margin:       10,
+      filename:     'Catalogo_Vendita.pdf',
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true }, // useCORS permette di caricare le immagini esterne nel pdf
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+    };
+
+    // Genera e scarica il file
+    html2pdf().set(opt).from(element).save().then(() => {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }).catch(err => {
+      alert("Si è verificato un errore durante la generazione del PDF: " + err);
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    });
   }
 </script>
 </body>
