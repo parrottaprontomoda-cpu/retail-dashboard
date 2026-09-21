@@ -157,7 +157,6 @@
   <div id="report-actions">
     <button id="close-report-btn" onclick="closeReport()">← Torna al catalogo</button>
     <div class="action-buttons">
-      <!-- QUESTO TASTO ORA GENERA E SCARICA DIRETTAMENTE IL PDF -->
       <button id="print-report-btn" onclick="generateInteractivePDF()">⬇️ Scarica PDF Interattivo</button>
     </div>
   </div>
@@ -190,6 +189,19 @@
   let CART = {};
   let ACTIVE_CAT = 'Tutti';
   let ACTIVE_CATALOGS = new Set();
+
+  // ==================== LETTURA PARAMETRI URL ====================
+  // Permette di filtrare automaticamente aprendo link come: ?catalogo=LOTTO KIDS AI26&categoria=Maglie
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramCatalogo = urlParams.get('catalogo');
+  const paramCategoria = urlParams.get('categoria');
+  
+  if (paramCatalogo) {
+    ACTIVE_CATALOGS.add(paramCatalogo);
+  }
+  if (paramCategoria) {
+    ACTIVE_CAT = paramCategoria;
+  }
 
   function loadProducts() {
     document.getElementById('loading-msg').style.display = 'block';
@@ -457,7 +469,6 @@
           const matrixHtml = renderReportMatrix(g);
           const waText = encodeURIComponent(`Ciao! Vorrei chiedere informazioni / ordinare il prodotto: ${g.nome} (Cod. ${g.codiceProdotto || '-'})`);
 
-          // "html2pdf__page-break" evita che la scheda venga spezzata su due pagine nel PDF
           return `
             <div class="report-card html2pdf__page-break">
               <img src="${img}" onerror="this.src='https://via.placeholder.com/300x400?text=Foto'">
@@ -503,20 +514,17 @@
     btn.innerHTML = '⏳ Generazione PDF... attendere';
     btn.disabled = true;
 
-    // Seleziona il div contenente il report visivo
     const element = document.getElementById('report-view');
 
-    // Impostazioni della libreria html2pdf
     const opt = {
       margin:       10,
       filename:     'Catalogo_Vendita.pdf',
       image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true }, // useCORS permette di caricare le immagini esterne nel pdf
+      html2canvas:  { scale: 2, useCORS: true }, 
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
       pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
     };
 
-    // Genera e scarica il file
     html2pdf().set(opt).from(element).save().then(() => {
       btn.innerHTML = originalText;
       btn.disabled = false;
