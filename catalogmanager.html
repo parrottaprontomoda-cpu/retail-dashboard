@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catalogo Prodotti</title>
+<style>
+  :root {
+    --primary: #25D366;
+    --dark: #1c1c1c;
+    --bg: #f7f7f8;
+    --card-bg: #ffffff;
+    --border: #e6e6e6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--dark); }
+  header { background: var(--dark); color: #fff; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; gap: 8px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  .header-actions { display: flex; gap: 8px; }
+  .header-actions button { border: none; padding: 8px 14px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+  #cart-btn { background: var(--primary); color: #fff; }
+  #report-btn { background: #fff; color: var(--dark); }
+  .controls { padding: 14px 20px 0; display: flex; gap: 8px; flex-wrap: wrap; }
+  .controls input { flex: 1; min-width: 160px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
+  .cats { padding: 10px 20px 0; display: flex; gap: 8px; overflow-x: auto; }
+  .cat-chip { padding: 6px 14px; border-radius: 16px; background: #fff; border: 1px solid var(--border); white-space: nowrap; cursor: pointer; font-size: 13px; }
+  .cat-chip.active { background: var(--dark); color: #fff; border-color: var(--dark); }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; padding: 16px 20px 100px; }
+  .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+  .card img { width: 100%; height: 130px; object-fit: cover; background: #eee; }
+  .card-body { padding: 10px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .card-body h3 { font-size: 14px; margin: 0; }
+  .card-body p { font-size: 12px; color: #666; margin: 0; flex: 1; }
+  .price { font-weight: bold; font-size: 14px; }
+  .stock { font-size: 11px; color: #888; }
+  .add-btn { margin-top: 6px; background: var(--dark); color: #fff; border: none; border-radius: 8px; padding: 8px; cursor: pointer; font-size: 13px; }
+  .qty-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .qty-row button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border); background: #fff; cursor: pointer; }
+  .unavailable { opacity: 0.45; }
+  .unavailable .add-btn { pointer-events: none; background: #ccc; }
+
+  #cart-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 320px; max-width: 90vw; background: #fff; box-shadow: -4px 0 16px rgba(0,0,0,0.15); transform: translateX(100%); transition: transform 0.25s ease; z-index: 20; display: flex; flex-direction: column; }
+  #cart-panel.open { transform: translateX(0); }
+  #cart-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  #cart-items { flex: 1; overflow-y: auto; padding: 10px 16px; }
+  .cart-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+  #cart-footer { padding: 16px; border-top: 1px solid var(--border); }
+  #cart-total { font-weight: bold; font-size: 16px; margin-bottom: 10px; }
+  #whatsapp-btn { width: 100%; background: var(--primary); color: #fff; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; }
+  #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: none; z-index: 15; }
+  #overlay.show { display: block; }
+  #empty-msg, #loading-msg, #error-msg { text-align: center; padding: 40px; color: #888; }
+
+  /* ===== REPORT STAMPABILE ===== */
+  #report-view { display: none; background: #fff; padding: 30px; max-width: 800px; margin: 0 auto; }
+  #report-view.show { display: block; }
+  #report-view h2 { margin-bottom: 0; }
+  #report-view .report-date { color: #666; font-size: 13px; margin-bottom: 20px; }
+  #report-view table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  #report-view th, #report-view td { border-bottom: 1px solid #ddd; padding: 8px; text-align: left; }
+  #report-view .out-of-stock { color: #b00; }
+  #report-actions { max-width: 800px; margin: 16px auto; display: flex; gap: 10px; padding: 0 20px; }
+  #report-actions button { padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; }
+  #close-report-btn { background: #eee; }
+  #print-report-btn { background: var(--dark); color: #fff; }
+
+  @media print {
+    header, .controls, .cats, #grid, #cart-panel, #overlay, #report-actions { display: none !important; }
+    #report-view { display: block !important; box-shadow: none; padding: 0; }
+    body { background: #fff; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🛍️ Catalogo Prodotti</h1>
+  <div class="header-actions">
+    <button id="report-btn" onclick="openReport()">📄 Report disponibilità</button>
+    <button id="cart-btn" onclick="toggleCart(true)">🛒 <span id="cart-count">0</span></button>
+  </div>
+</header>
+
+<div class="controls">
+  <input type="text" id="search" placeholder="Cerca un prodotto..." oninput="renderGrid()">
+</div>
+<div class="cats" id="cats"></div>
+
+<div id="loading-msg">Caricamento prodotti e disponibilità in tempo reale...</div>
+<div id="error-msg" style="display:none;"></div>
+<div id="grid"></div>
+
+<!-- REPORT -->
+<div id="report-actions" style="display:none;">
+  <button id="close-report-btn" onclick="closeReport()">← Torna al catalogo</button>
+  <button id="print-report-btn" onclick="window.print()">🖨️ Stampa / Salva PDF</button>
+</div>
+<div id="report-view"></div>
+
+<div id="overlay" onclick="toggleCart(false)"></div>
+<div id="cart-panel">
+  <div id="cart-header">
+    <strong>Il tuo ordine</strong>
+    <button onclick="toggleCart(false)" style="border:none;background:none;font-size:18px;cursor:pointer;">✕</button>
+  </div>
+  <div id="cart-items"></div>
+  <div id="cart-footer">
+    <div id="cart-total">Totale: € 0.00</div>
+    <button id="whatsapp-btn" onclick="sendWhatsApp()">Ordina su WhatsApp</button>
+  </div>
+</div>
+
+<script>
+  // ==================== CONFIGURAZIONE ====================
+  // Incolla qui l'URL del tuo Web App Apps Script (Distribuisci > Nuova distribuzione > Web app)
+  const API_URL = 'INCOLLA_QUI_URL_WEB_APP_APPS_SCRIPT/exec';
+  // Numero WhatsApp con prefisso internazionale, senza + né spazi
+  const WHATSAPP_NUMBER = '39XXXXXXXXXX';
+
+  let PRODUCTS = [];
+  let CART = {};
+  let ACTIVE_CAT = 'Tutti';
+
+  function loadProducts() {
+    document.getElementById('loading-msg').style.display = 'block';
+    document.getElementById('error-msg').style.display = 'none';
+
+    fetch(API_URL + '?action=products')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok) throw new Error('Risposta API non valida');
+        PRODUCTS = data.products;
+        document.getElementById('loading-msg').style.display = 'none';
+        renderCategories();
+        renderGrid();
+      })
+      .catch(err => {
+        document.getElementById('loading-msg').style.display = 'none';
+        const el = document.getElementById('error-msg');
+        el.style.display = 'block';
+        el.innerText = 'Impossibile caricare il catalogo. Controlla API_URL nel file HTML. (' + err.message + ')';
+      });
+  }
+
+  loadProducts();
+
+  function renderCategories() {
+    const cats = ['Tutti', ...new Set(PRODUCTS.map(p => p.categoria))];
+    document.getElementById('cats').innerHTML = cats.map(c =>
+      `<div class="cat-chip ${c === ACTIVE_CAT ? 'active' : ''}" onclick="setCat('${c.replace(/'/g, "\\'")}')">${c}</div>`
+    ).join('');
+  }
+
+  function setCat(c) { ACTIVE_CAT = c; renderCategories(); renderGrid(); }
+
+  function renderGrid() {
+    const search = document.getElementById('search').value.toLowerCase();
+    const grid = document.getElementById('grid');
+    const filtered = PRODUCTS.filter(p => {
+      const matchCat = ACTIVE_CAT === 'Tutti' || p.categoria === ACTIVE_CAT;
+      const matchSearch = p.nome.toLowerCase().includes(search) || (p.descrizione || '').toLowerCase().includes(search);
+      return matchCat && matchSearch;
+    });
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div id="empty-msg">Nessun prodotto trovato.</div>';
+      return;
+    }
+
+    grid.innerHTML = filtered.map(p => {
+      const qty = CART[p.id] ? CART[p.id].qty : 0;
+      const img = p.immagine || 'https://via.placeholder.com/300x200?text=Foto+non+disponibile';
+      const stockLabel = p.disponibile ? `Disponibili: ${p.quantita}` : 'Esaurito';
+      return `
+        <div class="card ${p.disponibile ? '' : 'unavailable'}">
+          <img src="${img}" loading="lazy" onerror="this.src='https://via.placeholder.com/300x200?text=Foto+non+disponibile'">
+          <div class="card-body">
+            <h3>${p.nome}</h3>
+            <p>${p.descrizione || ''}</p>
+            <div class="price">€ ${p.prezzo.toFixed(2)}</div>
+            <div class="stock">${stockLabel}</div>
+            ${qty === 0
+              ? `<button class="add-btn" onclick="addToCart('${p.id}')">${p.disponibile ? 'Aggiungi' : 'Non disponibile'}</button>`
+              : `<div class="qty-row">
+                   <button onclick="changeQty('${p.id}', -1)">−</button>
+                   <span>${qty}</span>
+                   <button onclick="changeQty('${p.id}', 1)">+</button>
+                 </div>`
+            }
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function addToCart(id) {
+    const p = PRODUCTS.find(x => x.id == id);
+    if (!p || !p.disponibile) return;
+    CART[id] = { product: p, qty: 1 };
+    renderGrid(); renderCart();
+  }
+
+  function changeQty(id, delta) {
+    if (!CART[id]) return;
+    CART[id].qty += delta;
+    if (CART[id].qty <= 0) delete CART[id];
+    renderGrid(); renderCart();
+  }
+
+  function renderCart() {
+    const items = Object.values(CART);
+    document.getElementById('cart-count').innerText = items.reduce((s, i) => s + i.qty, 0);
+    const itemsEl = document.getElementById('cart-items');
+    itemsEl.innerHTML = items.length === 0
+      ? '<p style="color:#888;text-align:center;margin-top:20px;">Il carrello è vuoto</p>'
+      : items.map(i => `
+          <div class="cart-item">
+            <span>${i.qty}× ${i.product.nome}</span>
+            <span>€ ${(i.qty * i.product.prezzo).toFixed(2)}</span>
+          </div>`).join('');
+    const total = items.reduce((s, i) => s + i.qty * i.product.prezzo, 0);
+    document.getElementById('cart-total').innerText = 'Totale: € ' + total.toFixed(2);
+  }
+
+  function toggleCart(open) {
+    document.getElementById('cart-panel').classList.toggle('open', open);
+    document.getElementById('overlay').classList.toggle('show', open);
+  }
+
+  function sendWhatsApp() {
+    const items = Object.values(CART);
+    if (items.length === 0) { alert('Il carrello è vuoto. Aggiungi almeno un prodotto.'); return; }
+    let msg = 'Ciao! Vorrei ordinare:%0A%0A';
+    let total = 0;
+    items.forEach(i => {
+      const subtotal = i.qty * i.product.prezzo;
+      total += subtotal;
+      msg += `${i.qty}x ${i.product.nome} - € ${subtotal.toFixed(2)}%0A`;
+    });
+    msg += `%0ATotale: € ${total.toFixed(2)}`;
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
+  }
+
+  // ==================== REPORT DISPONIBILITÀ ====================
+  function openReport() {
+    // Ricarica i dati freschi dal magazzino nel momento esatto della richiesta
+    fetch(API_URL + '?action=products')
+      .then(r => r.json())
+      .then(data => {
+        const products = data.products || [];
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('it-IT') + ' alle ' + now.toLocaleTimeString('it-IT');
+
+        const rows = products.map(p => `
+          <tr class="${p.disponibile ? '' : 'out-of-stock'}">
+            <td>${p.nome}</td>
+            <td>${p.categoria}</td>
+            <td>€ ${p.prezzo.toFixed(2)}</td>
+            <td>${p.disponibile ? p.quantita : 'Esaurito'}</td>
+          </tr>`).join('');
+
+        document.getElementById('report-view').innerHTML = `
+          <h2>Report Disponibilità Prodotti</h2>
+          <div class="report-date">Aggiornato il ${dateStr}</div>
+          <table>
+            <thead><tr><th>Prodotto</th><th>Categoria</th><th>Prezzo</th><th>Disponibilità</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>`;
+
+        document.getElementById('report-view').classList.add('show');
+        document.getElementById('report-actions').style.display = 'flex';
+        document.querySelector('header').style.display = 'none';
+        document.querySelector('.controls').style.display = 'none';
+        document.querySelector('.cats').style.display = 'none';
+        document.getElementById('grid').style.display = 'none';
+      });
+  }
+
+  function closeReport() {
+    document.getElementById('report-view').classList.remove('show');
+    document.getElementById('report-actions').style.display = 'none';
+    document.querySelector('header').style.display = 'flex';
+    document.querySelector('.controls').style.display = 'flex';
+    document.querySelector('.cats').style.display = 'flex';
+    document.getElementById('grid').style.display = 'grid';
+  }
+</script>
+</body>
+</html>
