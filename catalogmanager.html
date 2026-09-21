@@ -25,6 +25,8 @@
   .cats { padding: 10px 20px 0; display: flex; gap: 8px; overflow-x: auto; }
   .cat-chip { padding: 6px 14px; border-radius: 16px; background: #fff; border: 1px solid var(--border); white-space: nowrap; cursor: pointer; font-size: 13px; }
   .cat-chip.active { background: var(--dark); color: #fff; border-color: var(--dark); }
+  .cat-label { padding: 10px 20px 0; font-size: 12px; color: #888; font-weight: bold; text-transform: uppercase; }
+  .cat-chip.catalog-chip.active { background: var(--primary); border-color: var(--primary); }
   #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; padding: 16px 20px 100px; }
   .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
   .card img { width: 100%; height: 130px; object-fit: cover; background: #eee; }
@@ -84,6 +86,9 @@
 <div class="controls">
   <input type="text" id="search" placeholder="Cerca un prodotto..." oninput="renderGrid()">
 </div>
+<div class="cat-label">Cataloghi</div>
+<div class="cats" id="catalog-tabs"></div>
+<div class="cat-label">Categorie</div>
 <div class="cats" id="cats"></div>
 
 <div id="loading-msg">Caricamento prodotti e disponibilità in tempo reale...</div>
@@ -120,6 +125,7 @@
   let PRODUCTS = [];
   let CART = {};
   let ACTIVE_CAT = 'Tutti';
+  let ACTIVE_CATALOGS = new Set(); // vuoto = tutti i cataloghi (Levis, Hangar93, ecc.)
 
   function loadProducts() {
     document.getElementById('loading-msg').style.display = 'block';
@@ -131,6 +137,7 @@
         if (!data.ok) throw new Error('Risposta API non valida');
         PRODUCTS = data.products;
         document.getElementById('loading-msg').style.display = 'none';
+        renderCatalogTabs();
         renderCategories();
         renderGrid();
       })
@@ -153,14 +160,45 @@
 
   function setCat(c) { ACTIVE_CAT = c; renderCategories(); renderGrid(); }
 
-  function renderGrid() {
+  // ==================== LINGUETTE CATALOGO (Levis, Hangar93, ecc.) ====================
+  function renderCatalogTabs() {
+    const catalogs = [...new Set(PRODUCTS.map(p => p.catalogo))].sort();
+    const el = document.getElementById('catalog-tabs');
+    const allActive = ACTIVE_CATALOGS.size === 0;
+    let html = `<div class="cat-chip catalog-chip ${allActive ? 'active' : ''}" onclick="toggleCatalog('__ALL__')">Tutti</div>`;
+    html += catalogs.map(c => {
+      const active = ACTIVE_CATALOGS.has(c);
+      return `<div class="cat-chip catalog-chip ${active ? 'active' : ''}" onclick="toggleCatalog('${c.replace(/'/g, "\\'")}')">${c}</div>`;
+    }).join('');
+    el.innerHTML = html;
+  }
+
+  function toggleCatalog(c) {
+    if (c === '__ALL__') {
+      ACTIVE_CATALOGS.clear();
+    } else if (ACTIVE_CATALOGS.has(c)) {
+      ACTIVE_CATALOGS.delete(c);
+    } else {
+      ACTIVE_CATALOGS.add(c);
+    }
+    renderCatalogTabs();
+    renderGrid();
+  }
+
+  // Applica ricerca + categoria + catalogo/i selezionati a una lista di prodotti
+  function applyFilters(list) {
     const search = document.getElementById('search').value.toLowerCase();
-    const grid = document.getElementById('grid');
-    const filtered = PRODUCTS.filter(p => {
+    return list.filter(p => {
       const matchCat = ACTIVE_CAT === 'Tutti' || p.categoria === ACTIVE_CAT;
+      const matchCatalog = ACTIVE_CATALOGS.size === 0 || ACTIVE_CATALOGS.has(p.catalogo);
       const matchSearch = p.nome.toLowerCase().includes(search) || (p.descrizione || '').toLowerCase().includes(search);
-      return matchCat && matchSearch;
+      return matchCat && matchCatalog && matchSearch;
     });
+  }
+
+  function renderGrid() {
+    const grid = document.getElementById('grid');
+    const filtered = applyFilters(PRODUCTS);
 
     if (filtered.length === 0) {
       grid.innerHTML = '<div id="empty-msg">Nessun prodotto trovato.</div>';
@@ -176,6 +214,7 @@
           <img src="${img}" loading="lazy" onerror="this.src='https://via.placeholder.com/300x200?text=Foto+non+disponibile'">
           <div class="card-body">
             <h3>${p.nome}</h3>
+            <p style="font-size:11px;color:#999;margin-bottom:2px;">${p.catalogo || ''}</p>
             <p>${p.descrizione || ''}</p>
             <div class="price">€ ${p.prezzo.toFixed(2)}</div>
             <div class="stock">${stockLabel}</div>
@@ -246,13 +285,18 @@
     fetch(API_URL + '?action=products')
       .then(r => r.json())
       .then(data => {
-        const products = data.products || [];
+        PRODUCTS = data.products || PRODUCTS; // aggiorna anche i dati in memoria
+        const products = applyFilters(data.products || []); // rispetta cataloghi/categoria/ricerca selezionati
         const now = new Date();
         const dateStr = now.toLocaleDateString('it-IT') + ' alle ' + now.toLocaleTimeString('it-IT');
+        const catalogLabel = ACTIVE_CATALOGS.size === 0
+          ? 'Tutti i cataloghi'
+          : [...ACTIVE_CATALOGS].join(', ');
 
         const rows = products.map(p => `
           <tr class="${p.disponibile ? '' : 'out-of-stock'}">
             <td>${p.nome}</td>
+            <td>${p.catalogo}</td>
             <td>${p.categoria}</td>
             <td>€ ${p.prezzo.toFixed(2)}</td>
             <td>${p.disponibile ? p.quantita : 'Esaurito'}</td>
@@ -260,9 +304,9 @@
 
         document.getElementById('report-view').innerHTML = `
           <h2>Report Disponibilità Prodotti</h2>
-          <div class="report-date">Aggiornato il ${dateStr}</div>
+          <div class="report-date">Catalogo: ${catalogLabel} — Aggiornato il ${dateStr}</div>
           <table>
-            <thead><tr><th>Prodotto</th><th>Categoria</th><th>Prezzo</th><th>Disponibilità</th></tr></thead>
+            <thead><tr><th>Prodotto</th><th>Catalogo</th><th>Categoria</th><th>Prezzo</th><th>Disponibilità</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>`;
 
