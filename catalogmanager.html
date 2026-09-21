@@ -190,8 +190,7 @@
   let ACTIVE_CAT = 'Tutti';
   let ACTIVE_CATALOGS = new Set();
 
-  // ==================== LETTURA PARAMETRI URL ====================
-  // Permette di filtrare automaticamente aprendo link come: ?catalogo=LOTTO KIDS AI26&categoria=Maglie
+  // ==================== LETTURA PARAMETRI URL E IMPOSTAZIONE VISTA CONDIVISA ====================
   const urlParams = new URLSearchParams(window.location.search);
   const paramCatalogo = urlParams.get('catalogo');
   const paramCategoria = urlParams.get('categoria');
@@ -201,6 +200,16 @@
   }
   if (paramCategoria) {
     ACTIVE_CAT = paramCategoria;
+  }
+
+  // Se c'è un filtro URL attivo (vista per il cliente finale), nascondiamo gli elementi non necessari
+  if (paramCatalogo || paramCategoria) {
+    document.getElementById('report-btn').style.display = 'none'; // Nasconde pulsante PDF
+    document.getElementById('catalog-tabs').style.display = 'none'; // Nasconde linguette cataloghi
+    document.getElementById('cats').style.display = 'none'; // Nasconde linguette categorie
+    
+    // Nasconde anche le scritte "Cataloghi" e "Categorie"
+    document.querySelectorAll('.cat-label').forEach(el => el.style.display = 'none');
   }
 
   function loadProducts() {
@@ -213,6 +222,8 @@
         if (!data.ok) throw new Error('Risposta API non valida');
         PRODUCTS = data.products;
         document.getElementById('loading-msg').style.display = 'none';
+        
+        // Renderizziamo categorie e cataloghi in background anche se nascosti per la logica dei filtri
         renderCatalogTabs();
         renderCategories();
         renderGrid();
@@ -502,8 +513,13 @@
     
     document.querySelector('header').style.display = 'flex';
     document.querySelector('.controls').style.display = 'flex';
-    document.querySelector('.cats').style.display = 'flex';
-    document.querySelectorAll('.cat-label').forEach(el => el.style.display = 'block');
+    
+    // Ripristiniamo la visualizzazione di filtri e linguette SOLO se NON stiamo guardando un link condiviso
+    if (!paramCatalogo && !paramCategoria) {
+      document.querySelector('.cats').style.display = 'flex';
+      document.querySelectorAll('.cat-label').forEach(el => el.style.display = 'block');
+    }
+    
     document.getElementById('grid').style.display = 'grid';
   }
 
