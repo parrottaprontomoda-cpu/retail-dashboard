@@ -42,7 +42,20 @@
 
   #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; padding: 16px 20px 100px; }
   .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-  .card img { width: 100%; height: 160px; object-fit: cover; background: #eee; }
+  
+  /* --- MODIFICHE ALLE IMMAGINI IN GRIGLIA PER EVITARE I TAGLI --- */
+  .card img { 
+    width: 100%; 
+    height: 180px; 
+    object-fit: contain; /* Mostra l'immagine intera senza tagliare bordi */
+    background: #ffffff; /* Sfondo bianco per fondersi con la card */
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+    cursor: zoom-in; /* Indica all'utente che può ingrandirla */
+    transition: transform 0.2s ease;
+  }
+  .card img:hover { transform: scale(1.03); }
+  
   .card-body { padding: 10px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
   .card-body h3 { font-size: 14px; margin: 0; }
   .card-body p { font-size: 12px; color: #666; margin: 0; flex: 1; }
@@ -87,6 +100,14 @@
   
   #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; z-index: 15; }
   #overlay.show { display: block; }
+  
+  /* --- LIGHTBOX (MODAL PER INGRANDIMENTO FOTO) --- */
+  #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; z-index: 100; justify-content: center; align-items: center; flex-direction: column; padding: 20px; }
+  #lightbox.show { display: flex; }
+  #lightbox img { max-width: 100%; max-height: 80vh; object-fit: contain; background: #fff; border-radius: 8px; padding: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+  #lightbox-close { position: absolute; top: 20px; right: 30px; font-size: 40px; color: #fff; cursor: pointer; background: none; border: none; }
+  #lightbox-caption { color: #fff; font-size: 16px; margin-top: 15px; font-weight: bold; text-align: center; }
+
   #empty-msg, #loading-msg, #error-msg { text-align: center; padding: 40px; color: #888; font-size: 16px; }
 
   /* ===== REPORT PDF (OTTIMIZZATO) ===== */
@@ -146,6 +167,13 @@
 <div id="error-msg" style="display:none;"></div>
 <div id="grid"></div>
 
+<!-- LIGHTBOX PER INGRANDIRE LE FOTO -->
+<div id="lightbox" onclick="closeLightbox()">
+  <button id="lightbox-close" onclick="closeLightbox()">&times;</button>
+  <img id="lightbox-img" src="" alt="Prodotto ingrandito" onclick="event.stopPropagation()">
+  <div id="lightbox-caption"></div>
+</div>
+
 <div id="report-container">
   <div id="report-actions">
     <button id="close-report-btn" onclick="closeReport()">← Torna al catalogo</button>
@@ -183,14 +211,10 @@
   let ACTIVE_CAT = 'Tutti';
   let ACTIVE_CATALOGS = new Set();
 
-  // ==================== MOTORE DI PAGINAZIONE (OTTIMIZZAZIONE RAM) ====================
-  // Memorizza i prodotti già processati e pronti da disegnare
+  // Motore di Paginazione
   let filteredGroups = []; 
-  // Quanti prodotti mostrare al primo colpo e ogni volta che si preme "Carica Altri"
   const ITEMS_PER_PAGE = 24; 
-  // Tiene il conto di quanti prodotti sono attualmente disegnati sullo schermo
   let currentDisplayed = 0; 
-  // ====================================================================================
 
   const urlParams = new URLSearchParams(window.location.search);
   const paramCatalogo = urlParams.get('catalogo');
@@ -217,7 +241,6 @@
         renderCatalogTabs();
         renderCategories();
         
-        // Avvia il filtro e il render del primo lotto di prodotti
         updateFilters(); 
       })
       .catch(err => {
@@ -259,7 +282,6 @@
     updateFilters();
   }
 
-  // === AGGIORNAMENTO FILTRI E AVVIO PAGINAZIONE ===
   function updateFilters() {
     const search = document.getElementById('search').value.toLowerCase();
     const filteredRaw = PRODUCTS.filter(p => {
@@ -269,15 +291,12 @@
       return matchCat && matchCatalog && matchSearch;
     });
     
-    // Raggruppa i prodotti e salva nella variabile globale del motore di paginazione
     filteredGroups = groupProducts(filteredRaw);
-    // Resetta la visualizzazione alla prima pagina
     currentDisplayed = ITEMS_PER_PAGE; 
     
     renderGrid();
   }
 
-  // === CARICA ALTRI (PAGINAZIONE) ===
   function loadMore() {
     currentDisplayed += ITEMS_PER_PAGE;
     renderGrid();
@@ -348,7 +367,17 @@
     return `<div class="variant-matrix-wrap"><table class="variant-matrix"><thead>${header}</thead><tbody>${rows}</tbody></table></div>`;
   }
 
-  // === RENDER GRID OTTIMIZZATO PER DISEGNARE SOLO UNA PORZIONE ===
+  // === FUNZIONI PER IL LIGHTBOX DELLA FOTO ===
+  function openLightbox(src, caption) {
+    document.getElementById('lightbox-img').src = src;
+    document.getElementById('lightbox-caption').innerText = caption;
+    document.getElementById('lightbox').classList.add('show');
+  }
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('show');
+  }
+  // ===========================================
+
   function renderGrid() {
     const grid = document.getElementById('grid');
 
@@ -357,14 +386,17 @@
       return;
     }
 
-    // Prendi solo i gruppi dall'indice 0 fino a currentDisplayed
     const visibleGroups = filteredGroups.slice(0, currentDisplayed);
 
     let html = visibleGroups.map(g => {
       const img = g.immagine || 'https://via.placeholder.com/300x200?text=Foto+non+disponibile';
+      // NOTA: Aggiunto l'evento onclick sull'immagine per attivare il lightbox
+      const safeName = g.nome.replace(/'/g, "\\'");
+      const codeInfo = g.codiceProdotto ? ` (Cod. ${g.codiceProdotto})` : '';
+      
       return `
         <div class="card">
-          <img src="${img}" loading="lazy" onerror="this.src='https://via.placeholder.com/300x200?text=Foto+Mancante'">
+          <img src="${img}" loading="lazy" onclick="openLightbox('${img}', '${safeName}${codeInfo}')" onerror="this.src='https://via.placeholder.com/300x200?text=Foto+Mancante'">
           <div class="card-body">
             <h3>${g.nome}</h3>
             <p style="font-size:11px;color:#999;margin-bottom:2px;">${g.catalogo || ''}${g.codiceProdotto ? ' · Cod. ' + g.codiceProdotto : ''}</p>
@@ -375,7 +407,6 @@
         </div>`;
     }).join('');
 
-    // Se ci sono ancora prodotti da mostrare rispetto al totale filtrato, aggiungi il tasto CARICA ALTRI
     if (currentDisplayed < filteredGroups.length) {
       const remaining = filteredGroups.length - currentDisplayed;
       html += `
@@ -400,7 +431,6 @@
       if (CART[id].qty > 1) CART[id].qty = 1; 
       if (CART[id].qty <= 0) delete CART[id];
     }
-    // Ridisegna la griglia mantenendo aperta la paginazione in cui si trova l'utente
     renderGrid(); 
     renderCart();
   }
@@ -491,7 +521,6 @@
       .then(data => {
         PRODUCTS = data.products || PRODUCTS; 
         
-        // Nel PDF ignoriamo la paginazione di 24 e carichiamo l'elenco filtrato COMPLETO
         const search = document.getElementById('search').value.toLowerCase();
         const productsPerReport = PRODUCTS.filter(p => {
           const matchCat = ACTIVE_CAT === 'Tutti' || p.categoria === ACTIVE_CAT;
