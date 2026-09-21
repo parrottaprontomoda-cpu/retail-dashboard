@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Catalogo Prodotti</title>
+<!-- LIBRERIA PER GENERARE IL PDF DIRETTAMENTE -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <style>
@@ -167,8 +168,14 @@
 </div>
 
 <script>
+  // ==================== CONFIGURAZIONE ====================
   const API_URL = 'https://script.google.com/macros/s/AKfycbx09XG2XA-PrkoaueaWySeYOm8IxKX4BtNv7oTGJqxBkqkUWJOoZsSKabh1RlXFBcKVIw/exec';
   const WHATSAPP_NUMBER = '39096421546';
+
+  // SCORPORO IVA: 
+  // Imposta 1.22 se i prezzi nel foglio includono l'IVA (e vuoi mostrarli netti).
+  // Imposta 1 se i prezzi nel foglio sono già senza IVA.
+  const DIVISORE_IVA = 1.22;
 
   let PRODUCTS = [];
   let CART = {};
@@ -341,7 +348,7 @@
             <h3>${g.nome}</h3>
             <p style="font-size:11px;color:#999;margin-bottom:2px;">${g.catalogo || ''}${g.codiceProdotto ? ' · Cod. ' + g.codiceProdotto : ''}</p>
             <p>${g.descrizione || ''}</p>
-            <div class="price">€ ${g.prezzo.toFixed(2)}</div>
+            <div class="price">€ ${(g.prezzo / DIVISORE_IVA).toFixed(2)} <span style="font-size:11px; color:#888; font-weight:normal;">+ IVA</span></div>
             ${renderVariantMatrix(g)}
           </div>
         </div>`;
@@ -383,7 +390,7 @@
         <div class="cart-item">
           <div class="cart-item-info">
             <div style="font-weight:600;">${i.product.nome}</div>
-            <div class="cart-item-variant">${variantLabel(i.product)} — € ${(i.qty * i.product.prezzo).toFixed(2)}</div>
+            <div class="cart-item-variant">${variantLabel(i.product)} — € ${((i.qty * i.product.prezzo) / DIVISORE_IVA).toFixed(2)} <span style="font-size:10px">+ IVA</span></div>
           </div>
           <div class="cart-item-controls">
             <button onclick="changeQty('${i.product.id}', -1)">-</button>
@@ -393,7 +400,7 @@
     }
     
     const total = items.reduce((s, i) => s + i.qty * i.product.prezzo, 0);
-    document.getElementById('cart-total').innerText = 'Totale: € ' + total.toFixed(2);
+    document.getElementById('cart-total').innerHTML = 'Totale: € ' + (total / DIVISORE_IVA).toFixed(2) + ' <span style="font-size:12px; color:#888; font-weight:normal;">+ IVA</span>';
   }
 
   function toggleCart(open) {
@@ -407,11 +414,11 @@
     let msg = 'Ciao! Vorrei ordinare i seguenti articoli:%0A%0A';
     let total = 0;
     items.forEach(i => {
-      const sub = i.qty * i.product.prezzo;
+      const sub = (i.qty * i.product.prezzo) / DIVISORE_IVA;
       total += sub;
-      msg += `▪️ ${i.qty}x ${i.product.nome} (${variantLabel(i.product)}) - € ${sub.toFixed(2)}%0A`;
+      msg += `▪️ ${i.qty}x ${i.product.nome} (${variantLabel(i.product)}) - € ${sub.toFixed(2)} + IVA%0A`;
     });
-    msg += `%0A*Totale: € ${total.toFixed(2)}*`;
+    msg += `%0A*Totale: € ${total.toFixed(2)} + IVA*`;
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
   }
 
@@ -464,7 +471,7 @@
               <img src="${img}" onerror="this.src='https://via.placeholder.com/300x400?text=Foto'">
               <div class="report-card-info">
                 <h4>${g.nome}</h4>
-                <p><strong>Codice:</strong> ${g.codiceProdotto || '-'} | <strong>Catalogo:</strong> ${g.catalogo || '-'} | <strong>Prezzo:</strong> € ${g.prezzo.toFixed(2)}</p>
+                <p><strong>Codice:</strong> ${g.codiceProdotto || '-'} | <strong>Catalogo:</strong> ${g.catalogo || '-'} | <strong>Prezzo:</strong> € ${(g.prezzo / DIVISORE_IVA).toFixed(2)} + IVA</p>
                 <div class="report-matrix-wrap">${matrixHtml}</div>
                 <br>
                 <a class="report-order-btn" href="https://wa.me/${WHATSAPP_NUMBER}?text=${waText}">Ordina Articolo su WhatsApp</a>
