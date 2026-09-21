@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Catalogo Prodotti</title>
-<!-- LIBRERIA PER GENERARE IL PDF DIRETTAMENTE -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <style>
@@ -34,6 +33,12 @@
   .cat-label { padding: 10px 20px 0; font-size: 12px; color: #888; font-weight: bold; text-transform: uppercase; }
   .cat-chip.catalog-chip.active { background: var(--primary); border-color: var(--primary); }
   
+  /* --- REGOLE BLINDATE PER LA MODALITÀ CONDIVISIONE CLIENTE --- */
+  body.shared-mode #report-btn { display: none !important; }
+  body.shared-mode .cats { display: none !important; }
+  body.shared-mode .cat-label { display: none !important; }
+  /* ----------------------------------------------------------- */
+
   #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; padding: 16px 20px 100px; }
   .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
   .card img { width: 100%; height: 160px; object-fit: cover; background: #eee; }
@@ -42,7 +47,6 @@
   .card-body p { font-size: 12px; color: #666; margin: 0; flex: 1; }
   .price { font-weight: bold; font-size: 14px; }
   
-  /* Gestione Varianti */
   .variant-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .variant-chip { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: #fff; font-size: 11px; cursor: pointer; font-weight: 600; text-align: center;}
   .variant-chip.out { opacity: 0.4; text-decoration: line-through; cursor: not-allowed; }
@@ -63,7 +67,6 @@
   .cart-qty-btn:hover { background: rgba(0,0,0,0.25); }
   .cart-qty-val { flex: 1; text-align: center; font-size: 13px; padding: 0 4px; font-weight: bold; }
 
-  /* Elementi del Carrello laterale */
   #cart-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 340px; max-width: 90vw; background: #fff; box-shadow: -4px 0 16px rgba(0,0,0,0.15); transform: translateX(100%); transition: transform 0.25s ease; z-index: 20; display: flex; flex-direction: column; }
   #cart-panel.open { transform: translateX(0); }
   #cart-header { padding: 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
@@ -83,7 +86,6 @@
   #overlay.show { display: block; }
   #empty-msg, #loading-msg, #error-msg { text-align: center; padding: 40px; color: #888; }
 
-  /* ===== REPORT PDF (OTTIMIZZATO) ===== */
   #report-container { display: none; background: #f0f0f0; padding: 20px 0; }
   #report-container.show { display: block; }
   #report-view { background: #fff; padding: 40px; max-width: 900px; margin: 0 auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
@@ -101,18 +103,7 @@
   .report-cell { display: inline-block; padding: 4px 8px; background: #fff; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; min-width: 28px; text-align: center; font-weight: bold; }
   .report-cell.out { color: #d32f2f; text-decoration: line-through; background: #fbe9e9; border-color: #f5c6c6; font-weight: normal; }
   
-  /* Stile Pulsante Ordina nel PDF */
-  .report-order-btn { 
-    display: inline-block; 
-    background-color: var(--primary); 
-    color: #ffffff; 
-    padding: 10px 20px; 
-    border-radius: 20px; 
-    font-size: 14px; 
-    text-decoration: none; 
-    font-weight: bold; 
-    margin-top: 16px; 
-  }
+  .report-order-btn { display: inline-block; background-color: var(--primary); color: #ffffff; padding: 10px 20px; border-radius: 20px; font-size: 14px; text-decoration: none; font-weight: bold; margin-top: 16px; }
 
   #report-actions { max-width: 900px; margin: 20px auto; display: flex; justify-content: space-between; gap: 12px; padding: 0 20px; }
   .action-buttons { display: flex; gap: 12px; }
@@ -120,7 +111,6 @@
   #close-report-btn { background: #e0e0e0; color: var(--dark); }
   #print-report-btn { background: var(--dark); color: #fff; }
   
-  /* Classi per html2pdf per evitare tagli delle pagine a metà card */
   .html2pdf__page-break { page-break-inside: avoid; break-inside: avoid; }
 
   @media (max-width: 600px) {
@@ -152,7 +142,6 @@
 <div id="error-msg" style="display:none;"></div>
 <div id="grid"></div>
 
-<!-- SEZIONE REPORT E TASTI DOWNLOAD PDF -->
 <div id="report-container">
   <div id="report-actions">
     <button id="close-report-btn" onclick="closeReport()">← Torna al catalogo</button>
@@ -160,12 +149,9 @@
       <button id="print-report-btn" onclick="generateInteractivePDF()">⬇️ Scarica PDF Interattivo</button>
     </div>
   </div>
-  
-  <!-- L'area che verrà convertita in PDF digitale -->
   <div id="report-view"></div>
 </div>
 
-<!-- CARRELLO & OVERLAY -->
 <div id="overlay" onclick="toggleCart(false)"></div>
 <div id="cart-panel">
   <div id="cart-header">
@@ -181,7 +167,6 @@
 </div>
 
 <script>
-  // ==================== CONFIGURAZIONE ====================
   const API_URL = 'https://script.google.com/macros/s/AKfycbx09XG2XA-PrkoaueaWySeYOm8IxKX4BtNv7oTGJqxBkqkUWJOoZsSKabh1RlXFBcKVIw/exec';
   const WHATSAPP_NUMBER = '39096421546';
 
@@ -190,7 +175,7 @@
   let ACTIVE_CAT = 'Tutti';
   let ACTIVE_CATALOGS = new Set();
 
-  // ==================== LETTURA PARAMETRI URL E IMPOSTAZIONE VISTA CONDIVISA ====================
+  // ==================== ATTIVAZIONE MODALITÀ CONDIVISIONE ====================
   const urlParams = new URLSearchParams(window.location.search);
   const paramCatalogo = urlParams.get('catalogo');
   const paramCategoria = urlParams.get('categoria');
@@ -202,15 +187,11 @@
     ACTIVE_CAT = paramCategoria;
   }
 
-  // Se c'è un filtro URL attivo (vista per il cliente finale), nascondiamo gli elementi non necessari
+  // Se c'è un filtro URL (link inviato al cliente), blindiamo la pagina nascondendo i bottoni di gestione
   if (paramCatalogo || paramCategoria) {
-    document.getElementById('report-btn').style.display = 'none'; // Nasconde pulsante PDF
-    document.getElementById('catalog-tabs').style.display = 'none'; // Nasconde linguette cataloghi
-    document.getElementById('cats').style.display = 'none'; // Nasconde linguette categorie
-    
-    // Nasconde anche le scritte "Cataloghi" e "Categorie"
-    document.querySelectorAll('.cat-label').forEach(el => el.style.display = 'none');
+    document.body.classList.add('shared-mode');
   }
+  // ===========================================================================
 
   function loadProducts() {
     document.getElementById('loading-msg').style.display = 'block';
@@ -223,7 +204,6 @@
         PRODUCTS = data.products;
         document.getElementById('loading-msg').style.display = 'none';
         
-        // Renderizziamo categorie e cataloghi in background anche se nascosti per la logica dei filtri
         renderCatalogTabs();
         renderCategories();
         renderGrid();
@@ -435,7 +415,6 @@
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
   }
 
-  // ==================== REPORT E GENERAZIONE PDF DIGITALE ====================
   function renderReportMatrix(g) {
     const misure = sortSizes([...new Set(g.variants.map(v => v.misura).filter(Boolean))]);
     const colori = [...new Set(g.variants.map(v => v.colore).filter(Boolean))].sort();
@@ -499,31 +478,21 @@
           <div>${cardsHtml}</div>`;
 
         document.getElementById('report-container').classList.add('show');
-        
         document.querySelector('header').style.display = 'none';
         document.querySelector('.controls').style.display = 'none';
-        document.querySelector('.cats').style.display = 'none';
-        document.querySelectorAll('.cat-label').forEach(el => el.style.display = 'none');
+        
+        // Non occorre forzare l'invisibilità di tabs qua perché la classe shared-mode lo fa già
         document.getElementById('grid').style.display = 'none';
       });
   }
 
   function closeReport() {
     document.getElementById('report-container').classList.remove('show');
-    
     document.querySelector('header').style.display = 'flex';
     document.querySelector('.controls').style.display = 'flex';
-    
-    // Ripristiniamo la visualizzazione di filtri e linguette SOLO se NON stiamo guardando un link condiviso
-    if (!paramCatalogo && !paramCategoria) {
-      document.querySelector('.cats').style.display = 'flex';
-      document.querySelectorAll('.cat-label').forEach(el => el.style.display = 'block');
-    }
-    
     document.getElementById('grid').style.display = 'grid';
   }
 
-  // --- FUNZIONE PER CREARE E SCARICARE DIRETTAMENTE IL PDF ---
   function generateInteractivePDF() {
     const btn = document.getElementById('print-report-btn');
     const originalText = btn.innerHTML;
