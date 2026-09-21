@@ -27,7 +27,7 @@
   .cat-chip.active { background: var(--dark); color: #fff; border-color: var(--dark); }
   .cat-label { padding: 10px 20px 0; font-size: 12px; color: #888; font-weight: bold; text-transform: uppercase; }
   .cat-chip.catalog-chip.active { background: var(--primary); border-color: var(--primary); }
-  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; padding: 16px 20px 100px; }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; padding: 16px 20px 100px; }
   .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
   .card img { width: 100%; height: 130px; object-fit: cover; background: #eee; }
   .card-body { padding: 10px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
@@ -39,6 +39,16 @@
   .variant-chip { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: #fff; font-size: 11px; cursor: pointer; font-weight: 600; }
   .variant-chip.out { opacity: 0.4; text-decoration: line-through; cursor: not-allowed; }
   .variant-chip.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); }
+  /* Griglia taglie (orizzontale) × colori (verticale) */
+  .variant-matrix-wrap { overflow-x: auto; margin-top: 8px; }
+  .variant-matrix { border-collapse: collapse; font-size: 11px; }
+  .variant-matrix th, .variant-matrix td { padding: 3px; text-align: center; }
+  .variant-matrix thead th { font-weight: 600; color: #666; font-size: 10px; }
+  .variant-matrix th.color-label { text-align: right; padding-right: 6px; font-weight: 600; color: #444; white-space: nowrap; }
+  .variant-cell { width: 30px; height: 26px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; }
+  .variant-cell.out { opacity: 0.4; cursor: not-allowed; }
+  .variant-cell.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .variant-cell.empty { border: none; background: none; color: #ddd; cursor: default; }
   .cart-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; gap: 6px; }
   .cart-item-info { flex: 1; min-width: 0; }
   .cart-item-variant { font-size: 11px; color: #888; }
@@ -229,6 +239,60 @@
     return [v.misura, v.colore].filter(Boolean).join(' / ') || 'Standard';
   }
 
+  // Ordina le taglie in modo naturale: prima le sigle standard (S,M,L...),
+  // poi eventuali numeri (38,39,40...), poi alfabeticamente il resto.
+  const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '3XL', '4XL'];
+  function sortSizes(sizes) {
+    return sizes.slice().sort((a, b) => {
+      const ai = SIZE_ORDER.indexOf(String(a).toUpperCase());
+      const bi = SIZE_ORDER.indexOf(String(b).toUpperCase());
+      if (ai !== -1 || bi !== -1) return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      const an = parseFloat(a), bn = parseFloat(b);
+      if (!isNaN(an) && !isNaN(bn)) return an - bn;
+      return String(a).localeCompare(String(b));
+    });
+  }
+
+  // Costruisce la griglia: taglie in orizzontale (colonne), colori in verticale (righe)
+  function renderVariantMatrix(g) {
+    const misure = sortSizes([...new Set(g.variants.map(v => v.misura).filter(Boolean))]);
+    const colori = [...new Set(g.variants.map(v => v.colore).filter(Boolean))].sort();
+
+    // Se il prodotto non ha taglie/colori distinti, mostra la vecchia lista semplice a pillole
+    if (misure.length === 0 && colori.length === 0) {
+      return `<div class="variant-grid">${g.variants.map(v => {
+        const inCart = CART[v.id] ? CART[v.id].qty : 0;
+        const label = variantLabel(v) + (inCart > 0 ? ` ×${inCart}` : '');
+        const cls = 'variant-chip' + (!v.disponibile ? ' out' : (inCart > 0 ? ' in-cart' : ''));
+        const title = v.disponibile ? `Disponibili: ${v.quantita}` : 'Esaurito';
+        return v.disponibile
+          ? `<button class="${cls}" title="${title}" onclick="addToCart('${v.id}')">${label}</button>`
+          : `<span class="${cls}" title="${title}">${label}</span>`;
+      }).join('')}</div>`;
+    }
+
+    const map = {};
+    g.variants.forEach(v => { map[(v.misura || '') + '|' + (v.colore || '')] = v; });
+
+    const header = `<tr><th></th>${misure.map(m => `<th>${m}</th>`).join('')}</tr>`;
+    const rows = colori.map(col => {
+      const cells = misure.map(m => {
+        const v = map[m + '|' + col];
+        if (!v) return `<td><span class="variant-cell empty">—</span></td>`;
+        const inCart = CART[v.id] ? CART[v.id].qty : 0;
+        const cls = 'variant-cell' + (!v.disponibile ? ' out' : (inCart > 0 ? ' in-cart' : ''));
+        const title = v.disponibile ? `Disponibili: ${v.quantita}` : 'Esaurito';
+        const label = v.disponibile ? (inCart > 0 ? `${v.quantita}·${inCart}` : v.quantita) : '×';
+        return v.disponibile
+          ? `<td><button class="${cls}" title="${title}" onclick="addToCart('${v.id}')">${label}</button></td>`
+          : `<td><span class="${cls}" title="${title}">${label}</span></td>`;
+      }).join('');
+      return `<tr><th class="color-label">${col}</th>${cells}</tr>`;
+    }).join('');
+
+    return `<div class="variant-matrix-wrap"><table class="variant-matrix"><thead>${header}</thead><tbody>${rows}</tbody></table></div>`;
+  }
+
   function renderGrid() {
     const grid = document.getElementById('grid');
     const filtered = applyFilters(PRODUCTS);
@@ -241,15 +305,7 @@
 
     grid.innerHTML = groups.map(g => {
       const img = g.immagine || 'https://via.placeholder.com/300x200?text=Foto+non+disponibile';
-      const variantsHtml = g.variants.map(v => {
-        const inCart = CART[v.id] ? CART[v.id].qty : 0;
-        const label = variantLabel(v) + (inCart > 0 ? ` ×${inCart}` : '');
-        const cls = 'variant-chip' + (!v.disponibile ? ' out' : (inCart > 0 ? ' in-cart' : ''));
-        const title = v.disponibile ? `Disponibili: ${v.quantita}` : 'Esaurito';
-        return v.disponibile
-          ? `<button class="${cls}" title="${title}" onclick="addToCart('${v.id}')">${label}</button>`
-          : `<span class="${cls}" title="${title}">${label}</span>`;
-      }).join('');
+      const variantsHtml = renderVariantMatrix(g);
 
       return `
         <div class="card">
