@@ -55,11 +55,11 @@
   .variant-cell.out { opacity: 0.4; cursor: not-allowed; }
   .variant-cell.empty { border: none; background: none; color: #ddd; cursor: default; }
   
-  /* Stile speciale quando la variante è nel carrello (mostra i bottoni + e -) */
-  .variant-cell.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); padding: 0; cursor: default; overflow: hidden; width: auto; min-width: 60px; }
+  /* Stile speciale quando la variante è nel carrello */
+  .variant-cell.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); padding: 0; cursor: default; overflow: hidden; width: auto; min-width: 48px; }
   .cart-qty-btn { background: rgba(0,0,0,0.15); color: #fff; border: none; width: 24px; height: 32px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; }
   .cart-qty-btn:hover { background: rgba(0,0,0,0.25); }
-  .cart-qty-val { flex: 1; text-align: center; font-size: 12px; padding: 0 4px; min-width: 16px; }
+  .cart-qty-val { flex: 1; text-align: center; font-size: 13px; padding: 0 4px; font-weight: bold; }
 
   /* Elementi del Carrello laterale */
   #cart-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 340px; max-width: 90vw; background: #fff; box-shadow: -4px 0 16px rgba(0,0,0,0.15); transform: translateX(100%); transition: transform 0.25s ease; z-index: 20; display: flex; flex-direction: column; }
@@ -70,7 +70,7 @@
   .cart-item-info { flex: 1; min-width: 0; }
   .cart-item-variant { font-size: 11px; color: #888; }
   .cart-item-controls { display: flex; align-items: center; gap: 8px; }
-  .cart-item-controls button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border); background: #f7f7f7; cursor: pointer; font-size: 14px; font-weight: bold; }
+  .cart-item-controls button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border); background: #f7f7f7; cursor: pointer; font-size: 16px; font-weight: bold; display: flex; align-items: center; justify-content: center; }
   
   #cart-footer { padding: 16px; border-top: 1px solid var(--border); background: #fafafa; }
   #cart-total { font-weight: bold; font-size: 18px; margin-bottom: 12px; }
@@ -81,34 +81,42 @@
   #overlay.show { display: block; }
   #empty-msg, #loading-msg, #error-msg { text-align: center; padding: 40px; color: #888; }
 
-  /* ===== REPORT STAMPABILE & PDF ===== */
+  /* ===== REPORT STAMPABILE & PDF (OTTIMIZZATO PER VENDITA) ===== */
   #report-view { display: none; background: #fff; padding: 20px; max-width: 900px; margin: 0 auto; }
   #report-view.show { display: block; }
   #report-view h2 { margin-bottom: 4px; }
   #report-view .report-date { color: #666; font-size: 13px; margin-bottom: 24px; border-bottom: 2px solid var(--dark); padding-bottom: 10px; }
   
-  .report-card { display: flex; gap: 16px; border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 16px; page-break-inside: avoid; }
-  .report-card img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; background: #f0f0f0; border: 1px solid var(--border); }
+  .report-card { display: flex; flex-direction: row; gap: 24px; border: 1px solid #ddd; border-radius: 12px; padding: 24px; margin-bottom: 24px; page-break-inside: avoid; align-items: center; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.03); }
+  /* L'immagine ora è molto più grande e si incastra perfettamente (contain) */
+  .report-card img { width: 260px; height: 320px; object-fit: contain; border-radius: 8px; background: #f9f9f9; border: 1px solid var(--border); padding: 8px; }
+  
   .report-card-info { flex: 1; }
-  .report-card-info h4 { margin: 0 0 6px 0; font-size: 16px; }
-  .report-card-info p { margin: 0 0 4px 0; font-size: 13px; color: #555; }
-  .report-matrix-wrap { margin-top: 12px; background: #fafafa; padding: 8px; border-radius: 6px; }
+  .report-card-info h4 { margin: 0 0 10px 0; font-size: 20px; }
+  .report-card-info p { margin: 0 0 6px 0; font-size: 14px; color: #555; }
+  .report-matrix-wrap { margin-top: 16px; background: #fafafa; padding: 12px; border-radius: 6px; display: inline-block; }
   
   /* Cella report (non interattiva) */
-  .report-cell { display: inline-block; padding: 4px 8px; background: #fff; border: 1px solid #ccc; border-radius: 4px; font-size: 11px; min-width: 28px; text-align: center; }
-  .report-cell.out { color: #d32f2f; text-decoration: line-through; background: #fbe9e9; border-color: #f5c6c6; }
+  .report-cell { display: inline-block; padding: 4px 8px; background: #fff; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; min-width: 28px; text-align: center; font-weight: bold; }
+  .report-cell.out { color: #d32f2f; text-decoration: line-through; background: #fbe9e9; border-color: #f5c6c6; font-weight: normal; }
   
-  .report-order-btn { display: inline-block; background: var(--primary); color: #fff !important; padding: 8px 16px; border-radius: 20px; font-size: 13px; text-decoration: none; font-weight: bold; margin-top: 12px; }
+  .report-order-btn { display: inline-block; background: var(--primary); color: #fff !important; padding: 10px 20px; border-radius: 20px; font-size: 14px; text-decoration: none; font-weight: bold; margin-top: 16px; }
 
   #report-actions { max-width: 900px; margin: 20px auto; display: flex; gap: 12px; padding: 0 20px; }
   #report-actions button { padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; font-size: 14px; }
   #close-report-btn { background: #e0e0e0; color: var(--dark); }
   #print-report-btn { background: var(--dark); color: #fff; }
 
+  @media (max-width: 600px) {
+    .report-card { flex-direction: column; text-align: center; }
+    .report-card img { width: 100%; height: 300px; }
+  }
+
   @media print {
     header, .controls, .cats, #grid, #cart-panel, #overlay, #report-actions, .cat-label { display: none !important; }
     #report-view { display: block !important; box-shadow: none; padding: 0; }
-    .report-order-btn { display: none !important; } /* Nascondi pulsante WA in stampa cartacea */
+    .report-card { border: none; border-bottom: 2px solid #eee; box-shadow: none; padding: 16px 0; }
+    .report-order-btn { display: none !important; }
     body { background: #fff; }
   }
 </style>
@@ -118,7 +126,7 @@
 <header>
   <h1>🛍️ Catalogo Prodotti</h1>
   <div class="header-actions">
-    <button id="report-btn" onclick="openReport()">📄 Report PDF</button>
+    <button id="report-btn" onclick="openReport()">📄 Strumento di Vendita (PDF)</button>
     <button id="cart-btn" onclick="toggleCart(true)">🛒 <span id="cart-count">0</span></button>
   </div>
 </header>
@@ -263,7 +271,7 @@
     const misure = sortSizes([...new Set(g.variants.map(v => v.misura).filter(Boolean))]);
     const colori = [...new Set(g.variants.map(v => v.colore).filter(Boolean))].sort();
 
-    // Se è un prodotto standard senza griglia complessa
+    // Se è un prodotto standard senza griglia
     if (misure.length === 0 && colori.length === 0) {
       return `<div class="variant-grid">${g.variants.map(v => {
         const inCart = CART[v.id] ? CART[v.id].qty : 0;
@@ -271,12 +279,11 @@
         if (inCart > 0) {
           return `
           <div class="variant-chip in-cart">
-            <button class="cart-qty-btn" onclick="changeQty('${v.id}', -1)">-</button>
-            <span class="cart-qty-val">${inCart}</span>
-            <button class="cart-qty-btn" onclick="changeQty('${v.id}', 1)">+</button>
+            <button class="cart-qty-btn" style="border-radius:4px 0 0 4px;" onclick="changeQty('${v.id}', -1)">-</button>
+            <span class="cart-qty-val">1 In Carrello</span>
           </div>`;
         }
-        return `<div class="variant-chip" onclick="changeQty('${v.id}', 1)">Standard (Disponibili: ${v.quantita})</div>`;
+        return `<div class="variant-chip" onclick="changeQty('${v.id}', 1)">Disp: ${v.quantita} (Clicca x ordinare)</div>`;
       }).join('')}</div>`;
     }
 
@@ -292,18 +299,18 @@
         const inCart = CART[v.id] ? CART[v.id].qty : 0;
         if (!v.disponibile) return `<td><div class="variant-cell out" title="Esaurito">×</div></td>`;
         
-        // Cella interattiva: se c'è nel carrello mostra controlli + e -, altrimenti clicchi per aggiungere
+        // Se c'è nel carrello mostriamo SOLO 1 e il tasto per rimuoverlo (no tasto +)
         if (inCart > 0) {
           return `
           <td>
-            <div class="variant-cell in-cart">
-              <button class="cart-qty-btn" onclick="changeQty('${v.id}', -1)">-</button>
-              <div class="cart-qty-val" title="Nel carrello">${inCart}</div>
-              <button class="cart-qty-btn" onclick="changeQty('${v.id}', 1)">+</button>
+            <div class="variant-cell in-cart" title="Nel carrello (Max 1)">
+              <button class="cart-qty-btn" style="border-radius:6px 0 0 6px;" onclick="changeQty('${v.id}', -1)">-</button>
+              <div class="cart-qty-val" title="Nel carrello">1</div>
             </div>
           </td>`;
         }
         
+        // Se NON è nel carrello mostra la quantità reale presa da magazzino
         return `<td><div class="variant-cell" title="Disponibili: ${v.quantita}" onclick="changeQty('${v.id}', 1)">${v.quantita}</div></td>`;
       }).join('');
       return `<tr><th class="color-label">${col}</th>${cells}</tr>`;
@@ -344,9 +351,10 @@
     if (!p || !p.disponibile) return;
     
     if (!CART[id]) {
-      if (delta > 0) CART[id] = { product: p, qty: delta };
+      if (delta > 0) CART[id] = { product: p, qty: 1 }; // Forza a 1 alla creazione
     } else {
       CART[id].qty += delta;
+      if (CART[id].qty > 1) CART[id].qty = 1; // LIMITE RIGIDO A 1
       if (CART[id].qty <= 0) delete CART[id];
     }
     renderGrid(); 
@@ -378,7 +386,7 @@
           <div class="cart-item-controls">
             <button onclick="changeQty('${i.product.id}', -1)">-</button>
             <span style="font-weight:bold;min-width:14px;text-align:center;">${i.qty}</span>
-            <button onclick="changeQty('${i.product.id}', 1)">+</button>
+            <!-- Il tasto + è stato rimosso dal carrello per forzare max 1 -->
           </div>
         </div>`).join('');
     }
@@ -434,7 +442,7 @@
       return `<tr><th class="color-label">${col}</th>${cells}</tr>`;
     }).join('');
 
-    return `<table class="variant-matrix" style="max-width:400px;"><thead>${header}</thead><tbody>${rows}</tbody></table>`;
+    return `<table class="variant-matrix" style="max-width:450px;"><thead>${header}</thead><tbody>${rows}</tbody></table>`;
   }
 
   function openReport() {
@@ -450,24 +458,25 @@
         const catalogLabel = ACTIVE_CATALOGS.size === 0 ? 'Tutti i cataloghi' : [...ACTIVE_CATALOGS].join(', ');
 
         const cardsHtml = groups.map(g => {
-          const img = g.immagine || 'https://via.placeholder.com/300x200?text=Foto+Mancante';
+          const img = g.immagine || 'https://via.placeholder.com/300x400?text=Foto+Mancante';
           const matrixHtml = renderReportMatrix(g);
           const waText = encodeURIComponent(`Ciao! Vorrei chiedere informazioni / ordinare il prodotto: ${g.nome} (Cod. ${g.codiceProdotto || '-'})`);
 
           return `
             <div class="report-card">
-              <img src="${img}" onerror="this.src='https://via.placeholder.com/300x200?text=Foto'">
+              <img src="${img}" onerror="this.src='https://via.placeholder.com/300x400?text=Foto'">
               <div class="report-card-info">
                 <h4>${g.nome}</h4>
                 <p><strong>Codice:</strong> ${g.codiceProdotto || '-'} | <strong>Catalogo:</strong> ${g.catalogo || '-'} | <strong>Prezzo:</strong> € ${g.prezzo.toFixed(2)}</p>
                 <div class="report-matrix-wrap">${matrixHtml}</div>
+                <br>
                 <a class="report-order-btn" href="https://wa.me/${WHATSAPP_NUMBER}?text=${waText}" target="_blank">Ordina Articolo su WhatsApp</a>
               </div>
             </div>`;
         }).join('');
 
         document.getElementById('report-view').innerHTML = `
-          <h2>Report Magazzino e Disponibilità</h2>
+          <h2>Strumento di Vendita e Magazzino</h2>
           <div class="report-date">Filtro attivo: ${catalogLabel} — Generato il ${dateStr}</div>
           <div>${cardsHtml}</div>`;
 
