@@ -553,15 +553,15 @@
   function sendWhatsApp() {
     const items = Object.values(CART);
     if (items.length === 0) { alert('Il carrello è vuoto!'); return; }
-    let msg = 'Ciao! Vorrei ordinare i seguenti articoli:%0A%0A';
+    let msg = 'Ciao! Vorrei ordinare i seguenti articoli:\n\n';
     let total = 0;
     items.forEach(i => {
       const sub = (i.qty * i.product.prezzo) / DIVISORE_IVA;
       total += sub;
-      msg += `▪️ ${i.qty}x ${i.product.nome} (${variantLabel(i.product)}) - € ${sub.toFixed(2)} + IVA%0A`;
+      msg += `▪️ ${i.qty}x ${i.product.nome} (${variantLabel(i.product)}) - € ${sub.toFixed(2)} + IVA\n`;
     });
-    msg += `%0A*Totale: € ${total.toFixed(2)} + IVA*`;
-    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, '_blank');
+    msg += `\n*Totale: € ${total.toFixed(2)} + IVA*`;
+    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
   }
 
   function renderReportMatrix(g) {
