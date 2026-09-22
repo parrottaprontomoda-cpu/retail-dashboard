@@ -63,13 +63,13 @@
   .price { font-weight: bold; font-size: 14px; }
   .iva-label { font-size: 11px; color: #888; font-weight: normal; margin-left: 2px; }
   
-  .variant-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .variant-grid { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 8px; }
   .variant-chip { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: #fff; font-size: 11px; cursor: pointer; font-weight: 600; text-align: center;}
   .variant-chip.out { opacity: 0.4; text-decoration: line-through; cursor: not-allowed; }
   .variant-chip.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; gap: 8px;}
   
-  .variant-matrix-wrap { overflow-x: auto; margin-top: 8px; }
-  .variant-matrix { border-collapse: collapse; font-size: 11px; width: 100%; }
+  .variant-matrix-wrap { overflow-x: auto; margin-top: 8px; text-align: right; }
+  .variant-matrix { border-collapse: collapse; font-size: 11px; margin-left: auto; }
   .variant-matrix th, .variant-matrix td { padding: 3px; text-align: center; }
   .variant-matrix thead th { font-weight: 600; color: #666; font-size: 10px; }
   .variant-matrix th.color-label { text-align: right; padding-right: 6px; font-weight: 600; color: #444; white-space: nowrap; }
@@ -562,6 +562,12 @@
     });
     msg += `\n*Totale: € ${total.toFixed(2)} + IVA*`;
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
+
+    // Svuota il carrello subito dopo l'invio dell'ordine su WhatsApp
+    CART = {};
+    renderGrid();
+    renderCart();
+    toggleCart(false);
   }
 
   function renderReportMatrix(g) {
