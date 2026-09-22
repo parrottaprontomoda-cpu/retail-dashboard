@@ -144,6 +144,15 @@
     .report-card img { width: 100%; height: 300px; }
     #report-actions { flex-direction: column; }
   }
+
+  /* ===== MENU CONTESTUALE CATALOGO ===== */
+  .catalog-menu-overlay { position: fixed; inset: 0; z-index: 30; background: transparent; display: none; }
+  .catalog-menu-overlay.show { display: block; }
+  .catalog-menu { position: fixed; z-index: 31; background: #fff; border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,0.2); min-width: 200px; overflow: hidden; display: none; }
+  .catalog-menu.show { display: block; }
+  .catalog-menu-title { padding: 10px 14px; font-size: 12px; color: #888; font-weight: bold; border-bottom: 1px solid var(--border); }
+  .catalog-menu-item { padding: 12px 14px; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .catalog-menu-item:hover { background: #f5f5f5; }
 </style>
 </head>
 <body>
@@ -173,6 +182,14 @@
   <button id="lightbox-close" onclick="closeLightbox()">&times;</button>
   <img id="lightbox-img" src="" alt="Prodotto ingrandito" onclick="event.stopPropagation()">
   <div id="lightbox-caption"></div>
+</div>
+
+<!-- MENU CONTESTUALE CATALOGO -->
+<div id="catalog-menu-overlay" class="catalog-menu-overlay" onclick="closeCatalogMenu()"></div>
+<div id="catalog-menu" class="catalog-menu">
+  <div class="catalog-menu-title" id="catalog-menu-title"></div>
+  <div class="catalog-menu-item" onclick="catalogMenuAction('window')">🪟 Apri in una nuova finestra</div>
+  <div class="catalog-menu-item" onclick="catalogMenuAction('share')">🔗 Condividi catalogo</div>
 </div>
 
 <div id="report-container">
@@ -211,6 +228,7 @@
   let CART = {};
   let ACTIVE_CAT = 'Tutti';
   let ACTIVE_CATALOGS = new Set();
+  let MENU_TARGET_CATALOG = null; // catalogo selezionato quando si apre il menu contestuale
 
   // Motore di Paginazione
   let filteredGroups = []; 
@@ -266,20 +284,78 @@
     const catalogs = [...new Set(PRODUCTS.map(p => p.catalogo))].sort();
     const el = document.getElementById('catalog-tabs');
     const allActive = ACTIVE_CATALOGS.size === 0;
-    let html = `<div class="cat-chip catalog-chip ${allActive ? 'active' : ''}" onclick="toggleCatalog('__ALL__')">Tutti</div>`;
+
+    let html = `<div class="cat-chip catalog-chip ${allActive ? 'active' : ''}" onclick="resetCatalogFilter()">Tutti</div>`;
     html += catalogs.map(c => {
       const active = ACTIVE_CATALOGS.has(c);
-      return `<div class="cat-chip catalog-chip ${active ? 'active' : ''}" onclick="toggleCatalog('${c.replace(/'/g, "\\'")}')">${c}</div>`;
+      const safe = c.replace(/'/g, "\\'");
+      return `<div class="cat-chip catalog-chip ${active ? 'active' : ''}" onclick="openCatalogMenu(event, '${safe}')">${c}</div>`;
     }).join('');
     el.innerHTML = html;
   }
 
-  function toggleCatalog(c) {
-    if (c === '__ALL__') ACTIVE_CATALOGS.clear();
-    else if (ACTIVE_CATALOGS.has(c)) ACTIVE_CATALOGS.delete(c);
-    else ACTIVE_CATALOGS.add(c);
+  // Chip "Tutti": resetta il filtro nella pagina corrente (nessun menu)
+  function resetCatalogFilter() {
+    ACTIVE_CATALOGS.clear();
     renderCatalogTabs();
     updateFilters();
+  }
+
+  // Costruisce il link diretto a un catalogo (senza altri parametri)
+  function buildCatalogLink(catalogName) {
+    const baseUrl = window.location.origin + window.location.pathname;
+    return baseUrl + '?catalogo=' + encodeURIComponent(catalogName);
+  }
+
+  // Apre il menu contestuale (Nuova finestra / Condividi) accanto al chip cliccato
+  function openCatalogMenu(evt, catalogName) {
+    evt.stopPropagation();
+    MENU_TARGET_CATALOG = catalogName;
+
+    const menu = document.getElementById('catalog-menu');
+    const overlay = document.getElementById('catalog-menu-overlay');
+    document.getElementById('catalog-menu-title').innerText = catalogName;
+
+    const rect = evt.currentTarget.getBoundingClientRect();
+    menu.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+    menu.style.left = Math.min(rect.left + window.scrollX, window.innerWidth - 220) + 'px';
+
+    overlay.classList.add('show');
+    menu.classList.add('show');
+  }
+
+  function closeCatalogMenu() {
+    document.getElementById('catalog-menu').classList.remove('show');
+    document.getElementById('catalog-menu-overlay').classList.remove('show');
+    MENU_TARGET_CATALOG = null;
+  }
+
+  function catalogMenuAction(action) {
+    if (!MENU_TARGET_CATALOG) return;
+    const link = buildCatalogLink(MENU_TARGET_CATALOG);
+    const name = MENU_TARGET_CATALOG;
+
+    if (action === 'window') {
+      window.open(link, '_blank', 'noopener');
+    } else if (action === 'share') {
+      if (navigator.share) {
+        navigator.share({
+          title: 'Catalogo ' + name,
+          text: 'Dai un\'occhiata al catalogo ' + name + ':',
+          url: link
+        }).catch(() => {});
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(link).then(() => {
+          alert('Link copiato negli appunti:\n' + link);
+        }).catch(() => {
+          prompt('Copia il link del catalogo:', link);
+        });
+      } else {
+        prompt('Copia il link del catalogo:', link);
+      }
+    }
+
+    closeCatalogMenu();
   }
 
   function updateFilters() {
