@@ -68,17 +68,25 @@
   .variant-chip.out { opacity: 0.4; text-decoration: line-through; cursor: not-allowed; }
   .variant-chip.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; gap: 8px;}
   
-  .variant-matrix-wrap { overflow-x: auto; margin-top: 8px; text-align: right; }
+  /* Contenitore del blocco taglie/colori nella scheda prodotto: niente scroll orizzontale */
+  .variant-matrix-wrap { margin-top: 8px; }
+  .variant-color-group { margin-top: 8px; }
+  .variant-color-group:first-child { margin-top: 0; }
+  .variant-color-name { font-size: 11px; font-weight: 600; color: #444; text-align: right; margin-bottom: 4px; }
+  .variant-size-row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+
+  /* Stili per la tabella del report PDF (invariati) */
   .variant-matrix { border-collapse: collapse; font-size: 11px; margin-left: auto; }
   .variant-matrix th, .variant-matrix td { padding: 3px; text-align: center; }
   .variant-matrix thead th { font-weight: 600; color: #666; font-size: 10px; }
   .variant-matrix th.color-label { text-align: right; padding-right: 6px; font-weight: 600; color: #444; white-space: nowrap; }
   
-  .variant-cell { min-width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; padding: 0 4px; }
+  .variant-cell { min-width: 40px; height: 36px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600; font-size: 11px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px 6px; line-height: 1.2; }
+  .variant-cell-qty { font-size: 9px; font-weight: 400; color: #888; }
   .variant-cell.out { opacity: 0.4; cursor: not-allowed; }
-  .variant-cell.empty { border: none; background: none; color: #ddd; cursor: default; }
+  .variant-cell.empty { border: none; background: none; color: #ddd; cursor: default; min-width: 40px; height: 36px; }
   
-  .variant-cell.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); padding: 0; cursor: default; overflow: hidden; width: auto; min-width: 48px; }
+  .variant-cell.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); padding: 0; cursor: default; overflow: hidden; width: auto; min-width: 60px; flex-direction: row; }
   .cart-qty-btn { background: rgba(0,0,0,0.15); color: #fff; border: none; width: 24px; height: 32px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; }
   .cart-qty-btn:hover { background: rgba(0,0,0,0.25); }
   .cart-qty-val { flex: 1; text-align: center; font-size: 13px; padding: 0 4px; font-weight: bold; }
@@ -422,25 +430,29 @@
     const map = {};
     g.variants.forEach(v => { map[(v.misura || '') + '|' + (v.colore || '')] = v; });
 
-    const header = `<tr><th></th>${misure.map(m => `<th>${m}</th>`).join('')}</tr>`;
-    const rows = colori.map(col => {
+    // Layout a blocchi: nome colore sopra, taglie sotto in riga allineate a destra.
+    // Evita lo scroll orizzontale (che nascondeva le taglie a destra e "saltava" a sinistra ad ogni click).
+    const blocks = colori.map(col => {
       const cells = misure.map(m => {
         const v = map[m + '|' + col];
-        if (!v) return `<td><span class="variant-cell empty">—</span></td>`;
-        
+        if (!v) return `<div class="variant-cell empty">—</div>`;
+
         const inCart = CART[v.id] ? CART[v.id].qty : 0;
-        if (!v.disponibile) return `<td><div class="variant-cell out" title="Esaurito">×</div></td>`;
-        
+        if (!v.disponibile) return `<div class="variant-cell out" title="Esaurito">${m}<br>×</div>`;
+
         if (inCart > 0) {
-          return `<td><div class="variant-cell in-cart" title="Nel carrello (Max 1)"><button class="cart-qty-btn" style="border-radius:6px 0 0 6px;" onclick="changeQty('${v.id}', -1)">-</button><div class="cart-qty-val" title="Nel carrello">1</div></div></td>`;
+          return `<div class="variant-cell in-cart" title="Nel carrello (Max 1)"><button class="cart-qty-btn" style="border-radius:6px 0 0 6px;" onclick="changeQty('${v.id}', -1)">-</button><div class="cart-qty-val" title="Nel carrello">${m}</div></div>`;
         }
-        
-        return `<td><div class="variant-cell" title="Disponibili: ${v.quantita}" onclick="changeQty('${v.id}', 1)">${v.quantita}</div></td>`;
+
+        return `<div class="variant-cell" title="${m} — Disponibili: ${v.quantita}" onclick="changeQty('${v.id}', 1)">${m}<span class="variant-cell-qty">${v.quantita}</span></div>`;
       }).join('');
-      return `<tr><th class="color-label">${col}</th>${cells}</tr>`;
+      return `<div class="variant-color-group">
+        <div class="variant-color-name">${col}</div>
+        <div class="variant-size-row">${cells}</div>
+      </div>`;
     }).join('');
 
-    return `<div class="variant-matrix-wrap"><table class="variant-matrix"><thead>${header}</thead><tbody>${rows}</tbody></table></div>`;
+    return `<div class="variant-matrix-wrap">${blocks}</div>`;
   }
 
   // === FUNZIONI PER APRIRE E CHIUDERE LA FOTO INGRANDITA ===
