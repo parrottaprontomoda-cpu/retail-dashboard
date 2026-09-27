@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Riconciliazione Magazzino - Punti Vendita</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  body{background:#f4f6f8;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;}
+  .card{border:none;border-radius:10px;box-shadow:0 3px 8px rgba(0,0,0,.08);margin-bottom:20px;}
+  .kpi{border-radius:10px;padding:16px;color:#fff;}
+  .kpi .lbl{font-size:.78rem;text-transform:uppercase;opacity:.85;}
+  .kpi .val{font-size:1.6rem;font-weight:700;}
+  .row-anomalia{background:#fdecea !important;}
+  .row-transito{background:#fff8e1 !important;}
+  .row-ok{background:#eafaf1 !important;}
+  .badge-stato{font-size:.72rem;padding:5px 8px;}
+  th.sortable{cursor:pointer;user-select:none;}
+  th.sortable:hover{text-decoration:underline;}
+  #summaryEan{display:none;}
+  textarea#pvMapping{font-family:monospace;font-size:.85rem;}
+</style>
+</head>
+<body>
+<nav class="navbar navbar-dark mb-4" style="background:#2c3e50;">
+  <div class="container-fluid">
+    <span class="navbar-brand mb-0 h1"><i class="fas fa-boxes-stacked me-2"></i>Riconciliazione Magazzino ↔ Punti Vendita</span>
+  </div>
+</nav>
+
+<div class="container-fluid px-4 pb-5">
+
+  <!-- CONFIG SORGENTI -->
+  <div class="card">
+    <div class="card-body">
+      <h5 class="fw-bold mb-3"><i class="fas fa-link me-2"></i>1. Sorgenti Dati</h5>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label small fw-bold">ID Foglio Google (NOTE)</label>
+          <input type="text" id="noteSheetId" class="form-control">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small fw-bold">Nome Foglio</label>
+          <input type="text" id="noteSheetName" class="form-control" value="NOTE">
+        </div>
+        <div class="col-md-7">
+          <label class="form-label small fw-bold">Link CSV pubblicato VENDITE</label>
+          <input type="text" id="venditeUrl" class="form-control">
+        </div>
+      </div>
+      <button id="btnLoad" class="btn btn-primary mt-3"><i class="fas fa-download me-2"></i>Carica Dati</button>
+      <span id="loadStatus" class="ms-3 text-muted small"></span>
+    </div>
+  </div>
+
+  <!-- MAPPATURA COLONNE -->
+  <div class="card d-none" id="mappingCard">
+    <div class="card-body">
+      <h5 class="fw-bold mb-3"><i class="fas fa-table-columns me-2"></i>2. Mappatura Colonne</h5>
+      <div class="row">
+        <div class="col-md-6 border-end">
+          <h6 class="text-primary">Foglio NOTE</h6>
+          <div class="row g-2">
+            <div class="col-6"><label class="small">Data</label><select id="noteColData" class="form-select form-select-sm"></select></div>
+            <div class="col-6"><label class="small">Destinazione (CLI/MAG)</label><select id="noteColDest" class="form-select form-select-sm"></select></div>
+            <div class="col-6"><label class="small">Codice / EAN</label><select id="noteColEan" class="form-select form-select-sm"></select></div>
+            <div class="col-6"><label class="small">Descrizione</label><select id="noteColDesc" class="form-select form-select-sm"></select></div>
+            <div class="col-6"><label class="small">Quantità (segno +/-)</label><select id="noteColQta" class="form-select form-select-sm"></select></div>
+            <div class="col-6"><label class="small">ID Rilevamento (opz.)</label><select id="noteColIdRil" class="form-select form-select-sm"></select></div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <h6 class="text-success">Foglio VENDITE</h6>
+          <div class="row g-2">
+            <div class="col-6"><label class="small">Data</label><select id="vColData" class="form-select form-select-sm"></select></div>
+            <div class="col-6"><label class="small">Negozio</label><select id="vColStore" class="form-select form-select-sm"></select></div>
+            <div class="col-6"><label class="small">EAN</label><select id="vColEan" class="form-select form-select-sm"></select></div>
+            <div class="col-6"><label class="small">Codice Interno (fallback)</label><select id="vColCodInt" class="form-select form-select-sm"></select></div>
+            <div class="col-6"><label class="small">Descrizione</label><select id="vColDesc" class="form-select form-select-sm"></select></div>
+            <div class="col-6"><label class="small">Quantità</label><select id="vColQta" class="form-select form-select-sm"></select></div>
+          </div>
+        </div>
+      </div>
+      <hr>
+      <h6 class="fw-bold">Mappatura Punti Vendita <small class="text-muted">(una riga per PV: NomeVisualizzato = alias contenuto in CLI/MAG | alias contenuto in Negozio VENDITE)</small></h6>
+      <textarea id="pvMapping" class="form-control mb-2" rows="5"></textarea>
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="small fw-bold">Data da (opz.)</label>
+          <input type="date" id="dateFrom" class="form-control form-control-sm">
+        </div>
+        <div class="col-md-3">
+          <label class="small fw-bold">Data a (opz.)</label>
+          <input type="date" id="dateTo" class="form-control form-control-sm">
+        </div>
+      </div>
+      <button id="btnCompute" class="btn btn-success mt-3"><i class="fas fa-calculator me-2"></i>Calcola Riconciliazione</button>
+    </div>
+  </div>
+
+  <!-- RISULTATI -->
+  <div id="resultsSection" class="d-none">
+    <div class="row mb-3">
+      <div class="col-md-3 col-6"><div class="kpi" style="background:#0d6efd;"><div class="lbl">Combinazioni PV+Articolo</div><div class="val" id="kpiTot">0</div></div></div>
+      <div class="col-md-3 col-6"><div class="kpi" style="background:#198754;"><div class="lbl">In regola (giacenza 0)</div><div class="val" id="kpiOk">0</div></div></div>
+      <div class="col-md-3 col-6"><div class="kpi" style="background:#ffc107;color:#333;"><div class="lbl">In transito (&gt;0, non ancora reso/venduto)</div><div class="val" id="kpiTransito">0</div></div></div>
+      <div class="col-md-3 col-6"><div class="kpi" style="background:#dc3545;"><div class="lbl">Anomalie (giacenza &lt; 0)</div><div class="val" id="kpiAnomalia">0</div></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <div class="row g-2 mb-3">
+          <div class="col-md-3"><input id="filterEan" class="form-control" placeholder="Filtra per EAN/Codice..."></div>
+          <div class="col-md-4"><input id="filterDesc" class="form-control" placeholder="Filtra per descrizione..."></div>
+          <div class="col-md-3">
+            <select id="filterPv" class="form-select"><option value="ALL">Tutti i punti vendita</option></select>
+          </div>
+          <div class="col-md-2">
+            <select id="filterStato" class="form-select">
+              <option value="ALL">Tutti gli stati</option>
+              <option value="ANOMALIA">Solo anomalie</option>
+              <option value="TRANSITO">Solo in transito</option>
+              <option value="OK">Solo in regola</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="summaryEan" class="alert alert-primary">
+          <strong id="summaryEanTitle"></strong>
+          <div class="row mt-2 text-center">
+            <div class="col"><div class="small text-muted">Inviato Rete</div><div class="fw-bold" id="sumInviato">0</div></div>
+            <div class="col"><div class="small text-muted">Reso Rete</div><div class="fw-bold" id="sumReso">0</div></div>
+            <div class="col"><div class="small text-muted">Venduto Rete</div><div class="fw-bold" id="sumVenduto">0</div></div>
+            <div class="col"><div class="small text-muted">Giacenza Teorica Rete</div><div class="fw-bold fs-5" id="sumGiacenza">0</div></div>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle" id="mainTable">
+            <thead class="table-dark">
+              <tr>
+                <th class="sortable" data-k="ean">EAN/Codice</th>
+                <th class="sortable" data-k="desc">Descrizione</th>
+                <th class="sortable" data-k="pv">Punto Vendita</th>
+                <th class="sortable text-end" data-k="inviato">Inviato</th>
+                <th class="sortable text-end" data-k="reso">Reso</th>
+                <th class="sortable text-end" data-k="venduto">Venduto</th>
+                <th class="sortable text-end" data-k="giacenza">Giacenza Teorica</th>
+                <th>Stato</th>
+              </tr>
+            </thead>
+            <tbody id="mainTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+<script>
+moment.locale('it');
+const DEFAULT_SHEET_ID = "1OlxI1A6wuhvH0gnfo3VnkyQ58kWBgIfJAVIjUIuZw-I";
+const DEFAULT_VENDITE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRSwk2BhmMriyZotR2gLYtOkHic0lM3-0efkhaKhJ7gxDyQyqbGF0noTp9RV9GQgEHWTeuSskT57sVI/pub?gid=1352769388&single=true&output=csv";
+const DEFAULT_PV = ['PEPLO', 'PARROTTA POINT CHIARAVALLA', 'PARROTTA PRONTO MODA', 'CARAMELLO', 'TIKO'];
+
+document.getElementById('noteSheetId').value = localStorage.getItem('rec_noteSheetId') || DEFAULT_SHEET_ID;
+document.getElementById('venditeUrl').value = localStorage.getItem('rec_venditeUrl') || DEFAULT_VENDITE_URL;
+document.getElementById('pvMapping').value = localStorage.getItem('rec_pvMapping') ||
+  DEFAULT_PV.map(p => `${p} = ${p}`).join('\n');
+
+let noteCols = [], noteRows = [];
+let vCols = [], vRows = [];
+let results = [];
+let sortState = { key: 'giacenza', dir: 1 };
+
+function parseNum(v){
+  if(v===null||v===undefined||v==='') return 0;
+  let s=String(v).replace('€','').trim();
+  if(s.includes(',')&&s.includes('.')) s=s.replace(/\./g,'').replace(',','.');
+  else if(s.includes(',')) s=s.replace(',','.');
+  let n=parseFloat(s); return isNaN(n)?0:n;
+}
+function guessCol(cols, keywords){
+  for(let c of cols){ let l=c.toLowerCase(); for(let k of keywords) if(l.includes(k)) return c; }
+  return cols[0]||'';
+}
+function fillSelect(id, cols, guessKeys){
+  let sel=document.getElementById(id); sel.innerHTML='';
+  cols.forEach(c=>sel.appendChild(new Option(c,c)));
+  sel.value = guessCol(cols, guessKeys);
+}
+function parseDate(v){
+  let m = moment(String(v||'').trim(), ["DD/MM/YYYY","DD/MM/YYYY HH:mm","YYYY-MM-DD","YYYY-MM-DD HH:mm:ss"]);
+  return m.isValid()?m:null;
+}
+function parsePvMapping(){
+  let map = {}; // pvKey -> [aliases uppercase]
+  document.getElementById('pvMapping').value.split('\n').forEach(line=>{
+    line=line.trim(); if(!line) return;
+    let [key, aliasStr] = line.split('=');
+    if(!key) return;
+    key=key.trim();
+    let aliases = (aliasStr||key).split('|').map(a=>a.trim().toUpperCase()).filter(a=>a);
+    map[key]=aliases;
+  });
+  return map;
+}
+function matchPv(rawName, map, side){
+  // side: 0 = check NOTE alias half is not distinguished, we just check all aliases against name
+  let up = String(rawName||'').trim().toUpperCase();
+  if(!up) return null;
+  for(let key in map){
+    for(let alias of map[key]){
+      if(up.includes(alias)) return key;
+    }
+  }
+  return null;
+}
+
+document.getElementById('btnLoad').addEventListener('click', function(){
+  localStorage.setItem('rec_noteSheetId', document.getElementById('noteSheetId').value.trim());
+  localStorage.setItem('rec_venditeUrl', document.getElementById('venditeUrl').value.trim());
+  const status = document.getElementById('loadStatus');
+  status.textContent = 'Caricamento NOTE...';
+
+  const sheetId = document.getElementById('noteSheetId').value.trim();
+  const sheetName = document.getElementById('noteSheetName').value.trim() || 'NOTE';
+  const tqUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json;responseHandler:handleNoteData&sheet=${encodeURIComponent(sheetName)}&headers=1`;
+  let script = document.createElement('script');
+  script.src = tqUrl;
+  script.onerror = function(){ status.textContent = 'Errore caricamento NOTE.'; };
+  document.body.appendChild(script);
+});
+
+window.handleNoteData = function(resp){
+  const status = document.getElementById('loadStatus');
+  if(!resp || !resp.table){ status.textContent='Errore lettura foglio NOTE.'; return; }
+  noteCols = resp.table.cols.map((c,i)=> c && c.label ? c.label : 'Colonna_'+i);
+  noteRows = resp.table.rows.map(r=>{
+    let o={};
+    r.c.forEach((cell,i)=>{ o[noteCols[i]] = (cell && cell.f!=null) ? cell.f : (cell && cell.v!=null ? cell.v : ''); });
+    return o;
+  });
+  status.textContent = `NOTE: ${noteRows.length} righe caricate. Caricamento VENDITE...`;
+  loadVendite();
+};
+
+function loadVendite(){
+  const status = document.getElementById('loadStatus');
+  const url = document.getElementById('venditeUrl').value.trim();
+  fetch(url + '&_t=' + Date.now()).then(r=>r.ok?r.text():Promise.reject('http')).then(csv=>{
+    Papa.parse(csv, { header:true, skipEmptyLines:true, complete: function(res){
+      vRows = res.data; vCols = res.meta.fields;
+      status.textContent = `NOTE: ${noteRows.length} righe · VENDITE: ${vRows.length} righe caricate.`;
+      setupMapping();
+    }});
+  }).catch(()=>{ status.textContent = 'Errore caricamento VENDITE. Controlla il link CSV.'; });
+}
+
+function setupMapping(){
+  fillSelect('noteColData', noteCols, ['data']);
+  fillSelect('noteColDest', noteCols, ['cli','mag','client','destin']);
+  fillSelect('noteColEan', noteCols, ['cod','ean']);
+  fillSelect('noteColDesc', noteCols, ['descr']);
+  fillSelect('noteColQta', noteCols, ['qta','quant','pz']);
+  fillSelect('noteColIdRil', noteCols, ['rilev','id']);
+
+  fillSelect('vColData', vCols, ['data']);
+  fillSelect('vColStore', vCols, ['negoz','store','punto']);
+  fillSelect('vColEan', vCols, ['ean','barcode']);
+  fillSelect('vColCodInt', vCols, ['cod']);
+  fillSelect('vColDesc', vCols, ['descr']);
+  fillSelect('vColQta', vCols, ['qta','quant']);
+
+  document.getElementById('mappingCard').classList.remove('d-none');
+}
+
+document.getElementById('btnCompute').addEventListener('click', computeReconciliation);
+
+function computeReconciliation(){
+  localStorage.setItem('rec_pvMapping', document.getElementById('pvMapping').value);
+  const pvMap = parsePvMapping();
+  const pvKeys = Object.keys(pvMap);
+
+  const cData=document.getElementById('noteColData').value, cDest=document.getElementById('noteColDest').value,
+        cEan=document.getElementById('noteColEan').value, cDesc=document.getElementById('noteColDesc').value,
+        cQta=document.getElementById('noteColQta').value;
+  const vData=document.getElementById('vColData').value, vStore=document.getElementById('vColStore').value,
+        vEan=document.getElementById('vColEan').value, vCodInt=document.getElementById('vColCodInt').value,
+        vDesc=document.getElementById('vColDesc').value, vQta=document.getElementById('vColQta').value;
+
+  const dFrom = document.getElementById('dateFrom').value ? moment(document.getElementById('dateFrom').value) : null;
+  const dTo = document.getElementById('dateTo').value ? moment(document.getElementById('dateTo').value) : null;
+
+  // agg[pv|ean] = {inviato, reso, desc}
+  let agg = {};
+  let descByEan = {};
+
+  noteRows.forEach(row=>{
+    const pv = matchPv(row[cDest], pvMap);
+    if(!pv) return;
+    const d = parseDate(row[cData]);
+    if(dFrom && d && d.isBefore(dFrom)) return;
+    if(dTo && d && d.isAfter(dTo)) return;
+    const ean = String(row[cEan]||'').trim();
+    if(!ean) return;
+    const qta = parseNum(row[cQta]);
+    const key = pv+'|'+ean;
+    if(!agg[key]) agg[key] = { pv, ean, inviato:0, reso:0, venduto:0, desc: row[cDesc]||'' };
+    if(qta < 0) agg[key].inviato += Math.abs(qta);
+    else agg[key].reso += qta;
+    if(row[cDesc]) descByEan[ean] = row[cDesc];
+  });
+
+  vRows.forEach(row=>{
+    const pv = matchPv(row[vStore], pvMap);
+    if(!pv) return;
+    const d = parseDate(row[vData]);
+    if(dFrom && d && d.isBefore(dFrom)) return;
+    if(dTo && d && d.isAfter(dTo)) return;
+    let ean = String(row[vEan]||'').trim();
+    if(!ean) ean = String(row[vCodInt]||'').trim();
+    if(!ean) return;
+    let qta = parseNum(row[vQta]); if(qta===0) qta=1;
+    const key = pv+'|'+ean;
+    if(!agg[key]) agg[key] = { pv, ean, inviato:0, reso:0, venduto:0, desc: row[vDesc]||'' };
+    agg[key].venduto += qta;
+    if(row[vDesc] && !descByEan[ean]) descByEan[ean] = row[vDesc];
+  });
+
+  results = Object.values(agg).map(r=>{
+    if(!r.desc) r.desc = descByEan[r.ean] || '';
+    r.giacenza = r.inviato - r.reso - r.venduto;
+    if(r.giacenza < -0.001) r.stato = 'ANOMALIA';
+    else if(r.giacenza > 0.001) r.stato = 'TRANSITO';
+    else r.stato = 'OK';
+    return r;
+  });
+
+  // popola filtro PV
+  let pvSel = document.getElementById('filterPv');
+  pvSel.innerHTML = '<option value="ALL">Tutti i punti vendita</option>';
+  pvKeys.forEach(k=> pvSel.appendChild(new Option(k,k)));
+
+  document.getElementById('resultsSection').classList.remove('d-none');
+  renderTable();
+}
+
+['filterEan','filterDesc','filterPv','filterStato'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', renderTable);
+  document.getElementById(id).addEventListener('change', renderTable);
+});
+
+document.querySelectorAll('th.sortable').forEach(th=>{
+  th.addEventListener('click', function(){
+    const k = this.dataset.k;
+    if(sortState.key===k) sortState.dir *= -1; else { sortState.key=k; sortState.dir=1; }
+    renderTable();
+  });
+});
+
+function renderTable(){
+  const fEan = document.getElementById('filterEan').value.toLowerCase().trim();
+  const fDesc = document.getElementById('filterDesc').value.toLowerCase().trim();
+  const fPv = document.getElementById('filterPv').value;
+  const fStato = document.getElementById('filterStato').value;
+
+  let filtered = results.filter(r=>{
+    if(fEan && !r.ean.toLowerCase().includes(fEan)) return false;
+    if(fDesc && !String(r.desc).toLowerCase().includes(fDesc)) return false;
+    if(fPv!=='ALL' && r.pv!==fPv) return false;
+    if(fStato!=='ALL' && r.stato!==fStato) return false;
+    return true;
+  });
+
+  // KPI (su tutto results, non solo filtrato, per avere il quadro generale)
+  document.getElementById('kpiTot').textContent = results.length;
+  document.getElementById('kpiOk').textContent = results.filter(r=>r.stato==='OK').length;
+  document.getElementById('kpiTransito').textContent = results.filter(r=>r.stato==='TRANSITO').length;
+  document.getElementById('kpiAnomalia').textContent = results.filter(r=>r.stato==='ANOMALIA').length;
+
+  // riepilogo articolo (se filtro EAN individua un solo codice)
+  const eanSet = new Set(filtered.map(r=>r.ean));
+  const summaryBox = document.getElementById('summaryEan');
+  if(fEan && eanSet.size===1){
+    const ean = [...eanSet][0];
+    const rowsForEan = results.filter(r=>r.ean===ean);
+    const tI = rowsForEan.reduce((a,r)=>a+r.inviato,0);
+    const tR = rowsForEan.reduce((a,r)=>a+r.reso,0);
+    const tV = rowsForEan.reduce((a,r)=>a+r.venduto,0);
+    document.getElementById('summaryEanTitle').textContent = `Inventario articolo ${ean} - ${rowsForEan[0].desc||''} (tutta la rete)`;
+    document.getElementById('sumInviato').textContent = tI.toLocaleString('it-IT');
+    document.getElementById('sumReso').textContent = tR.toLocaleString('it-IT');
+    document.getElementById('sumVenduto').textContent = tV.toLocaleString('it-IT');
+    document.getElementById('sumGiacenza').textContent = (tI-tR-tV).toLocaleString('it-IT');
+    summaryBox.style.display = 'block';
+  } else {
+    summaryBox.style.display = 'none';
+  }
+
+  filtered.sort((a,b)=>{
+    let va=a[sortState.key], vb=b[sortState.key];
+    if(typeof va==='string') return va.localeCompare(vb)*sortState.dir;
+    return (va-vb)*sortState.dir;
+  });
+
+  const tbody = document.getElementById('mainTableBody');
+  tbody.innerHTML = '';
+  filtered.forEach(r=>{
+    const cls = r.stato==='ANOMALIA'?'row-anomalia':(r.stato==='TRANSITO'?'row-transito':'row-ok');
+    const badge = r.stato==='ANOMALIA' ? '<span class="badge bg-danger badge-stato">ANOMALIA</span>'
+                : r.stato==='TRANSITO' ? '<span class="badge bg-warning text-dark badge-stato">IN TRANSITO</span>'
+                : '<span class="badge bg-success badge-stato">OK</span>';
+    tbody.insertAdjacentHTML('beforeend', `<tr class="${cls}">
+      <td>${r.ean}</td><td>${r.desc||''}</td><td>${r.pv}</td>
+      <td class="text-end">${r.inviato.toLocaleString('it-IT')}</td>
+      <td class="text-end">${r.reso.toLocaleString('it-IT')}</td>
+      <td class="text-end">${r.venduto.toLocaleString('it-IT')}</td>
+      <td class="text-end fw-bold">${r.giacenza.toLocaleString('it-IT')}</td>
+      <td>${badge}</td>
+    </tr>`);
+  });
+}
+</script>
+</body>
+</html>
