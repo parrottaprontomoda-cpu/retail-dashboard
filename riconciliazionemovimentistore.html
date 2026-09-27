@@ -85,7 +85,9 @@
             <div class="col-6"><label class="small">Destinazione (CLI/MAG)</label><select id="noteColDest" class="form-select form-select-sm"></select></div>
             <div class="col-6"><label class="small">Codice / EAN</label><select id="noteColEan" class="form-select form-select-sm"></select></div>
             <div class="col-6"><label class="small">Descrizione</label><select id="noteColDesc" class="form-select form-select-sm"></select></div>
-            <div class="col-6"><label class="small">Quantità (segno +/-)</label><select id="noteColQta" class="form-select form-select-sm"></select></div>
+            <div class="col-12"><label class="small fw-bold text-danger">Valore Movimento con segno (es. VAL MAG, non "Qta")</label><select id="noteColQta" class="form-select form-select-sm"></select>
+              <small class="text-muted d-block">Deve essere la colonna dove le uscite verso il PV sono negative e i resi positivi. La colonna "Qta" da sola (sempre positiva) non basta.</small>
+            </div>
             <div class="col-6"><label class="small">ID Rilevamento (opz.)</label><select id="noteColIdRil" class="form-select form-select-sm"></select></div>
           </div>
         </div>
@@ -98,6 +100,16 @@
             <div class="col-6"><label class="small">Codice Interno (fallback)</label><select id="vColCodInt" class="form-select form-select-sm"></select></div>
             <div class="col-6"><label class="small">Descrizione</label><select id="vColDesc" class="form-select form-select-sm"></select></div>
             <div class="col-6"><label class="small">Quantità</label><select id="vColQta" class="form-select form-select-sm"></select></div>
+            <div class="col-12 mt-1">
+              <label class="small fw-bold text-danger">Priorità abbinamento con NOTE</label>
+              <select id="vMatchPriority" class="form-select form-select-sm">
+                <option value="codint_first">Codice Interno, poi EAN (consigliato se l'EAN varia per colore/variante)</option>
+                <option value="ean_first">EAN, poi Codice Interno</option>
+                <option value="codint_only">Solo Codice Interno</option>
+                <option value="ean_only">Solo EAN</option>
+              </select>
+              <small class="text-muted d-block">Se il foglio NOTE registra il codice a livello di modello (es. 9502604043) e non il barcode per colore, usa "Codice Interno, poi EAN".</small>
+            </div>
           </div>
         </div>
       </div>
@@ -215,7 +227,7 @@ function parseNum(v){
   let n=parseFloat(s); return isNaN(n)?0:n;
 }
 function guessCol(cols, keywords){
-  for(let c of cols){ let l=c.toLowerCase(); for(let k of keywords) if(l.includes(k)) return c; }
+  for(let k of keywords){ for(let c of cols){ if(c.toLowerCase().includes(k)) return c; } }
   return cols[0]||'';
 }
 function fillSelect(id, cols, guessKeys){
@@ -296,7 +308,7 @@ function setupMapping(){
   fillSelect('noteColDest', noteCols, ['cli','mag','client','destin']);
   fillSelect('noteColEan', noteCols, ['cod','ean']);
   fillSelect('noteColDesc', noteCols, ['descr']);
-  fillSelect('noteColQta', noteCols, ['qta','quant','pz']);
+  fillSelect('noteColQta', noteCols, ['val mag','valmag','val. mag','qta','quant','pz']);
   fillSelect('noteColIdRil', noteCols, ['rilev','id']);
 
   fillSelect('vColData', vCols, ['data']);
@@ -352,8 +364,16 @@ function computeReconciliation(){
     const d = parseDate(row[vData]);
     if(dFrom && d && d.isBefore(dFrom)) return;
     if(dTo && d && d.isAfter(dTo)) return;
-    let ean = String(row[vEan]||'').trim();
-    if(!ean) ean = String(row[vCodInt]||'').trim();
+    const eanVal = String(row[vEan]||'').trim();
+    const codIntVal = String(row[vCodInt]||'').trim();
+    const priority = document.getElementById('vMatchPriority').value;
+    let ean;
+    switch(priority){
+      case 'codint_only': ean = codIntVal; break;
+      case 'ean_only': ean = eanVal; break;
+      case 'ean_first': ean = eanVal || codIntVal; break;
+      default: ean = codIntVal || eanVal; // codint_first
+    }
     if(!ean) return;
     let qta = parseNum(row[vQta]); if(qta===0) qta=1;
     const key = pv+'|'+ean;
