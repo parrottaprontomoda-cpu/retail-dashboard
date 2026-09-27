@@ -54,6 +54,25 @@
     </div>
   </div>
 
+  <!-- RICERCA PRODOTTO SU PEPLO.SHOP -->
+  <div class="card">
+    <div class="card-body">
+      <h5 class="fw-bold mb-2"><i class="fas fa-magnifying-glass me-2"></i>Ricerca prodotto su Peplo.shop</h5>
+      <p class="text-muted small mb-2">Non riesco ad accedere direttamente al sito per verificarne l'indirizzo di ricerca interno (blocco anti-bot): di default il link apre una ricerca Google ristretta al sito. Se conosci l'URL di ricerca reale di peplo.shop (es. <code>https://peplo.shop/search?q=...</code>), incollalo qui al posto del token <code>{q}</code> e verrà usato quello.</p>
+      <div class="row g-2">
+        <div class="col-md-8">
+          <input type="text" id="shopSearchUrl" class="form-control form-control-sm" placeholder="https://www.google.com/search?q=site:peplo.shop+{q}">
+        </div>
+        <div class="col-md-4">
+          <select id="shopSearchField" class="form-select form-select-sm">
+            <option value="desc">Cerca per Descrizione</option>
+            <option value="ean">Cerca per EAN/Codice</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- MAPPATURA COLONNE -->
   <div class="card d-none" id="mappingCard">
     <div class="card-body">
@@ -148,6 +167,7 @@
                 <th class="sortable text-end" data-k="venduto">Venduto</th>
                 <th class="sortable text-end" data-k="giacenza">Giacenza Teorica</th>
                 <th>Stato</th>
+                <th>Peplo.shop</th>
               </tr>
             </thead>
             <tbody id="mainTableBody"></tbody>
@@ -170,6 +190,17 @@ document.getElementById('noteSheetId').value = localStorage.getItem('rec_noteShe
 document.getElementById('venditeUrl').value = localStorage.getItem('rec_venditeUrl') || DEFAULT_VENDITE_URL;
 document.getElementById('pvMapping').value = localStorage.getItem('rec_pvMapping') ||
   DEFAULT_PV.map(p => `${p} = ${p}`).join('\n');
+document.getElementById('shopSearchUrl').value = localStorage.getItem('rec_shopSearchUrl') || 'https://www.google.com/search?q=site:peplo.shop+{q}';
+document.getElementById('shopSearchField').value = localStorage.getItem('rec_shopSearchField') || 'desc';
+document.getElementById('shopSearchUrl').addEventListener('input', function(){ localStorage.setItem('rec_shopSearchUrl', this.value); });
+document.getElementById('shopSearchField').addEventListener('change', function(){ localStorage.setItem('rec_shopSearchField', this.value); renderTable(); });
+
+function shopSearchLink(r){
+  const tmpl = document.getElementById('shopSearchUrl').value.trim() || 'https://www.google.com/search?q=site:peplo.shop+{q}';
+  const field = document.getElementById('shopSearchField').value;
+  const q = (field === 'ean' ? r.ean : (r.desc || r.ean)) || '';
+  return tmpl.includes('{q}') ? tmpl.replace('{q}', encodeURIComponent(q)) : (tmpl + encodeURIComponent(q));
+}
 
 let noteCols = [], noteRows = [];
 let vCols = [], vRows = [];
@@ -421,6 +452,7 @@ function renderTable(){
       <td class="text-end">${r.venduto.toLocaleString('it-IT')}</td>
       <td class="text-end fw-bold">${r.giacenza.toLocaleString('it-IT')}</td>
       <td>${badge}</td>
+      <td><a href="${shopSearchLink(r)}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary" title="Cerca l'immagine del prodotto su peplo.shop"><i class="fas fa-image"></i></a></td>
     </tr>`);
   });
 }
