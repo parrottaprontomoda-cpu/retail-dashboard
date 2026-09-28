@@ -70,6 +70,12 @@
           </select>
         </div>
       </div>
+      <div class="row g-2 mt-2">
+        <div class="col-md-12">
+          <label class="small fw-bold">Link dashboard Analisi Magazzino (il codice articolo cliccabile apre questo indirizzo con <code>?codice=...</code>)</label>
+          <input type="text" id="magBaseUrl" class="form-control form-control-sm">
+        </div>
+      </div>
     </div>
   </div>
 
@@ -196,7 +202,7 @@
 moment.locale('it');
 const DEFAULT_SHEET_ID = "1OlxI1A6wuhvH0gnfo3VnkyQ58kWBgIfJAVIjUIuZw-I";
 const DEFAULT_VENDITE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRSwk2BhmMriyZotR2gLYtOkHic0lM3-0efkhaKhJ7gxDyQyqbGF0noTp9RV9GQgEHWTeuSskT57sVI/pub?gid=1352769388&single=true&output=csv";
-const DEFAULT_PV = ['PEPLO', 'PARROTTA POINT CHIARAVALLA', 'PARROTTA PRONTO MODA', 'CARAMELLO', 'TIKO'];
+const DEFAULT_PV = ['PEPLO', 'PARROTTA POINT CHIARAVALLE', 'PARROTTA PRONTO MODA', 'CARAMELLO', 'TIKO'];
 
 document.getElementById('noteSheetId').value = localStorage.getItem('rec_noteSheetId') || DEFAULT_SHEET_ID;
 document.getElementById('venditeUrl').value = localStorage.getItem('rec_venditeUrl') || DEFAULT_VENDITE_URL;
@@ -206,6 +212,19 @@ document.getElementById('shopSearchUrl').value = localStorage.getItem('rec_shopS
 document.getElementById('shopSearchField').value = localStorage.getItem('rec_shopSearchField') || 'desc';
 document.getElementById('shopSearchUrl').addEventListener('input', function(){ localStorage.setItem('rec_shopSearchUrl', this.value); });
 document.getElementById('shopSearchField').addEventListener('change', function(){ localStorage.setItem('rec_shopSearchField', this.value); renderTable(); });
+
+const DEFAULT_MAG_URL = 'https://parrottaprontomoda-cpu.github.io/retail-dashboard/analisi_mag_centrale.html';
+document.getElementById('magBaseUrl').value = localStorage.getItem('rec_magBaseUrl') || DEFAULT_MAG_URL;
+document.getElementById('magBaseUrl').addEventListener('input', function(){ localStorage.setItem('rec_magBaseUrl', this.value); renderTable(); });
+
+function magLink(r){
+  const base = (document.getElementById('magBaseUrl').value.trim() || DEFAULT_MAG_URL).split('?')[0];
+  // anno: se il periodo scelto cade in un solo anno lo passo alla dashboard, altrimenti carico tutti gli anni
+  const f = document.getElementById('dateFrom').value, t = document.getElementById('dateTo').value;
+  let anno = 'tutti';
+  if(f && t && f.slice(0,4) === t.slice(0,4)) anno = f.slice(0,4);
+  return base + '?codice=' + encodeURIComponent(r.ean) + '&anno=' + anno;
+}
 
 function shopSearchLink(r){
   const tmpl = document.getElementById('shopSearchUrl').value.trim() || 'https://www.google.com/search?q=site:peplo.shop+{q}';
@@ -466,7 +485,7 @@ function renderTable(){
                 : r.stato==='TRANSITO' ? '<span class="badge bg-warning text-dark badge-stato">IN TRANSITO</span>'
                 : '<span class="badge bg-success badge-stato">OK</span>';
     tbody.insertAdjacentHTML('beforeend', `<tr class="${cls}">
-      <td>${r.ean}</td><td>${r.desc||''}</td><td>${r.pv}</td>
+      <td><a href="${magLink(r)}" target="_blank" rel="noopener" title="Apri i movimenti di questo articolo in Analisi Magazzino">${r.ean}</a></td><td>${r.desc||''}</td><td>${r.pv}</td>
       <td class="text-end">${r.inviato.toLocaleString('it-IT')}</td>
       <td class="text-end">${r.reso.toLocaleString('it-IT')}</td>
       <td class="text-end">${r.venduto.toLocaleString('it-IT')}</td>
