@@ -496,6 +496,43 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
     let dataTableInstance = null;
     let debounceTimer;
 
+    // ---------------------------------------------------------------
+    // FILTRI DA INDIRIZZO (URL)
+    // Esempi:  ...?codice=9302300
+    //          ...?codice=9302300&negozio=PEPLO&mese=2026-09
+    //          ...?card=ABC123        ...?data=2026-09-27
+    // Parametri: codice (descrizione/codice interno/EAN), card (Card o CF),
+    //            negozio (nome esatto), mese (AAAA-MM), data (AAAA-MM-GG)
+    // I filtri vengono applicati una sola volta, al primo caricamento dei dati.
+    // ---------------------------------------------------------------
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlFilters = {
+        codice:  (urlParams.get('codice')  || '').trim(),
+        card:    (urlParams.get('card')    || '').trim(),
+        negozio: (urlParams.get('negozio') || '').trim(),
+        mese:    (urlParams.get('mese')    || '').trim(),
+        data:    (urlParams.get('data')    || '').trim()
+    };
+    let urlFiltersApplied = false;
+
+    function applyUrlFilters() {
+        if (urlFiltersApplied) return;
+        urlFiltersApplied = true;
+
+        if (urlFilters.codice) document.getElementById('filterDesc').value = urlFilters.codice;
+        if (urlFilters.card) document.getElementById('filterCard').value = urlFilters.card;
+
+        const setSelect = (id, wanted) => {
+            if (!wanted) return;
+            const el = document.getElementById(id);
+            const opt = Array.from(el.options).find(o => o.value.toUpperCase() === wanted.toUpperCase());
+            if (opt) el.value = opt.value;
+        };
+        setSelect('filterStore', urlFilters.negozio);
+        setSelect('filterMonth', urlFilters.mese);
+        setSelect('filterDay', urlFilters.data);
+    }
+
     window.onload = () => loadData();
 
     function updateUrls() {
@@ -574,6 +611,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
                     
                     buildGlobalCRMStats(); 
                     setupFilters();
+                    applyUrlFilters(); // applica i filtri passati nell'indirizzo (solo al primo caricamento)
                     updateDashboard();
                     
                     btn.disabled = false;
