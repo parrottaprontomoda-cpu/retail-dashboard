@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portale Gestione Retail</title>
+  
+  <!-- Tailwind CSS per lo stile moderno e responsive -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Phosphor Icons per le icone -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              600: '#0284c7',
+              700: '#0369a1',
+              900: '#0c4a6e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f8fafc;
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-800 flex flex-col items-center justify-center p-4 sm:p-8">
+
+  <!-- Contenitore Principale -->
+  <div class="w-full max-w-5xl">
+    
+    <!-- Intestazione -->
+    <div class="text-center mb-12">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-600 text-white shadow-lg mb-6">
+        <i class="ph-fill ph-squares-four text-3xl"></i>
+      </div>
+      <h1 class="text-3xl sm:text-4xl font-bold text-slate-900 mb-3 tracking-tight">Retail Dashboard Hub</h1>
+      <p class="text-slate-500 text-sm sm:text-base max-w-xl mx-auto">
+        Seleziona l'applicazione a cui desideri accedere per visualizzare i report, monitorare i punti vendita o allineare le giacenze.
+      </p>
+    </div>
+
+    <!-- Griglia Pulsanti / Applicazioni -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+      <!-- Card 1: Analisi Magazzino -->
+      <a href="https://parrottaprontomoda-cpu.github.io/retail-dashboard/analisi_mag_centrale.html" target="_blank" rel="noopener noreferrer" 
+         class="group block bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+        <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-5 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
+          <i class="ph-fill ph-warehouse text-2xl"></i>
+        </div>
+        <h2 class="text-lg font-bold text-slate-900 mb-2">Analisi Magazzino</h2>
+        <p class="text-sm text-slate-500 mb-6 leading-relaxed">
+          Accedi ai report e alle metriche del magazzino centrale per monitorare carichi, scarichi e giacenze.
+        </p>
+        <div class="flex items-center text-blue-600 text-sm font-semibold group-hover:gap-2 transition-all">
+          Apri Dashboard <i class="ph-bold ph-arrow-right ml-1"></i>
+        </div>
+      </a>
+
+      <!-- Card 2: Analisi Store -->
+      <a href="https://parrottaprontomoda-cpu.github.io/retail-dashboard/analisistorepos.html" target="_blank" rel="noopener noreferrer" 
+         class="group block bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+        <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-5 group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
+          <i class="ph-fill ph-storefront text-2xl"></i>
+        </div>
+        <h2 class="text-lg font-bold text-slate-900 mb-2">Analisi Store</h2>
+        <p class="text-sm text-slate-500 mb-6 leading-relaxed">
+          Visualizza l'andamento dei punti vendita, i dati POS e le performance della rete commerciale.
+        </p>
+        <div class="flex items-center text-emerald-600 text-sm font-semibold group-hover:gap-2 transition-all">
+          Apri Dashboard <i class="ph-bold ph-arrow-right ml-1"></i>
+        </div>
+      </a>
+
+      <!-- Card 3: Riconciliazione Disponibilità -->
+      <a href="https://parrottaprontomoda-cpu.github.io/retail-dashboard/riconciliazionemovimentistore.html" target="_blank" rel="noopener noreferrer" 
+         class="group block bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+        <div class="w-12 h-12 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center mb-5 group-hover:bg-violet-600 group-hover:text-white transition-colors duration-300">
+          <i class="ph-fill ph-arrows-left-right text-2xl"></i>
+        </div>
+        <h2 class="text-lg font-bold text-slate-900 mb-2">Riconciliazione</h2>
+        <p class="text-sm text-slate-500 mb-6 leading-relaxed">
+          Verifica l'allineamento delle scorte, i movimenti anomali e quadra le disponibilità tra i sistemi.
+        </p>
+        <div class="flex items-center text-violet-600 text-sm font-semibold group-hover:gap-2 transition-all">
+          Apri Strumento <i class="ph-bold ph-arrow-right ml-1"></i>
+        </div>
+      </a>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="text-center mt-12 text-slate-400 text-xs font-medium uppercase tracking-wider">
+      Sistemi di Analisi e Controllo &copy; 2026
+    </div>
+
+  </div>
+
+</body>
+</html>
