@@ -370,6 +370,10 @@
     let charts = {};
     let currentPackingData = null; // dati dell'ultima Packing List generata, riusati dall'export Excel
 
+    // Parametri URL: ?codice=9302300  (opzionali: &anno=2026 oppure &anno=tutti, &mese=09)
+    const urlParams = new URLSearchParams(window.location.search);
+    const paramCodice = (urlParams.get('codice') || '').trim();
+
     document.getElementById('btnLoadData').addEventListener('click', function() {
         let y = document.getElementById('select-year').value;
         let m = document.getElementById('select-month').value;
@@ -393,6 +397,16 @@
         };
         document.body.appendChild(script);
     });
+
+    // Avvio automatico se l'indirizzo contiene ?codice=...
+    if (paramCodice) {
+        const pa = urlParams.get('anno');
+        const pm = urlParams.get('mese');
+        if (pa !== null) document.getElementById('select-year').value = (pa === 'tutti' ? '' : pa);
+        if (pm !== null) document.getElementById('select-month').value = pm.padStart(2, '0');
+        document.getElementById('filter-ean').value = paramCodice;
+        document.getElementById('btnLoadData').click();
+    }
 
     window.handleGoogleData = function(response) {
         if (!response || !response.table) {
@@ -524,6 +538,12 @@
         
         document.getElementById('loading').style.display = 'none';
         document.getElementById('dashboardContent').style.display = 'block';
+
+        // Se l'indirizzo contiene ?codice=..., applica subito il filtro prodotto
+        if (paramCodice) {
+            document.getElementById('filter-ean').value = paramCodice;
+            document.getElementById('applyFiltersBtn').click();
+        }
     }
 
     document.getElementById('applyFiltersBtn').addEventListener('click', function() {
