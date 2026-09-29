@@ -410,8 +410,6 @@
                 <p class="text-muted small">Clicca sui pulsanti colorati (Card Cliente, Codice Interno, EAN) nella tabella per filtrare rapidamente lo storico.</p>
                 <div class="table-responsive">
                     <table id="dataTable" class="table table-striped table-hover align-middle w-100">
-                        <thead id="dtHead" class="table-dark"></thead>
-                        <tbody id="dtBody"></tbody>
                     </table>
                 </div>
             </div>
@@ -427,7 +425,6 @@
 <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/locale/it.min.js"></script>
-<!-- INCLUSIONE LIBRERIA LOCALFORAGE (Gestione Cache Avanzata IndexedDB) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
 <script>
@@ -550,7 +547,6 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
     // ---------------------------------------------------------------
     const CACHE_KEY = 'vendite_cache_v2';
 
-    // Configuriamo localforage per forzare IndexedDB e creare un vero DB
     localforage.config({
         name: 'DashboardVenditeDB',
         storeName: 'cache_dati',
@@ -652,7 +648,6 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
             const cached = await loadCache();
             const vUrlNow = document.getElementById('urlVenditeInput').value.trim();
             
-            // SE LA CACHE ESISTE E IL LINK NON E' CAMBIATO -> CARICA DA MEMORIA
             if (cached && cached.salesCsv && cached.vUrl === vUrlNow) {
                 console.log("🎯 Dati trovati in cache locale. Caricamento veloce avviato.");
                 processCsvData(cached.salesCsv, cached.clientsCsv, btn, true);
@@ -1167,7 +1162,6 @@ ${userPrompt}`;
         }
     }
 
-    // Esegue una singola chiamata al modello Gemini indicato e restituisce il testo generato.
     async function callGeminiOnce(apiKey, model, promptText) {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
             method: "POST",
@@ -1200,8 +1194,6 @@ ${userPrompt}`;
         return text;
     }
 
-    // Prova il modello principale con qualche retry in caso di sovraccarico (503),
-    // poi passa a un modello più leggero come riserva se il problema persiste.
     async function callGeminiWithFallback(apiKey, promptText, statusBox) {
         const primaryModel = "gemini-flash-latest";
         const fallbackModel = "gemini-flash-lite-latest";
@@ -1213,7 +1205,7 @@ ${userPrompt}`;
                 return await callGeminiOnce(apiKey, primaryModel, promptText);
             } catch (err) {
                 lastErr = err;
-                if (!err.overloaded) break; // errori diversi da sovraccarico non hanno senso da ritentare
+                if (!err.overloaded) break; 
                 if (attempt < maxRetries && statusBox) {
                     statusBox.innerHTML = `<div class="text-center text-muted py-3"><i class="fas fa-spinner fa-spin fa-2x mb-2"></i><br>Server Gemini occupati, nuovo tentativo (${attempt + 1}/${maxRetries})...</div>`;
                     await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
@@ -1233,7 +1225,6 @@ ${userPrompt}`;
         throw lastErr;
     }
 
-    // Analisi di riserva locale in caso l'API Key manchi o fallisca
     function generateLocalSeasonalAi(stats) {
         let currentMonthNum = moment().month() + 1; 
         let currentMonthName = moment().format('MMMM'); 
@@ -1603,76 +1594,61 @@ ${userPrompt}`;
     }
 
     function updateTable(data) {
+        // Se la tabella esiste già, distruggila e svuotala completamente
         if (dataTableInstance) {
             dataTableInstance.destroy();
-            document.getElementById('dtHead').innerHTML = '';
-            document.getElementById('dtBody').innerHTML = '';
+            $('#dataTable').empty(); 
         }
 
         let dateColIdx = columns.indexOf(COL_DATA);
 
-        let trHead = document.createElement('tr');
-        columns.forEach(col => {
-            let th = document.createElement('th');
-            th.textContent = col;
-            trHead.appendChild(th);
-        });
-        document.getElementById('dtHead').appendChild(trHead);
-
-        data.forEach(row => {
-            let tr = document.createElement('tr');
-            columns.forEach(col => {
-                let td = document.createElement('td');
-                let cellVal = row[col] !== null ? row[col] : '';
-                
-                if (cellVal.trim() !== '') {
-                    if (col === COL_CARD) {
-                        let badge = document.createElement('span');
-                        badge.className = 'badge bg-primary card-filter-btn px-2 py-1';
-                        badge.innerHTML = `<i class="fas fa-id-card me-1"></i>${cellVal}`;
-                        badge.title = 'Filtra lo storico di questa Card';
-                        badge.onclick = function() { filterByCard(cellVal.trim()); };
-                        td.appendChild(badge);
-                    } 
-                    else if (col === COL_EAN) {
-                        let badge = document.createElement('span');
-                        badge.className = 'badge bg-success card-filter-btn px-2 py-1';
-                        badge.innerHTML = `<i class="fas fa-barcode me-1"></i>${cellVal}`;
-                        badge.title = 'Filtra per questo EAN';
-                        badge.onclick = function() { filterByProduct(cellVal.trim()); };
-                        td.appendChild(badge);
+        // Prepariamo la configurazione delle colonne per DataTables
+        let dtColumns = columns.map(col => {
+            return {
+                title: col,
+                data: col,
+                // Questa funzione crea i badge o formatta la data *solo* quando la riga viene visualizzata
+                render: function (cellData, type, row) {
+                    let cellVal = cellData !== null ? cellData : '';
+                    
+                    // Se stiamo "disegnando" la cella a schermo (type === 'display')
+                    if (type === 'display' && cellVal.trim() !== '') {
+                        if (col === COL_CARD) {
+                            return `<span class="badge bg-primary card-filter-btn px-2 py-1" title="Filtra lo storico di questa Card" onclick="filterByCard('${cellVal.trim()}')"><i class="fas fa-id-card me-1"></i>${cellVal}</span>`;
+                        } 
+                        else if (col === COL_EAN) {
+                            return `<span class="badge bg-success card-filter-btn px-2 py-1" title="Filtra per questo EAN" onclick="filterByProduct('${cellVal.trim()}')"><i class="fas fa-barcode me-1"></i>${cellVal}</span>`;
+                        }
+                        else if (col === COL_COD_INT) {
+                            return `<span class="badge bg-secondary card-filter-btn px-2 py-1 text-white" title="Filtra per questo Codice Interno" onclick="filterByProduct('${cellVal.trim()}')"><i class="fas fa-hashtag me-1"></i>${cellVal}</span>`;
+                        }
                     }
-                    else if (col === COL_COD_INT) {
-                        let badge = document.createElement('span');
-                        badge.className = 'badge bg-secondary card-filter-btn px-2 py-1 text-white';
-                        badge.innerHTML = `<i class="fas fa-hashtag me-1"></i>${cellVal}`;
-                        badge.title = 'Filtra per questo Codice Interno';
-                        badge.onclick = function() { filterByProduct(cellVal.trim()); };
-                        td.appendChild(badge);
+                    
+                    // Se DataTables ci sta chiedendo come "ordinare" (type === 'sort') la colonna data
+                    if (col === COL_DATA && type === 'sort') {
+                        let m = moment(cellVal.trim(), ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
+                        return m.isValid() ? m.format('YYYYMMDDHHmmss') : cellVal;
                     }
-                    else {
-                        td.textContent = cellVal;
-                    }
-                } else {
-                    td.textContent = cellVal;
+                    
+                    // Altrimenti restituisci il testo normale
+                    return cellVal;
                 }
-                
-                if (col === COL_DATA) {
-                    let m = moment(cellVal.trim(), ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
-                    if(m.isValid()) td.setAttribute('data-sort', m.format('YYYYMMDDHHmmss'));
-                }
-                
-                tr.appendChild(td);
-            });
-            document.getElementById('dtBody').appendChild(tr);
+            };
         });
 
+        // Inizializza DataTables passandogli direttamente l'array JSON (velocissimo)
         dataTableInstance = $('#dataTable').DataTable({
+            data: data,                  // Passiamo i dati grezzi qui!
+            columns: dtColumns,          // Passiamo la struttura colonne
+            deferRender: true,           // MAGIA: Renderizza HTML solo per la pagina visibile!
             language: { url: 'https://cdn.datatables.net/plug-ins/1.13.4/i18n/it-IT.json' },
             pageLength: 15,
             autoWidth: false,
             order: dateColIdx >= 0 ? [[ dateColIdx, 'desc' ]] : [] 
         });
+        
+        // Assicura che l'intestazione mantenga il tema scuro
+        $('#dataTable thead').addClass('table-dark');
     }
 </script>
 </body>
