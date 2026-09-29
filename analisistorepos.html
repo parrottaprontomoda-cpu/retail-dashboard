@@ -427,6 +427,7 @@
 <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/locale/it.min.js"></script>
+<!-- INCLUSIONE LIBRERIA LOCALFORAGE (Gestione Cache Avanzata IndexedDB) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
 <script>
@@ -500,12 +501,6 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
 
     // ---------------------------------------------------------------
     // FILTRI DA INDIRIZZO (URL)
-    // Esempi:  ...?codice=9302300
-    //          ...?codice=9302300&negozio=PEPLO&mese=2026-09
-    //          ...?card=ABC123        ...?data=2026-09-27
-    // Parametri: codice (descrizione/codice interno/EAN), card (Card o CF),
-    //            negozio (nome esatto), mese (AAAA-MM), data (AAAA-MM-GG)
-    // I filtri vengono applicati una sola volta, al primo caricamento dei dati.
     // ---------------------------------------------------------------
     const urlParams = new URLSearchParams(window.location.search);
     const urlFilters = {
@@ -551,10 +546,16 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
     }
 
     // ---------------------------------------------------------------
-    // CACHE LOCALE con localForage (IndexedDB): per supportare file 
-    // grandi (es. 3MB+) senza bloccare il browser né saturare il limite.
+    // CACHE LOCALE AVANZATA CON DIAGNOSTICA (IndexedDB via localForage)
     // ---------------------------------------------------------------
-    const CACHE_KEY = 'vendite_cache_v1';
+    const CACHE_KEY = 'vendite_cache_v2';
+
+    // Configuriamo localforage per forzare IndexedDB e creare un vero DB
+    localforage.config({
+        name: 'DashboardVenditeDB',
+        storeName: 'cache_dati',
+        description: 'Archivio locale per CSV di grandi dimensioni'
+    });
 
     async function saveCache(salesCsv, clientsCsv) {
         try {
@@ -565,8 +566,10 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
                 vUrl: document.getElementById('urlVenditeInput').value.trim(),
                 cUrl: document.getElementById('urlClientiInput').value.trim()
             });
+            console.log("✅ Dati salvati con successo in:", localforage.driver());
         } catch (e) {
-            console.warn('Impossibile salvare la cache locale via localForage', e);
+            console.error('❌ Impossibile salvare la cache locale:', e);
+            document.getElementById('cacheStatus').innerHTML = `<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Errore di sistema: il browser impedisce il salvataggio della cache.</span>`;
         }
     }
 
@@ -581,8 +584,12 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
     function updateCacheStatus(ts, fromCache) {
         const el = document.getElementById('cacheStatus');
         if (!ts) { el.textContent = ''; return; }
-        const label = fromCache ? 'Dati in cache del' : 'Dati aggiornati al';
-        el.innerHTML = `<i class="fas fa-${fromCache ? 'clock-rotate-left' : 'check-circle'} me-1"></i>${label} ${moment(ts).format('DD/MM/YYYY HH:mm')}`;
+        
+        if (fromCache) {
+            el.innerHTML = `<span class="text-success"><i class="fas fa-bolt me-1"></i>Caricato istantaneamente dalla memoria locale (Dati del ${moment(ts).format('DD/MM/YYYY HH:mm')})</span>`;
+        } else {
+            el.innerHTML = `<span class="text-primary"><i class="fas fa-cloud-download-alt me-1"></i>Scaricato da Google Fogli al ${moment(ts).format('DD/MM/YYYY HH:mm')}</span>`;
+        }
     }
 
     function processCsvData(salesCsv, clientsCsv, btn, fromCache) {
@@ -628,7 +635,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
 
                 buildGlobalCRMStats();
                 setupFilters();
-                applyUrlFilters(); // applica i filtri passati nell'indirizzo (solo al primo caricamento)
+                applyUrlFilters();
                 updateDashboard();
 
                 btn.disabled = false;
@@ -639,20 +646,25 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
 
     async function loadData(forceRefresh) {
         const btn = document.getElementById('btnRefresh');
+        btn.disabled = true;
 
-        // Primo caricamento pagina (forceRefresh=false): se c'è una cache valida, usala subito.
         if (!forceRefresh) {
             const cached = await loadCache();
             const vUrlNow = document.getElementById('urlVenditeInput').value.trim();
+            
+            // SE LA CACHE ESISTE E IL LINK NON E' CAMBIATO -> CARICA DA MEMORIA
             if (cached && cached.salesCsv && cached.vUrl === vUrlNow) {
+                console.log("🎯 Dati trovati in cache locale. Caricamento veloce avviato.");
                 processCsvData(cached.salesCsv, cached.clientsCsv, btn, true);
                 updateCacheStatus(cached.ts, true);
                 return;
+            } else {
+                console.log("⚠️ Cache assente, scaduta o link modificati. Necessario download da rete.");
             }
         }
 
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Caricamento...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Scaricamento Dati...';
+        document.getElementById('cacheStatus').innerHTML = '<span class="text-secondary"><i class="fas fa-network-wired me-1"></i>Connessione a Google Fogli in corso...</span>';
 
         let vUrl = document.getElementById('urlVenditeInput').value.trim();
         let cUrl = document.getElementById('urlClientiInput').value.trim();
@@ -666,12 +678,12 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         let p1 = fetch(vUrl + "&_t=" + new Date().getTime()).then(r => r.ok ? r.text() : "");
         let p2 = cUrl ? fetch(cUrl + "&_t=" + new Date().getTime()).then(r => r.ok ? r.text() : "") : Promise.resolve("");
 
-        Promise.all([p1, p2]).then(results => {
+        Promise.all([p1, p2]).then(async results => {
             let salesCsv = results[0];
             let clientsCsv = results[1];
 
             if (salesCsv) {
-                saveCache(salesCsv, clientsCsv);
+                await saveCache(salesCsv, clientsCsv);
                 updateCacheStatus(Date.now(), false);
             }
 
