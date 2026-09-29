@@ -427,6 +427,7 @@
 <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/locale/it.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 
 <script>
     // INIZIALIZZAZIONE FUNZIONI GLOBALI E UTILS
@@ -546,35 +547,35 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         let bsCollapse = bootstrap.Collapse.getInstance(collapseEl);
         if(bsCollapse) bsCollapse.hide();
         
-        loadData();
+        loadData(true);
     }
 
     // ---------------------------------------------------------------
-    // CACHE LOCALE (localStorage): dopo ogni download riuscito i due CSV
-    // grezzi vengono salvati nel browser insieme alla data/ora. Al primo
-    // caricamento della pagina, se una cache esiste, viene usata subito
-    // (nessuna attesa di rete); il pulsante "Aggiorna Dati" forza sempre
-    // un nuovo download e aggiorna la cache.
+    // CACHE LOCALE con localForage (IndexedDB): per supportare file 
+    // grandi (es. 3MB+) senza bloccare il browser né saturare il limite.
     // ---------------------------------------------------------------
     const CACHE_KEY = 'vendite_cache_v1';
 
-    function saveCache(salesCsv, clientsCsv) {
+    async function saveCache(salesCsv, clientsCsv) {
         try {
-            localStorage.setItem(CACHE_KEY, JSON.stringify({
-                salesCsv, clientsCsv, ts: Date.now(),
+            await localforage.setItem(CACHE_KEY, {
+                salesCsv: salesCsv,
+                clientsCsv: clientsCsv,
+                ts: Date.now(),
                 vUrl: document.getElementById('urlVenditeInput').value.trim(),
                 cUrl: document.getElementById('urlClientiInput').value.trim()
-            }));
+            });
         } catch (e) {
-            console.warn('Impossibile salvare la cache locale (dati troppo grandi per localStorage?)', e);
+            console.warn('Impossibile salvare la cache locale via localForage', e);
         }
     }
 
-    function loadCache() {
+    async function loadCache() {
         try {
-            const raw = localStorage.getItem(CACHE_KEY);
-            return raw ? JSON.parse(raw) : null;
-        } catch (e) { return null; }
+            return await localforage.getItem(CACHE_KEY);
+        } catch (e) { 
+            return null; 
+        }
     }
 
     function updateCacheStatus(ts, fromCache) {
@@ -636,12 +637,12 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         });
     }
 
-    function loadData(forceRefresh) {
+    async function loadData(forceRefresh) {
         const btn = document.getElementById('btnRefresh');
 
         // Primo caricamento pagina (forceRefresh=false): se c'è una cache valida, usala subito.
         if (!forceRefresh) {
-            const cached = loadCache();
+            const cached = await loadCache();
             const vUrlNow = document.getElementById('urlVenditeInput').value.trim();
             if (cached && cached.salesCsv && cached.vUrl === vUrlNow) {
                 processCsvData(cached.salesCsv, cached.clientsCsv, btn, true);
