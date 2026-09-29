@@ -33,12 +33,13 @@
     <div class="text-center header-title">
         <h1 class="fw-bold"><i class="fas fa-chart-line me-2"></i> Dashboard Direzionale & CRM</h1>
         <p class="mb-2 opacity-75">Analisi intelligente e Gestione Clienti integrata con Google Sheets</p>
-        <button id="btnRefresh" class="btn btn-light fw-bold mt-2 text-primary" onclick="loadData()">
+        <button id="btnRefresh" class="btn btn-light fw-bold mt-2 text-primary" onclick="loadData(true)">
             <i class="fas fa-sync-alt me-2"></i>Aggiorna Dati
         </button>
         <button id="btnReportAI" class="btn btn-warning fw-bold mt-2 text-dark ms-2" data-bs-toggle="modal" data-bs-target="#reportModal">
             <i class="fas fa-brain me-2"></i>Report & Analisi AI
         </button>
+        <div class="mt-2 small opacity-75" id="cacheStatus"></div>
     </div>
 
     <!-- MODALE REPORT STATISTICO + ANALISI AI + EXPORT -->
@@ -533,7 +534,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         setSelect('filterDay', urlFilters.data);
     }
 
-    window.onload = () => loadData();
+    window.onload = () => loadData(false);
 
     function updateUrls() {
         localStorage.setItem('urlVendite', document.getElementById('urlVenditeInput').value.trim());
@@ -548,8 +549,107 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         loadData();
     }
 
-    function loadData() {
+    // ---------------------------------------------------------------
+    // CACHE LOCALE (localStorage): dopo ogni download riuscito i due CSV
+    // grezzi vengono salvati nel browser insieme alla data/ora. Al primo
+    // caricamento della pagina, se una cache esiste, viene usata subito
+    // (nessuna attesa di rete); il pulsante "Aggiorna Dati" forza sempre
+    // un nuovo download e aggiorna la cache.
+    // ---------------------------------------------------------------
+    const CACHE_KEY = 'vendite_cache_v1';
+
+    function saveCache(salesCsv, clientsCsv) {
+        try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify({
+                salesCsv, clientsCsv, ts: Date.now(),
+                vUrl: document.getElementById('urlVenditeInput').value.trim(),
+                cUrl: document.getElementById('urlClientiInput').value.trim()
+            }));
+        } catch (e) {
+            console.warn('Impossibile salvare la cache locale (dati troppo grandi per localStorage?)', e);
+        }
+    }
+
+    function loadCache() {
+        try {
+            const raw = localStorage.getItem(CACHE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) { return null; }
+    }
+
+    function updateCacheStatus(ts, fromCache) {
+        const el = document.getElementById('cacheStatus');
+        if (!ts) { el.textContent = ''; return; }
+        const label = fromCache ? 'Dati in cache del' : 'Dati aggiornati al';
+        el.innerHTML = `<i class="fas fa-${fromCache ? 'clock-rotate-left' : 'check-circle'} me-1"></i>${label} ${moment(ts).format('DD/MM/YYYY HH:mm')}`;
+    }
+
+    function processCsvData(salesCsv, clientsCsv, btn, fromCache) {
+        if (!salesCsv) {
+            alert("Errore nel download del file Vendite. Controlla il link CSV.");
+            btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Aggiorna Dati';
+            return;
+        }
+
+        clientDict = {};
+        if (clientsCsv) {
+            Papa.parse(clientsCsv, {
+                header: true, skipEmptyLines: true,
+                complete: function(cRes) { buildClientDict(cRes); }
+            });
+        }
+
+        Papa.parse(salesCsv, {
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                if(results.data.length === 0) {
+                    alert("Il file CSV Vendite è vuoto.");
+                    btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Aggiorna Dati';
+                    return;
+                }
+                rawData = results.data;
+                columns = results.meta.fields;
+
+                COL_TRANS   = columns[0];
+                COL_DATA    = columns[1] || columns[0];
+                COL_COD_INT = columns[2] || columns[0];
+                COL_DESC    = columns[3] || columns[0];
+                COL_EAN     = columns[4] || columns[0];
+                COL_QTA     = columns[7] || columns[0];
+                COL_LISTINO = columns[8] || columns[0];
+                COL_NETTO   = columns[9] || columns[0];
+                COL_CONTANTE= columns[12] || columns[0];
+                COL_POS     = columns[13] || columns[0];
+                COL_CREDITO = columns[14] || columns[0];
+                COL_CARD    = columns[15] || columns[0];
+                COL_STORE   = columns[16] || columns[0];
+
+                buildGlobalCRMStats();
+                setupFilters();
+                applyUrlFilters(); // applica i filtri passati nell'indirizzo (solo al primo caricamento)
+                updateDashboard();
+
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Aggiorna Dati';
+            }
+        });
+    }
+
+    function loadData(forceRefresh) {
         const btn = document.getElementById('btnRefresh');
+
+        // Primo caricamento pagina (forceRefresh=false): se c'è una cache valida, usala subito.
+        if (!forceRefresh) {
+            const cached = loadCache();
+            const vUrlNow = document.getElementById('urlVenditeInput').value.trim();
+            if (cached && cached.salesCsv && cached.vUrl === vUrlNow) {
+                processCsvData(cached.salesCsv, cached.clientsCsv, btn, true);
+                updateCacheStatus(cached.ts, true);
+                return;
+            }
+        }
+
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Caricamento...';
 
@@ -569,55 +669,12 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
             let salesCsv = results[0];
             let clientsCsv = results[1];
 
-            if (!salesCsv) {
-                alert("Errore nel download del file Vendite. Controlla il link CSV.");
-                btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Aggiorna Dati';
-                return;
+            if (salesCsv) {
+                saveCache(salesCsv, clientsCsv);
+                updateCacheStatus(Date.now(), false);
             }
 
-            clientDict = {};
-            if (clientsCsv) {
-                Papa.parse(clientsCsv, {
-                    header: true, skipEmptyLines: true,
-                    complete: function(cRes) { buildClientDict(cRes); }
-                });
-            }
-
-            Papa.parse(salesCsv, {
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    if(results.data.length === 0) {
-                        alert("Il file CSV Vendite è vuoto.");
-                        btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Aggiorna Dati';
-                        return;
-                    }
-                    rawData = results.data;
-                    columns = results.meta.fields;
-                    
-                    COL_TRANS   = columns[0];
-                    COL_DATA    = columns[1] || columns[0];
-                    COL_COD_INT = columns[2] || columns[0]; 
-                    COL_DESC    = columns[3] || columns[0]; 
-                    COL_EAN     = columns[4] || columns[0]; 
-                    COL_QTA     = columns[7] || columns[0]; 
-                    COL_LISTINO = columns[8] || columns[0]; 
-                    COL_NETTO   = columns[9] || columns[0]; 
-                    COL_CONTANTE= columns[12] || columns[0]; 
-                    COL_POS     = columns[13] || columns[0]; 
-                    COL_CREDITO = columns[14] || columns[0]; 
-                    COL_CARD    = columns[15] || columns[0]; 
-                    COL_STORE   = columns[16] || columns[0]; 
-                    
-                    buildGlobalCRMStats(); 
-                    setupFilters();
-                    applyUrlFilters(); // applica i filtri passati nell'indirizzo (solo al primo caricamento)
-                    updateDashboard();
-                    
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Aggiorna Dati';
-                }
-            });
+            processCsvData(salesCsv, clientsCsv, btn, false);
 
         }).catch(err => {
             alert("Errore di connessione. Dettaglio: " + err.message);
