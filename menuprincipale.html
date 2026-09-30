@@ -4,27 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portale Gestione Retail</title>
-  
-  <!-- Tailwind CSS per lo stile moderno e responsive -->
+
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Phosphor Icons per le icone -->
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
   <script>
     tailwind.config = {
       theme: {
         extend: {
-          fontFamily: {
-            sans: ['Inter', 'system-ui', 'sans-serif'],
-          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
           colors: {
-            brand: {
-              50: '#f0f9ff',
-              100: '#e0f2fe',
-              600: '#0284c7',
-              700: '#0369a1',
-              900: '#0c4a6e',
-            }
+            brand: { 50: '#f0f9ff', 100: '#e0f2fe', 600: '#0284c7', 700: '#0369a1', 900: '#0c4a6e' }
           }
         }
       }
@@ -32,18 +22,15 @@
   </script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    body {
-      font-family: 'Inter', sans-serif;
-      background-color: #f8fafc;
-    }
+    body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+    .shake { animation: shake .3s ease-in-out; }
   </style>
 </head>
 <body class="min-h-screen text-slate-800 flex flex-col items-center justify-center p-4 sm:p-8">
 
-  <!-- Contenitore Principale -->
   <div class="w-full max-w-5xl">
-    
-    <!-- Intestazione -->
+
     <div class="text-center mb-12">
       <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-brand-600 text-white shadow-lg mb-6">
         <i class="ph-fill ph-squares-four text-3xl"></i>
@@ -54,11 +41,10 @@
       </p>
     </div>
 
-    <!-- Griglia Pulsanti / Applicazioni -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
       <!-- Card 1: Analisi Magazzino -->
-      <a href="https://parrottaprontomoda-cpu.github.io/retail-dashboard/analisi_mag_centrale.html" target="_blank" rel="noopener noreferrer" 
+      <a href="https://parrottaprontomoda-cpu.github.io/retail-dashboard/analisi_mag_centrale.html" target="_blank" rel="noopener noreferrer"
          class="group block bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
         <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-5 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
           <i class="ph-fill ph-warehouse text-2xl"></i>
@@ -72,13 +58,13 @@
         </div>
       </a>
 
-      <!-- Card 2: Analisi Store -->
-      <a href="https://parrottaprontomoda-cpu.github.io/retail-dashboard/analisistorepos.html" target="_blank" rel="noopener noreferrer" 
+      <!-- Card 2: Analisi Store (protetta da password) -->
+      <a id="storeLink" href="https://parrottaprontomoda-cpu.github.io/retail-dashboard/analisistorepos.html" rel="noopener noreferrer"
          class="group block bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
         <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-5 group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
           <i class="ph-fill ph-storefront text-2xl"></i>
         </div>
-        <h2 class="text-lg font-bold text-slate-900 mb-2">Analisi Store</h2>
+        <h2 class="text-lg font-bold text-slate-900 mb-2">Analisi Store <i class="ph-fill ph-lock-simple text-slate-400 text-base align-middle"></i></h2>
         <p class="text-sm text-slate-500 mb-6 leading-relaxed">
           Visualizza l'andamento dei punti vendita, i dati POS e le performance della rete commerciale.
         </p>
@@ -87,8 +73,8 @@
         </div>
       </a>
 
-      <!-- Card 3: Riconciliazione Disponibilità -->
-      <a href="https://parrottaprontomoda-cpu.github.io/retail-dashboard/riconciliazionemovimentistore.html" target="_blank" rel="noopener noreferrer" 
+      <!-- Card 3: Riconciliazione -->
+      <a href="https://parrottaprontomoda-cpu.github.io/retail-dashboard/riconciliazionemovimentistore.html" target="_blank" rel="noopener noreferrer"
          class="group block bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
         <div class="w-12 h-12 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center mb-5 group-hover:bg-violet-600 group-hover:text-white transition-colors duration-300">
           <i class="ph-fill ph-arrows-left-right text-2xl"></i>
@@ -104,12 +90,81 @@
 
     </div>
 
-    <!-- Footer -->
     <div class="text-center mt-12 text-slate-400 text-xs font-medium uppercase tracking-wider">
       Sistemi di Analisi e Controllo &copy; 2026
     </div>
-
   </div>
 
+  <!-- Modale password -->
+  <div id="pwModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+    <div id="pwBox" class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+          <i class="ph-fill ph-lock-key text-xl"></i>
+        </div>
+        <div>
+          <h3 class="font-bold text-slate-900">Accesso riservato</h3>
+          <p class="text-xs text-slate-500">Inserisci la password per Analisi Store</p>
+        </div>
+      </div>
+      <input id="pwInput" type="password" inputmode="numeric" autocomplete="off" placeholder="Password"
+             class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+      <p id="pwError" class="hidden text-red-600 text-xs mt-2">Password errata. Riprova.</p>
+      <div class="flex gap-2 mt-5">
+        <button id="pwCancel" type="button" class="flex-1 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold py-2.5 hover:bg-slate-50">Annulla</button>
+        <button id="pwOk" type="button" class="flex-1 rounded-xl bg-emerald-600 text-white text-sm font-semibold py-2.5 hover:bg-emerald-700">Accedi</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Hash SHA-256 di "retailhub:" + password (la password non è scritta nel codice)
+    const PW_HASH = "1e0c24db2923d6222884bdfa46cc745fee028788e03ab1afb4065667fb5a6b37";
+    const SALT = "retailhub:";
+
+    async function sha256(text) {
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    const link = document.getElementById("storeLink");
+    const modal = document.getElementById("pwModal");
+    const input = document.getElementById("pwInput");
+    const err = document.getElementById("pwError");
+    const box = document.getElementById("pwBox");
+    const url = link.href;
+
+    function openModal() {
+      err.classList.add("hidden");
+      input.value = "";
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      setTimeout(() => input.focus(), 50);
+    }
+    function closeModal() {
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    async function check() {
+      const h = await sha256(SALT + input.value);
+      if (h === PW_HASH) {
+        closeModal();
+        window.open(url, "_blank", "noopener");
+      } else {
+        err.classList.remove("hidden");
+        box.classList.remove("shake");
+        void box.offsetWidth;
+        box.classList.add("shake");
+        input.select();
+      }
+    }
+
+    link.addEventListener("click", e => { e.preventDefault(); openModal(); });
+    document.getElementById("pwOk").addEventListener("click", check);
+    document.getElementById("pwCancel").addEventListener("click", closeModal);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") check(); if (e.key === "Escape") closeModal(); });
+    modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
+  </script>
 </body>
 </html>
