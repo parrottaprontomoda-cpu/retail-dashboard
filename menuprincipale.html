@@ -25,6 +25,21 @@
     body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
     @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
     .shake { animation: shake .3s ease-in-out; }
+    /* Modale con CSS proprio: funziona anche se Tailwind non carica */
+    #pwModal { display:none; position:fixed; inset:0; z-index:9999; align-items:center; justify-content:center;
+               background:rgba(15,23,42,.55); padding:16px; }
+    #pwModal.open { display:flex; }
+    #pwBox { background:#fff; border-radius:16px; width:100%; max-width:380px; padding:24px;
+             box-shadow:0 25px 50px -12px rgba(0,0,0,.35); font-family:'Inter',sans-serif; }
+    #pwBox h3 { margin:0 0 4px; font-size:17px; font-weight:700; color:#0f172a; }
+    #pwBox p.sub { margin:0 0 16px; font-size:13px; color:#64748b; }
+    #pwInput { width:100%; box-sizing:border-box; border:1px solid #cbd5e1; border-radius:12px; padding:10px 14px; font-size:15px; }
+    #pwInput:focus { outline:2px solid #059669; border-color:#059669; }
+    #pwError { display:none; color:#dc2626; font-size:12px; margin:8px 0 0; }
+    .pwBtns { display:flex; gap:8px; margin-top:20px; }
+    .pwBtns button { flex:1; border-radius:12px; padding:10px; font-size:14px; font-weight:600; cursor:pointer; }
+    #pwCancel { background:#fff; border:1px solid #e2e8f0; color:#475569; }
+    #pwOk { background:#059669; border:0; color:#fff; }
   </style>
 </head>
 <body class="min-h-screen text-slate-800 flex flex-col items-center justify-center p-4 sm:p-8">
@@ -58,8 +73,9 @@
         </div>
       </a>
 
-      <!-- Card 2: Analisi Store (protetta da password) -->
-      <a id="storeLink" href="https://parrottaprontomoda-cpu.github.io/retail-dashboard/analisistorepos.html" rel="noopener noreferrer"
+      <!-- Card 2: Analisi Store (PROTETTA: nessun link diretto, l'URL è in data-url) -->
+      <a id="storeLink" href="#" onclick="return openPw(event)"
+         data-url="https://parrottaprontomoda-cpu.github.io/retail-dashboard/analisistorepos.html"
          class="group block bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
         <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-5 group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
           <i class="ph-fill ph-storefront text-2xl"></i>
@@ -91,80 +107,93 @@
     </div>
 
     <div class="text-center mt-12 text-slate-400 text-xs font-medium uppercase tracking-wider">
-      Sistemi di Analisi e Controllo &copy; 2026
+      Sistemi di Analisi e Controllo &copy; 2026 &middot; v2
     </div>
   </div>
 
   <!-- Modale password -->
-  <div id="pwModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-    <div id="pwBox" class="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-      <div class="flex items-center gap-3 mb-4">
-        <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-          <i class="ph-fill ph-lock-key text-xl"></i>
-        </div>
-        <div>
-          <h3 class="font-bold text-slate-900">Accesso riservato</h3>
-          <p class="text-xs text-slate-500">Inserisci la password per Analisi Store</p>
-        </div>
-      </div>
-      <input id="pwInput" type="password" inputmode="numeric" autocomplete="off" placeholder="Password"
-             class="w-full rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
-      <p id="pwError" class="hidden text-red-600 text-xs mt-2">Password errata. Riprova.</p>
-      <div class="flex gap-2 mt-5">
-        <button id="pwCancel" type="button" class="flex-1 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold py-2.5 hover:bg-slate-50">Annulla</button>
-        <button id="pwOk" type="button" class="flex-1 rounded-xl bg-emerald-600 text-white text-sm font-semibold py-2.5 hover:bg-emerald-700">Accedi</button>
+  <div id="pwModal">
+    <div id="pwBox">
+      <h3>🔒 Accesso riservato</h3>
+      <p class="sub">Inserisci la password per aprire Analisi Store</p>
+      <input id="pwInput" type="password" inputmode="numeric" autocomplete="off" placeholder="Password">
+      <p id="pwError">Password errata. Riprova.</p>
+      <div class="pwBtns">
+        <button id="pwCancel" type="button" onclick="closePw()">Annulla</button>
+        <button id="pwOk" type="button" onclick="checkPw()">Accedi</button>
       </div>
     </div>
   </div>
 
   <script>
-    // Hash SHA-256 di "retailhub:" + password (la password non è scritta nel codice)
-    const PW_HASH = "1e0c24db2923d6222884bdfa46cc745fee028788e03ab1afb4065667fb5a6b37";
-    const SALT = "retailhub:";
+    // Hash SHA-256 di "retailhub:" + password (la password non compare in chiaro)
+    var PW_HASH = "1e0c24db2923d6222884bdfa46cc745fee028788e03ab1afb4065667fb5a6b37";
+    var SALT = "retailhub:";
 
-    async function sha256(text) {
-      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    function sha256(str){
+  var rr=function(v,a){return (v>>>a)|(v<<(32-a));};
+  var K=[],H=[],isP={},pc=0,c,i,j;
+  for(c=2;pc<64;c++){
+    if(!isP[c]){
+      for(i=0;i<313;i+=c)isP[i]=c;
+      if(pc<8)H[pc]=(Math.pow(c,.5)*4294967296)|0;
+      K[pc++]=(Math.pow(c,1/3)*4294967296)|0;
     }
-
-    const link = document.getElementById("storeLink");
-    const modal = document.getElementById("pwModal");
-    const input = document.getElementById("pwInput");
-    const err = document.getElementById("pwError");
-    const box = document.getElementById("pwBox");
-    const url = link.href;
-
-    function openModal() {
-      err.classList.add("hidden");
-      input.value = "";
-      modal.classList.remove("hidden");
-      modal.classList.add("flex");
-      setTimeout(() => input.focus(), 50);
+  }
+  var bytes=unescape(encodeURIComponent(str)),bitLen=bytes.length*8,b=bytes+'\x80',words=[];
+  while(b.length%64-56)b+='\x00';
+  for(i=0;i<b.length;i++){words[i>>2]|=b.charCodeAt(i)<<((3-i)%4)*8;}
+  words[words.length]=(bitLen/4294967296)|0;
+  words[words.length]=bitLen;
+  for(j=0;j<words.length;){
+    var w=words.slice(j,j+=16),oldH=H.slice(0,8);
+    for(i=0;i<64;i++){
+      var w15=w[i-15],w2=w[i-2],a=H[0],e=H[4];
+      var t1=H[7]+(rr(e,6)^rr(e,11)^rr(e,25))+((e&H[5])^(~e&H[6]))+K[i]+
+        (w[i]=(i<16)?w[i]:(w[i-16]+(rr(w15,7)^rr(w15,18)^(w15>>>3))+w[i-7]+(rr(w2,17)^rr(w2,19)^(w2>>>10))|0));
+      var t2=(rr(a,2)^rr(a,13)^rr(a,22))+((a&H[1])^(a&H[2])^(H[1]&H[2]));
+      H=[(t1+t2)|0].concat(H);
+      H[4]=(H[4]+t1)|0;
     }
-    function closeModal() {
-      modal.classList.add("hidden");
-      modal.classList.remove("flex");
-    }
+    for(i=0;i<8;i++)H[i]=(H[i]+oldH[i])|0;
+  }
+  var out='';
+  for(i=0;i<8;i++){for(j=3;j>=0;j--){var x=(H[i]>>(j*8))&255;out+=(x<16?'0':'')+x.toString(16);}}
+  return out;
+}
 
-    async function check() {
-      const h = await sha256(SALT + input.value);
-      if (h === PW_HASH) {
-        closeModal();
-        window.open(url, "_blank", "noopener");
+
+    function openPw(e) {
+      if (e) e.preventDefault();
+      document.getElementById("pwError").style.display = "none";
+      var inp = document.getElementById("pwInput");
+      inp.value = "";
+      document.getElementById("pwModal").className = "open";
+      setTimeout(function () { inp.focus(); }, 50);
+      return false;
+    }
+    function closePw() {
+      document.getElementById("pwModal").className = "";
+    }
+    function checkPw() {
+      var inp = document.getElementById("pwInput");
+      if (sha256(SALT + inp.value) === PW_HASH) {
+        closePw();
+        window.open(document.getElementById("storeLink").getAttribute("data-url"), "_blank", "noopener");
       } else {
-        err.classList.remove("hidden");
-        box.classList.remove("shake");
-        void box.offsetWidth;
-        box.classList.add("shake");
-        input.select();
+        var box = document.getElementById("pwBox");
+        document.getElementById("pwError").style.display = "block";
+        box.classList.remove("shake"); void box.offsetWidth; box.classList.add("shake");
+        inp.select();
       }
     }
-
-    link.addEventListener("click", e => { e.preventDefault(); openModal(); });
-    document.getElementById("pwOk").addEventListener("click", check);
-    document.getElementById("pwCancel").addEventListener("click", closeModal);
-    input.addEventListener("keydown", e => { if (e.key === "Enter") check(); if (e.key === "Escape") closeModal(); });
-    modal.addEventListener("click", e => { if (e.target === modal) closeModal(); });
+    document.getElementById("pwInput").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") checkPw();
+      if (e.key === "Escape") closePw();
+    });
+    document.getElementById("pwModal").addEventListener("click", function (e) {
+      if (e.target === this) closePw();
+    });
   </script>
 </body>
 </html>
