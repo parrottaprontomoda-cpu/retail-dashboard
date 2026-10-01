@@ -183,6 +183,10 @@
   .share-actions button { flex: 1; min-width: 110px; padding: 10px; border: none; border-radius: 8px; background: var(--dark); color: #fff; font-weight: bold; cursor: pointer; }
   .share-actions button:nth-child(2) { background: var(--primary); }
   #share-msg { font-size: 13px; color: #2e7d32; min-height: 16px; }
+  .stats-table { width: 100%; border-collapse: collapse; }
+  .stats-table th, .stats-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+  .stats-table th { font-size: 11px; color: #888; text-transform: uppercase; }
+  .stats-table td.num, .stats-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .share-close { background: #e0e0e0; color: var(--dark); border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; }
 </style>
 </head>
@@ -192,6 +196,7 @@
   <h1>🛍️ Catalogo Prodotti</h1>
   <div class="header-actions">
     <button id="report-btn" onclick="openReport()">📄 Strumento di Vendita (PDF)</button>
+    <button id="stats-btn" style="display:none;background:#fff;color:var(--dark);" onclick="openStats()">📊 Visite</button>
     <button id="cart-btn" onclick="toggleCart(true)">🛒 <span id="cart-count">0</span></button>
   </div>
 </header>
@@ -230,7 +235,7 @@
 <div id="catalog-menu" class="catalog-menu">
   <div class="catalog-menu-title" id="catalog-menu-title"></div>
   <div class="catalog-menu-item" onclick="catalogMenuAction('window')">🪟 Apri in una nuova finestra</div>
-  <div class="catalog-menu-item" onclick="catalogMenuAction('share')">🔗 Condividi catalogo</div>
+  <div class="catalog-menu-item" onclick="catalogMenuAction('share')">🔗 <span id="menu-share-label">Condividi catalogo</span></div>
 </div>
 
 <!-- FINESTRA DI CONDIVISIONE CATALOGO -->
@@ -245,6 +250,15 @@
     </div>
     <div id="share-msg"></div>
     <button class="share-close" onclick="closeShareDialog()">Chiudi</button>
+  </div>
+</div>
+
+<!-- STATISTICHE VISITE (solo ?admin=1) -->
+<div id="stats-overlay" class="share-overlay" onclick="closeStats()">
+  <div class="share-box" style="max-width:560px;" onclick="event.stopPropagation()">
+    <strong>📊 Visualizzazioni cataloghi e categorie</strong>
+    <div id="stats-body" style="max-height:60vh;overflow:auto;font-size:13px;"></div>
+    <button class="share-close" onclick="closeStats()">Chiudi</button>
   </div>
 </div>
 
@@ -289,7 +303,7 @@
   let CART = {};
   let ACTIVE_CAT = 'Tutti';
   let ACTIVE_CATALOGS = new Set();
-  let MENU_TARGET_CATALOG = null;
+  let MENU_TARGET = null; // { type: 'catalogo' | 'categoria', name }
   let firstApplyDone = false;
 
   // Motore di Paginazione
@@ -469,7 +483,11 @@
 
   document.getElementById('cats').addEventListener('click', e => {
     const chip = e.target.closest('.cat-chip');
-    if (chip) setCat(chip.dataset.cat);
+    if (!chip) return;
+    const cat = chip.dataset.cat;
+    // Prima il menu (usa la posizione del chip), poi il filtro che ridisegna i chip
+    if (cat !== 'Tutti') { openCatalogMenu(e, 'categoria', cat, chip); track('filtro', 'categoria', cat); }
+    setCat(cat);
   });
 
   function setCat(c) {
@@ -495,7 +513,7 @@
 
   document.getElementById('catalog-tabs').addEventListener('click', e => {
     const chip = e.target.closest('[data-catalogo]');
-    if (chip) openCatalogMenu(e, chip.dataset.catalogo, chip);
+    if (chip) openCatalogMenu(e, 'catalogo', chip.dataset.catalogo, chip);
   });
 
   // Chip "Tutti": resetta il filtro nella pagina corrente (nessun menu)
@@ -507,19 +525,30 @@
   }
 
   // Link diretto a un catalogo in modalità cliente (chip e report nascosti)
-  function buildCatalogLink(catalogName) {
+  function buildShareLink(type, name) {
     const baseUrl = window.location.href.split('#')[0].split('?')[0];
-    return baseUrl + '?catalogo=' + encodeURIComponent(catalogName) + '&condiviso=1';
+    const params = [];
+    if (type === 'catalogo') {
+      params.push('catalogo=' + encodeURIComponent(name));
+    } else {
+      // categoria: se è attivo un solo catalogo, il link lo mantiene
+      if (ACTIVE_CATALOGS.size === 1) params.push('catalogo=' + encodeURIComponent([...ACTIVE_CATALOGS][0]));
+      params.push('categoria=' + encodeURIComponent(name));
+    }
+    params.push('condiviso=1');
+    return baseUrl + '?' + params.join('&');
   }
 
   // ===== FINESTRA DI CONDIVISIONE =====
   let SHARE_LINK = '';
   let SHARE_NAME = '';
+  let SHARE_KIND = 'catalogo';
 
-  function openShareDialog(link, name) {
+  function openShareDialog(link, name, kind) {
     SHARE_LINK = link;
     SHARE_NAME = name;
-    document.getElementById('share-title').textContent = 'Condividi catalogo ' + name;
+    SHARE_KIND = kind || 'catalogo';
+    document.getElementById('share-title').textContent = 'Condividi ' + SHARE_KIND + ' ' + name;
     document.getElementById('share-link').value = link;
     document.getElementById('share-msg').textContent = '';
     document.getElementById('share-native-btn').style.display = navigator.share ? 'inline-block' : 'none';
@@ -544,22 +573,23 @@
     }
   }
   function shareWhatsApp() {
-    const text = 'Dai un\'occhiata al catalogo ' + SHARE_NAME + ':\n' + SHARE_LINK;
+    const text = 'Dai un\'occhiata a ' + (SHARE_KIND === 'catalogo' ? 'questo catalogo' : 'questa categoria') + ' (' + SHARE_NAME + '):\n' + SHARE_LINK;
     window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
   }
   function shareNative() {
     if (!navigator.share) return;
-    navigator.share({ title: 'Catalogo ' + SHARE_NAME, text: 'Dai un\'occhiata al catalogo ' + SHARE_NAME + ':', url: SHARE_LINK }).catch(() => {});
+    navigator.share({ title: SHARE_NAME, text: 'Dai un\'occhiata a ' + (SHARE_KIND === 'catalogo' ? 'questo catalogo' : 'questa categoria') + ' (' + SHARE_NAME + '):', url: SHARE_LINK }).catch(() => {});
   }
 
   // Apre il menu contestuale (Nuova finestra / Condividi) accanto al chip cliccato
-  function openCatalogMenu(evt, catalogName, chipEl) {
+  function openCatalogMenu(evt, type, name, chipEl) {
     evt.stopPropagation();
-    MENU_TARGET_CATALOG = catalogName;
+    MENU_TARGET = { type, name };
 
     const menu = document.getElementById('catalog-menu');
     const overlay = document.getElementById('catalog-menu-overlay');
-    document.getElementById('catalog-menu-title').innerText = catalogName;
+    document.getElementById('catalog-menu-title').innerText = (type === 'catalogo' ? 'Catalogo: ' : 'Categoria: ') + name;
+    document.getElementById('menu-share-label').innerText = type === 'catalogo' ? 'Condividi catalogo' : 'Condividi categoria';
 
     const rect = chipEl.getBoundingClientRect();
     menu.style.top = (rect.bottom + 6) + 'px';
@@ -572,18 +602,18 @@
   function closeCatalogMenu() {
     document.getElementById('catalog-menu').classList.remove('show');
     document.getElementById('catalog-menu-overlay').classList.remove('show');
-    MENU_TARGET_CATALOG = null;
+    MENU_TARGET = null;
   }
 
   function catalogMenuAction(action) {
-    if (!MENU_TARGET_CATALOG) return;
-    const link = buildCatalogLink(MENU_TARGET_CATALOG);
-    const name = MENU_TARGET_CATALOG;
+    if (!MENU_TARGET) return;
+    const { type, name } = MENU_TARGET;
+    const link = buildShareLink(type, name);
 
     if (action === 'window') {
       window.open(link, '_blank', 'noopener');
     } else if (action === 'share') {
-      openShareDialog(link, name);
+      openShareDialog(link, name, type);
     }
 
     closeCatalogMenu();
@@ -930,7 +960,70 @@
     });
   }
 
+  // ===== CONTATORE VISUALIZZAZIONI =====
+  // Registra gli eventi sul foglio "VISITE" (richiede Code_visite.gs nell'Apps Script).
+  // Non conta: chi apre la pagina con ?admin=1, o ?notrack=1 (resta valido su quel browser; ?notrack=0 lo riattiva).
+  const TRACK_OFF_KEY = 'catalogo_notrack';
+  const VISITOR_KEY = 'catalogo_visitor';
+  const IS_ADMIN = urlParams.get('admin') === '1';
+  try {
+    if (urlParams.get('notrack') === '1') localStorage.setItem(TRACK_OFF_KEY, '1');
+    if (urlParams.get('notrack') === '0') localStorage.removeItem(TRACK_OFF_KEY);
+  } catch (e) {}
+  if (IS_ADMIN) document.getElementById('stats-btn').style.display = '';
+
+  function getVisitorId() {
+    try {
+      let v = localStorage.getItem(VISITOR_KEY);
+      if (!v) { v = 'v' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); localStorage.setItem(VISITOR_KEY, v); }
+      return v;
+    } catch (e) { return 'anonimo'; }
+  }
+
+  function track(evento, tipo, nome) {
+    if (IS_ADMIN) return;
+    try { if (localStorage.getItem(TRACK_OFF_KEY) === '1') return; } catch (e) {}
+    const q = new URLSearchParams({
+      action: 'view', e: evento, t: tipo, n: nome || '',
+      v: getVisitorId(), m: document.body.classList.contains('shared-mode') ? 'link' : 'diretto'
+    });
+    try { fetch(API_URL + '?' + q.toString(), { mode: 'no-cors', keepalive: true }).catch(() => {}); } catch (e) {}
+  }
+
+  // Una sola visita per sessione del browser (il ricaricamento non la raddoppia)
+  function trackVisit() {
+    try {
+      if (sessionStorage.getItem('catalogo_visit_logged')) return;
+      sessionStorage.setItem('catalogo_visit_logged', '1');
+    } catch (e) {}
+    const cat = urlParams.get('catalogo');
+    const categoria = urlParams.get('categoria');
+    if (!cat && !categoria) { track('visita', 'home', 'Tutto il catalogo'); return; }
+    if (cat) track('visita', 'catalogo', cat);
+    if (categoria) track('visita', 'categoria', categoria);
+  }
+
+  function openStats() {
+    const body = document.getElementById('stats-body');
+    body.innerHTML = '<p>Caricamento statistiche...</p>';
+    document.getElementById('stats-overlay').classList.add('show');
+    fetch(API_URL + '?action=stats')
+      .then(r => r.json())
+      .then(d => {
+        if (!d || !d.ok) throw new Error('Risposta non valida (hai aggiornato e ripubblicato l\'Apps Script?)');
+        if (!d.rows.length) { body.innerHTML = '<p>Nessuna visita registrata finora.</p>'; return; }
+        const tot = d.rows.reduce((s, r) => s + r.visualizzazioni, 0);
+        body.innerHTML = '<p>Totale visualizzazioni: <strong>' + tot + '</strong></p>' +
+          '<table class="stats-table"><thead><tr><th>Tipo</th><th>Nome</th><th class="num">Visualiz.</th><th class="num">Visitatori</th><th>Ultima</th></tr></thead><tbody>' +
+          d.rows.map(r => '<tr><td>' + escHtml(r.tipo) + '</td><td>' + escHtml(r.nome) + '</td><td class="num">' + r.visualizzazioni +
+            '</td><td class="num">' + r.unici + '</td><td>' + escHtml(r.ultima) + '</td></tr>').join('') + '</tbody></table>';
+      })
+      .catch(err => { body.innerHTML = '<p>Impossibile leggere le statistiche: ' + escHtml(err.message) + '</p>'; });
+  }
+  function closeStats() { document.getElementById('stats-overlay').classList.remove('show'); }
+
   // ===== AVVIO (sempre per ultimo: tutte le costanti e i listener sono già pronti) =====
+  trackVisit();
   loadProducts();
 </script>
 </body>
