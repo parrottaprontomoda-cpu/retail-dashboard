@@ -173,6 +173,17 @@
   .catalog-menu-title { padding: 10px 14px; font-size: 12px; color: #888; font-weight: bold; border-bottom: 1px solid var(--border); }
   .catalog-menu-item { padding: 12px 14px; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
   .catalog-menu-item:hover { background: #f5f5f5; }
+
+  /* ===== FINESTRA CONDIVISIONE ===== */
+  .share-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; z-index: 60; align-items: center; justify-content: center; padding: 20px; }
+  .share-overlay.show { display: flex; }
+  .share-box { background: #fff; border-radius: 12px; padding: 20px; width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 12px; }
+  .share-box input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+  .share-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .share-actions button { flex: 1; min-width: 110px; padding: 10px; border: none; border-radius: 8px; background: var(--dark); color: #fff; font-weight: bold; cursor: pointer; }
+  .share-actions button:nth-child(2) { background: var(--primary); }
+  #share-msg { font-size: 13px; color: #2e7d32; min-height: 16px; }
+  .share-close { background: #e0e0e0; color: var(--dark); border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -220,6 +231,21 @@
   <div class="catalog-menu-title" id="catalog-menu-title"></div>
   <div class="catalog-menu-item" onclick="catalogMenuAction('window')">🪟 Apri in una nuova finestra</div>
   <div class="catalog-menu-item" onclick="catalogMenuAction('share')">🔗 Condividi catalogo</div>
+</div>
+
+<!-- FINESTRA DI CONDIVISIONE CATALOGO -->
+<div id="share-overlay" class="share-overlay" onclick="closeShareDialog()">
+  <div class="share-box" onclick="event.stopPropagation()">
+    <strong id="share-title"></strong>
+    <input id="share-link" type="text" readonly onclick="this.select()">
+    <div class="share-actions">
+      <button onclick="copyShareLink()">📋 Copia link</button>
+      <button onclick="shareWhatsApp()">💬 WhatsApp</button>
+      <button id="share-native-btn" onclick="shareNative()">📤 Altre app</button>
+    </div>
+    <div id="share-msg"></div>
+    <button class="share-close" onclick="closeShareDialog()">Chiudi</button>
+  </div>
 </div>
 
 <div id="report-container">
@@ -431,7 +457,7 @@
       .finally(() => { if (to) clearTimeout(to); });
   }
 
-  loadProducts();
+  // (loadProducts() viene avviato in fondo allo script, dopo che tutto è inizializzato)
 
   // ===== CATEGORIE =====
   function renderCategories() {
@@ -482,8 +508,48 @@
 
   // Link diretto a un catalogo in modalità cliente (chip e report nascosti)
   function buildCatalogLink(catalogName) {
-    const baseUrl = window.location.origin + window.location.pathname;
+    const baseUrl = window.location.href.split('#')[0].split('?')[0];
     return baseUrl + '?catalogo=' + encodeURIComponent(catalogName) + '&condiviso=1';
+  }
+
+  // ===== FINESTRA DI CONDIVISIONE =====
+  let SHARE_LINK = '';
+  let SHARE_NAME = '';
+
+  function openShareDialog(link, name) {
+    SHARE_LINK = link;
+    SHARE_NAME = name;
+    document.getElementById('share-title').textContent = 'Condividi catalogo ' + name;
+    document.getElementById('share-link').value = link;
+    document.getElementById('share-msg').textContent = '';
+    document.getElementById('share-native-btn').style.display = navigator.share ? 'inline-block' : 'none';
+    document.getElementById('share-overlay').classList.add('show');
+  }
+  function closeShareDialog() {
+    document.getElementById('share-overlay').classList.remove('show');
+  }
+  function copyShareLink() {
+    const input = document.getElementById('share-link');
+    const msg = document.getElementById('share-msg');
+    const fallback = () => {
+      input.focus(); input.select(); input.setSelectionRange(0, 99999);
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) {}
+      msg.textContent = ok ? '✅ Link copiato!' : 'Copia manualmente il link selezionato.';
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(SHARE_LINK).then(() => { msg.textContent = '✅ Link copiato!'; }).catch(fallback);
+    } else {
+      fallback();
+    }
+  }
+  function shareWhatsApp() {
+    const text = 'Dai un\'occhiata al catalogo ' + SHARE_NAME + ':\n' + SHARE_LINK;
+    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  }
+  function shareNative() {
+    if (!navigator.share) return;
+    navigator.share({ title: 'Catalogo ' + SHARE_NAME, text: 'Dai un\'occhiata al catalogo ' + SHARE_NAME + ':', url: SHARE_LINK }).catch(() => {});
   }
 
   // Apre il menu contestuale (Nuova finestra / Condividi) accanto al chip cliccato
@@ -517,21 +583,7 @@
     if (action === 'window') {
       window.open(link, '_blank', 'noopener');
     } else if (action === 'share') {
-      if (navigator.share) {
-        navigator.share({
-          title: 'Catalogo ' + name,
-          text: 'Dai un\'occhiata al catalogo ' + name + ':',
-          url: link
-        }).catch(() => {});
-      } else if (navigator.clipboard) {
-        navigator.clipboard.writeText(link).then(() => {
-          alert('Link copiato negli appunti:\n' + link);
-        }).catch(() => {
-          prompt('Copia il link del catalogo:', link);
-        });
-      } else {
-        prompt('Copia il link del catalogo:', link);
-      }
+      openShareDialog(link, name);
     }
 
     closeCatalogMenu();
@@ -877,6 +929,9 @@
       btn.disabled = false;
     });
   }
+
+  // ===== AVVIO (sempre per ultimo: tutte le costanti e i listener sono già pronti) =====
+  loadProducts();
 </script>
 </body>
 </html>
