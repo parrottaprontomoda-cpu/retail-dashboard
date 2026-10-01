@@ -17,75 +17,74 @@
   }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--dark); }
-  
+
   header { background: var(--dark); color: #fff; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 10; gap: 8px; flex-wrap: wrap; }
   header h1 { font-size: 18px; margin: 0; }
   .header-actions { display: flex; gap: 8px; }
   .header-actions button { border: none; padding: 8px 14px; border-radius: 20px; font-weight: bold; cursor: pointer; }
+  .header-actions button:disabled { opacity: 0.7; cursor: wait; }
   #cart-btn { background: var(--primary); color: #fff; }
   #report-btn { background: #fff; color: var(--dark); }
-  
+
   .controls { padding: 14px 20px 0; display: flex; gap: 8px; flex-wrap: wrap; }
   .controls input { flex: 1; min-width: 160px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; }
-  
+
   .cats { padding: 10px 20px 0; display: flex; gap: 8px; overflow-x: auto; }
   .cat-chip { padding: 6px 14px; border-radius: 16px; background: #fff; border: 1px solid var(--border); white-space: nowrap; cursor: pointer; font-size: 13px; }
   .cat-chip.active { background: var(--dark); color: #fff; border-color: var(--dark); }
   .cat-label { padding: 10px 20px 0; font-size: 12px; color: #888; font-weight: bold; text-transform: uppercase; }
   .cat-chip.catalog-chip.active { background: var(--primary); border-color: var(--primary); }
-  
-  /* --- REGOLE BLINDATE PER LA MODALITÀ CONDIVISIONE CLIENTE --- */
+
+  /* --- REGOLE PER LA MODALITÀ CONDIVISIONE CLIENTE (?condiviso=1) --- */
   body.shared-mode #report-btn { display: none !important; }
   body.shared-mode .cats { display: none !important; }
   body.shared-mode .cat-label { display: none !important; }
-  /* ----------------------------------------------------------- */
+  /* ----------------------------------------------------------------- */
 
   #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; padding: 16px 20px 100px; }
   .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-  
-  /* --- MODIFICHE FOTO IN GRIGLIA (NESSUN TAGLIO + PIÙ ALTE) --- */
-  .card img { 
-    width: 100%; 
-    height: 220px; /* Aumentato per far vedere meglio i capi lunghi come le tute */
-    object-fit: contain; /* L'immagine viene ridimensionata per entrare tutta nel box */
-    background: #ffffff; 
+
+  /* --- FOTO IN GRIGLIA (NESSUN TAGLIO) --- */
+  .card img {
+    width: 100%;
+    height: 220px;
+    object-fit: contain;
+    background: #ffffff;
     padding: 10px;
     border-bottom: 1px solid var(--border);
-    cursor: zoom-in; /* Cursore lente ingrandimento */
+    cursor: zoom-in;
     transition: transform 0.2s ease;
   }
-  .card img:hover { transform: scale(1.03); } /* Leggero effetto al passaggio del mouse */
-  
+  .card img:hover { transform: scale(1.03); }
+
   .card-body { padding: 10px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
   .card-body h3 { font-size: 14px; margin: 0; }
   .card-body p { font-size: 12px; color: #666; margin: 0; flex: 1; }
-  
+
   .price { font-weight: bold; font-size: 14px; }
   .iva-label { font-size: 11px; color: #888; font-weight: normal; margin-left: 2px; }
-  
+
   .variant-grid { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 8px; }
   .variant-chip { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: #fff; font-size: 11px; cursor: pointer; font-weight: 600; text-align: center;}
   .variant-chip.out { opacity: 0.4; text-decoration: line-through; cursor: not-allowed; }
   .variant-chip.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; gap: 8px;}
-  
-  /* Contenitore del blocco taglie/colori nella scheda prodotto: niente scroll orizzontale */
+
   .variant-matrix-wrap { margin-top: 8px; }
   .variant-color-group { margin-top: 8px; }
   .variant-color-group:first-child { margin-top: 0; }
   .variant-color-name { font-size: 11px; font-weight: 600; color: #444; text-align: right; margin-bottom: 4px; }
   .variant-size-row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 
-  /* Stili per la tabella del report PDF (invariati) */
   .variant-matrix { border-collapse: collapse; font-size: 11px; margin-left: auto; }
   .variant-matrix th, .variant-matrix td { padding: 3px; text-align: center; }
   .variant-matrix thead th { font-weight: 600; color: #666; font-size: 10px; }
   .variant-matrix th.color-label { text-align: right; padding-right: 6px; font-weight: 600; color: #444; white-space: nowrap; }
-  
+
   .variant-cell { min-width: 40px; height: 36px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-weight: 600; font-size: 11px; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px 6px; line-height: 1.2; }
   .variant-cell-qty { font-size: 9px; font-weight: 400; color: #888; }
   .variant-cell.out { opacity: 0.4; cursor: not-allowed; }
   .variant-cell.empty { border: none; background: none; color: #ddd; cursor: default; min-width: 40px; height: 36px; }
-  
+
   .variant-cell.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); padding: 0; cursor: default; overflow: hidden; width: auto; min-width: 60px; flex-direction: row; }
   .cart-qty-btn { background: rgba(0,0,0,0.15); color: #fff; border: none; width: 24px; height: 32px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; }
   .cart-qty-btn:hover { background: rgba(0,0,0,0.25); }
@@ -100,43 +99,56 @@
   .cart-item-variant { font-size: 11px; color: #888; }
   .cart-item-controls { display: flex; align-items: center; gap: 8px; }
   .cart-item-controls button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border); background: #f7f7f7; cursor: pointer; font-size: 16px; font-weight: bold; display: flex; align-items: center; justify-content: center; }
-  
+
   #cart-footer { padding: 16px; border-top: 1px solid var(--border); background: #fafafa; }
   #cart-total { font-weight: bold; font-size: 18px; margin-bottom: 12px; }
   #whatsapp-btn { width: 100%; background: var(--primary); color: #fff; border: none; padding: 14px; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; }
   #clear-cart-btn { width: 100%; background: transparent; color: #d32f2f; border: 1px solid #d32f2f; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 13px; cursor: pointer; margin-top: 10px; }
-  
+
   #overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; z-index: 15; }
   #overlay.show { display: block; }
-  
-  /* --- STILI LIGHTBOX FOTO --- */
+
+  /* --- LIGHTBOX FOTO --- */
   #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; z-index: 100; justify-content: center; align-items: center; flex-direction: column; padding: 20px; }
   #lightbox.show { display: flex; }
   #lightbox img { max-width: 100%; max-height: 80vh; object-fit: contain; background: #fff; border-radius: 8px; padding: 10px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
   #lightbox-close { position: absolute; top: 20px; right: 30px; font-size: 40px; color: #fff; cursor: pointer; background: none; border: none; }
   #lightbox-caption { color: #fff; font-size: 16px; margin-top: 15px; font-weight: bold; text-align: center; }
-  /* --------------------------- */
 
-  #empty-msg, #loading-msg, #error-msg { text-align: center; padding: 40px; color: #888; font-size: 16px; }
+  #empty-msg, #error-msg { text-align: center; padding: 40px; color: #888; font-size: 16px; }
+  #error-msg button { margin-top: 14px; background: var(--dark); color: #fff; border: none; padding: 10px 20px; border-radius: 20px; font-weight: bold; cursor: pointer; }
 
-  /* ===== REPORT PDF (OTTIMIZZATO) ===== */
+  /* --- CARICAMENTO CON CONTO ALLA ROVESCIA --- */
+  #loading-msg { display: none; text-align: center; padding: 40px 20px; color: #666; font-size: 16px; }
+  .spinner { width: 42px; height: 42px; margin: 0 auto 14px; border: 4px solid #e0e0e0; border-top-color: var(--primary); border-radius: 50%; animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading-count { font-size: 44px; font-weight: bold; color: var(--dark); margin: 6px 0; font-variant-numeric: tabular-nums; }
+  #loading-sub { font-size: 13px; color: #999; margin-top: 8px; }
+  .progress { max-width: 320px; height: 8px; background: #e6e6e6; border-radius: 4px; margin: 12px auto 0; overflow: hidden; }
+  #progress-bar { height: 100%; width: 0%; background: var(--primary); transition: width 0.3s linear; }
+
+  /* Banner di aggiornamento in background (quando c'è una copia salvata) */
+  #refresh-banner { display: none; position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: var(--dark); color: #fff; padding: 10px 18px; border-radius: 24px; font-size: 13px; z-index: 12; box-shadow: 0 4px 16px rgba(0,0,0,0.3); max-width: 92vw; text-align: center; }
+  #refresh-banner.show { display: block; }
+
+  /* ===== REPORT PDF ===== */
   #report-container { display: none; background: #f0f0f0; padding: 20px 0; }
   #report-container.show { display: block; }
   #report-view { background: #fff; padding: 40px; max-width: 900px; margin: 0 auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
   #report-view h2 { margin-bottom: 4px; }
   #report-view .report-date { color: #666; font-size: 13px; margin-bottom: 24px; border-bottom: 2px solid var(--dark); padding-bottom: 10px; }
-  
+
   .report-card { display: flex; flex-direction: row; gap: 24px; border: 1px solid #ddd; border-radius: 12px; padding: 24px; margin-bottom: 24px; align-items: center; background: #fff; }
   .report-card img { width: 260px; height: 320px; object-fit: contain; border-radius: 8px; background: #f9f9f9; border: 1px solid var(--border); padding: 8px; }
-  
+
   .report-card-info { flex: 1; }
   .report-card-info h4 { margin: 0 0 10px 0; font-size: 20px; }
   .report-card-info p { margin: 0 0 6px 0; font-size: 14px; color: #555; }
   .report-matrix-wrap { margin-top: 16px; background: #fafafa; padding: 12px; border-radius: 6px; display: inline-block; }
-  
+
   .report-cell { display: inline-block; padding: 4px 8px; background: #fff; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; min-width: 28px; text-align: center; font-weight: bold; }
   .report-cell.out { color: #d32f2f; text-decoration: line-through; background: #fbe9e9; border-color: #f5c6c6; font-weight: normal; }
-  
+
   .report-order-btn { display: inline-block; background-color: var(--primary); color: #ffffff; padding: 10px 20px; border-radius: 20px; font-size: 14px; text-decoration: none; font-weight: bold; margin-top: 16px; }
 
   #report-actions { max-width: 900px; margin: 20px auto; display: flex; justify-content: space-between; gap: 12px; padding: 0 20px; }
@@ -144,7 +156,7 @@
   #report-actions button { padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-weight: bold; font-size: 14px; }
   #close-report-btn { background: #e0e0e0; color: var(--dark); }
   #print-report-btn { background: var(--dark); color: #fff; }
-  
+
   .html2pdf__page-break { page-break-inside: avoid; break-inside: avoid; }
 
   @media (max-width: 600px) {
@@ -174,16 +186,26 @@
 </header>
 
 <div class="controls">
-  <input type="text" id="search" placeholder="Cerca per nome o codice..." oninput="updateFilters()">
+  <input type="text" id="search" placeholder="Cerca per nome, codice, colore o misura..." oninput="debouncedFilters()">
 </div>
 <div class="cat-label">Cataloghi</div>
 <div class="cats" id="catalog-tabs"></div>
 <div class="cat-label">Categorie</div>
 <div class="cats" id="cats"></div>
 
-<div id="loading-msg">Elaborazione dati dal magazzino in corso...</div>
+<!-- CARICAMENTO CON CONTO ALLA ROVESCIA (primo accesso, senza copia salvata) -->
+<div id="loading-msg">
+  <div class="spinner"></div>
+  <div>Elaborazione dati dal magazzino in corso...</div>
+  <div id="loading-count">30</div>
+  <div class="progress"><div id="progress-bar"></div></div>
+  <div id="loading-sub">Il primo caricamento può richiedere circa 30 secondi. Dai prossimi accessi il catalogo comparirà subito.</div>
+</div>
 <div id="error-msg" style="display:none;"></div>
 <div id="grid"></div>
+
+<!-- BANNER AGGIORNAMENTO IN BACKGROUND -->
+<div id="refresh-banner"></div>
 
 <!-- STRUTTURA LIGHTBOX -->
 <div id="lightbox" onclick="closeLightbox()">
@@ -231,92 +253,241 @@
   // ==================== SCORPORO IVA ====================
   const DIVISORE_IVA = 1.22;
 
+  // ==================== CACHE E CONTO ALLA ROVESCIA ====================
+  const CACHE_KEY = 'catalogo_cache_v1';
+  const EXPECTED_SECONDS = 30;      // durata stimata del caricamento
+  const FETCH_TIMEOUT_MS = 120000;  // oltre i 2 minuti si considera fallito
+
   // Variabili Dati Globali
   let PRODUCTS = [];
   let CART = {};
   let ACTIVE_CAT = 'Tutti';
   let ACTIVE_CATALOGS = new Set();
-  let MENU_TARGET_CATALOG = null; // catalogo selezionato quando si apre il menu contestuale
+  let MENU_TARGET_CATALOG = null;
+  let firstApplyDone = false;
 
   // Motore di Paginazione
-  let filteredGroups = []; 
-  const ITEMS_PER_PAGE = 24; 
-  let currentDisplayed = 0; 
+  let filteredGroups = [];
+  const ITEMS_PER_PAGE = 24;
+  let currentDisplayed = 0;
 
+  // ===== HELPER =====
+  const norm = v => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const catKey = v => String(v ?? '').trim();
+  function escHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // Filtro unico, usato da griglia e report PDF
+  function matchesFilters(p) {
+    const matchCat = ACTIVE_CAT === 'Tutti' || norm(p.categoria) === norm(ACTIVE_CAT);
+    const matchCatalog = ACTIVE_CATALOGS.size === 0 || ACTIVE_CATALOGS.has(p.catalogo);
+    const terms = norm(document.getElementById('search').value).split(/\s+/).filter(Boolean);
+    const hay = norm([p.nome, p.descrizione, p.codiceProdotto, p.colore, p.misura].join(' '));
+    return matchCat && matchCatalog && terms.every(t => hay.includes(t));
+  }
+
+  // Aggiorna la barra del browser con ?categoria=...&catalogo=...
+  function syncUrl() {
+    try {
+      const u = new URL(window.location.href);
+      if (ACTIVE_CAT && ACTIVE_CAT !== 'Tutti') u.searchParams.set('categoria', ACTIVE_CAT);
+      else u.searchParams.delete('categoria');
+      if (ACTIVE_CATALOGS.size === 1) u.searchParams.set('catalogo', [...ACTIVE_CATALOGS][0]);
+      else u.searchParams.delete('catalogo');
+      if (u.href !== window.location.href) history.pushState(null, '', u);
+    } catch (e) { /* ambienti dove history non è disponibile */ }
+  }
+
+  // Ricostruisce lo stato dall'URL (all'avvio e con pulsanti Indietro/Avanti)
+  function readStateFromUrl() {
+    const p = new URLSearchParams(window.location.search);
+    ACTIVE_CATALOGS.clear();
+    if (p.get('catalogo')) ACTIVE_CATALOGS.add(p.get('catalogo'));
+    const wanted = p.get('categoria');
+    const found = wanted ? [...new Set(PRODUCTS.map(x => catKey(x.categoria)))].find(c => norm(c) === norm(wanted)) : null;
+    ACTIVE_CAT = found || 'Tutti';
+  }
+  window.addEventListener('popstate', () => {
+    readStateFromUrl();
+    renderCatalogTabs();
+    renderCategories();
+    updateFilters();
+  });
+
+  // Modalità condivisione cliente: solo con ?condiviso=1 (chip e pulsante report nascosti)
   const urlParams = new URLSearchParams(window.location.search);
-  const paramCatalogo = urlParams.get('catalogo');
-  const paramCategoria = urlParams.get('categoria');
-  
-  if (paramCatalogo) ACTIVE_CATALOGS.add(paramCatalogo);
-  if (paramCategoria) ACTIVE_CAT = paramCategoria;
+  if (urlParams.get('catalogo')) ACTIVE_CATALOGS.add(urlParams.get('catalogo'));
+  if (urlParams.get('categoria')) ACTIVE_CAT = urlParams.get('categoria');
+  if (urlParams.get('condiviso') === '1') document.body.classList.add('shared-mode');
 
-  if (paramCatalogo || paramCategoria) {
-    document.body.classList.add('shared-mode');
+  // ===== CACHE LOCALE (mostra subito l'ultimo catalogo noto, poi aggiorna) =====
+  function readCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (obj && Array.isArray(obj.products) && obj.products.length) return obj;
+    } catch (e) {}
+    return null;
+  }
+  function writeCache(products) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), products })); } catch (e) {}
+  }
+  function fmtTime(ts) {
+    return new Date(ts).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }
+
+  // ===== CONTO ALLA ROVESCIA =====
+  let countdownTimer = null;
+  let countdownStart = 0;
+  let countdownMode = 'full'; // 'full' = schermata di caricamento, 'banner' = aggiornamento in background
+
+  function startCountdown(mode) {
+    stopCountdown();
+    countdownMode = mode;
+    countdownStart = Date.now();
+    tickCountdown();
+    countdownTimer = setInterval(tickCountdown, 250);
+  }
+  function stopCountdown() {
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+  }
+  function tickCountdown() {
+    const elapsed = (Date.now() - countdownStart) / 1000;
+    const left = Math.ceil(EXPECTED_SECONDS - elapsed);
+    if (countdownMode === 'full') {
+      document.getElementById('loading-count').textContent = left > 0 ? left : '…';
+      document.getElementById('progress-bar').style.width = Math.min(100, elapsed / EXPECTED_SECONDS * 100) + '%';
+      if (left <= 0) document.getElementById('loading-sub').textContent = 'Ancora qualche istante, il server sta ultimando l\'elaborazione...';
+    } else {
+      setBanner('🔄 Aggiorno la disponibilità... ' + (left > 0 ? left + 's' : 'quasi pronto'));
+    }
+  }
+  function setBanner(text) {
+    const b = document.getElementById('refresh-banner');
+    if (!text) { b.classList.remove('show'); return; }
+    b.textContent = text;
+    b.classList.add('show');
+  }
+
+  // ===== CARICAMENTO PRODOTTI =====
+  function applyProducts(list) {
+    PRODUCTS = list;
+    if (!firstApplyDone) { readStateFromUrl(); firstApplyDone = true; }
+
+    // Allinea il carrello ai dati aggiornati (toglie ciò che non è più disponibile)
+    Object.keys(CART).forEach(id => {
+      const np = PRODUCTS.find(x => x.id == id);
+      if (!np || !np.disponibile) delete CART[id];
+      else CART[id].product = np;
+    });
+
+    renderCatalogTabs();
+    renderCategories();
+    updateFilters(true);
+    renderCart();
   }
 
   function loadProducts() {
-    document.getElementById('loading-msg').style.display = 'block';
-    document.getElementById('error-msg').style.display = 'none';
+    const loadingEl = document.getElementById('loading-msg');
+    const errorEl = document.getElementById('error-msg');
+    errorEl.style.display = 'none';
 
-    fetch(API_URL + '?action=products')
+    const cached = readCache();
+    if (cached) {
+      applyProducts(cached.products);        // catalogo visibile subito
+      startCountdown('banner');
+    } else {
+      loadingEl.style.display = 'block';
+      document.getElementById('loading-sub').textContent = 'Il primo caricamento può richiedere circa 30 secondi. Dai prossimi accessi il catalogo comparirà subito.';
+      startCountdown('full');
+    }
+
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const to = ctrl ? setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS) : null;
+
+    fetch(API_URL + '?action=products', ctrl ? { signal: ctrl.signal } : undefined)
       .then(r => r.json())
       .then(data => {
-        if (!data.ok) throw new Error('Risposta API non valida');
-        PRODUCTS = data.products;
-        document.getElementById('loading-msg').style.display = 'none';
-        
-        renderCatalogTabs();
-        renderCategories();
-        updateFilters(); 
+        if (!data || !data.ok || !Array.isArray(data.products)) throw new Error('Risposta API non valida');
+        stopCountdown();
+        loadingEl.style.display = 'none';
+        setBanner('');
+        writeCache(data.products);
+        applyProducts(data.products);
       })
       .catch(err => {
-        document.getElementById('loading-msg').style.display = 'none';
-        const el = document.getElementById('error-msg');
-        el.style.display = 'block';
-        el.innerText = 'Impossibile caricare il catalogo. Errore: ' + err.message;
-      });
+        stopCountdown();
+        loadingEl.style.display = 'none';
+        if (cached) {
+          setBanner('⚠️ Dati salvati il ' + fmtTime(cached.t) + ' — aggiornamento non riuscito');
+        } else {
+          setBanner('');
+          errorEl.style.display = 'block';
+          errorEl.innerHTML = 'Impossibile caricare il catalogo. Errore: ' + escHtml(err.message) + '<br><button onclick="loadProducts()">Riprova</button>';
+        }
+      })
+      .finally(() => { if (to) clearTimeout(to); });
   }
 
   loadProducts();
 
+  // ===== CATEGORIE =====
   function renderCategories() {
-    const cats = ['Tutti', ...new Set(PRODUCTS.map(p => p.categoria))];
+    const cats = ['Tutti', ...new Set(PRODUCTS.map(p => catKey(p.categoria)).filter(Boolean))];
     document.getElementById('cats').innerHTML = cats.map(c =>
-      `<div class="cat-chip ${c === ACTIVE_CAT ? 'active' : ''}" onclick="setCat('${c.replace(/'/g, "\\'")}')">${c}</div>`
+      `<div class="cat-chip ${norm(c) === norm(ACTIVE_CAT) ? 'active' : ''}" data-cat="${escHtml(c)}">${escHtml(c)}</div>`
     ).join('');
   }
 
-  function setCat(c) { ACTIVE_CAT = c; renderCategories(); updateFilters(); }
+  document.getElementById('cats').addEventListener('click', e => {
+    const chip = e.target.closest('.cat-chip');
+    if (chip) setCat(chip.dataset.cat);
+  });
 
+  function setCat(c) {
+    ACTIVE_CAT = c;
+    renderCategories();
+    updateFilters();
+    syncUrl();
+  }
+
+  // ===== CATALOGHI (MARCHI) =====
   function renderCatalogTabs() {
-    const catalogs = [...new Set(PRODUCTS.map(p => p.catalogo))].sort();
+    const catalogs = [...new Set(PRODUCTS.map(p => p.catalogo).filter(Boolean))].sort();
     const el = document.getElementById('catalog-tabs');
     const allActive = ACTIVE_CATALOGS.size === 0;
 
     let html = `<div class="cat-chip catalog-chip ${allActive ? 'active' : ''}" onclick="resetCatalogFilter()">Tutti</div>`;
     html += catalogs.map(c => {
       const active = ACTIVE_CATALOGS.has(c);
-      const safe = c.replace(/'/g, "\\'");
-      return `<div class="cat-chip catalog-chip ${active ? 'active' : ''}" onclick="openCatalogMenu(event, '${safe}')">${c}</div>`;
+      return `<div class="cat-chip catalog-chip ${active ? 'active' : ''}" data-catalogo="${escHtml(c)}">${escHtml(c)}</div>`;
     }).join('');
     el.innerHTML = html;
   }
+
+  document.getElementById('catalog-tabs').addEventListener('click', e => {
+    const chip = e.target.closest('[data-catalogo]');
+    if (chip) openCatalogMenu(e, chip.dataset.catalogo, chip);
+  });
 
   // Chip "Tutti": resetta il filtro nella pagina corrente (nessun menu)
   function resetCatalogFilter() {
     ACTIVE_CATALOGS.clear();
     renderCatalogTabs();
     updateFilters();
+    syncUrl();
   }
 
-  // Costruisce il link diretto a un catalogo (senza altri parametri)
+  // Link diretto a un catalogo in modalità cliente (chip e report nascosti)
   function buildCatalogLink(catalogName) {
     const baseUrl = window.location.origin + window.location.pathname;
-    return baseUrl + '?catalogo=' + encodeURIComponent(catalogName);
+    return baseUrl + '?catalogo=' + encodeURIComponent(catalogName) + '&condiviso=1';
   }
 
   // Apre il menu contestuale (Nuova finestra / Condividi) accanto al chip cliccato
-  function openCatalogMenu(evt, catalogName) {
+  function openCatalogMenu(evt, catalogName, chipEl) {
     evt.stopPropagation();
     MENU_TARGET_CATALOG = catalogName;
 
@@ -324,9 +495,9 @@
     const overlay = document.getElementById('catalog-menu-overlay');
     document.getElementById('catalog-menu-title').innerText = catalogName;
 
-    const rect = evt.currentTarget.getBoundingClientRect();
-    menu.style.top = (rect.bottom + window.scrollY + 6) + 'px';
-    menu.style.left = Math.min(rect.left + window.scrollX, window.innerWidth - 220) + 'px';
+    const rect = chipEl.getBoundingClientRect();
+    menu.style.top = (rect.bottom + 6) + 'px';
+    menu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 220)) + 'px';
 
     overlay.classList.add('show');
     menu.classList.add('show');
@@ -366,18 +537,18 @@
     closeCatalogMenu();
   }
 
-  function updateFilters() {
-    const search = document.getElementById('search').value.toLowerCase();
-    const filteredRaw = PRODUCTS.filter(p => {
-      const matchCat = ACTIVE_CAT === 'Tutti' || p.categoria === ACTIVE_CAT;
-      const matchCatalog = ACTIVE_CATALOGS.size === 0 || ACTIVE_CATALOGS.has(p.catalogo);
-      const matchSearch = p.nome.toLowerCase().includes(search) || (p.descrizione || '').toLowerCase().includes(search) || (p.codiceProdotto || '').toLowerCase().includes(search);
-      return matchCat && matchCatalog && matchSearch;
-    });
-    
-    filteredGroups = groupProducts(filteredRaw);
-    currentDisplayed = ITEMS_PER_PAGE; 
-    
+  // ===== FILTRI =====
+  let searchTimer = null;
+  function debouncedFilters() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => updateFilters(), 150);
+  }
+
+  // keepPage = true: dopo un aggiornamento dati mantiene le pagine già mostrate
+  function updateFilters(keepPage) {
+    const prevDisplayed = currentDisplayed;
+    filteredGroups = groupProducts(PRODUCTS.filter(matchesFilters));
+    currentDisplayed = keepPage ? Math.max(prevDisplayed, ITEMS_PER_PAGE) : ITEMS_PER_PAGE;
     renderGrid();
   }
 
@@ -431,23 +602,22 @@
     g.variants.forEach(v => { map[(v.misura || '') + '|' + (v.colore || '')] = v; });
 
     // Layout a blocchi: nome colore sopra, taglie sotto in riga allineate a destra.
-    // Evita lo scroll orizzontale (che nascondeva le taglie a destra e "saltava" a sinistra ad ogni click).
     const blocks = colori.map(col => {
       const cells = misure.map(m => {
         const v = map[m + '|' + col];
         if (!v) return `<div class="variant-cell empty">—</div>`;
 
         const inCart = CART[v.id] ? CART[v.id].qty : 0;
-        if (!v.disponibile) return `<div class="variant-cell out" title="Esaurito">${m}<br>×</div>`;
+        if (!v.disponibile) return `<div class="variant-cell out" title="Esaurito">${escHtml(m)}<br>×</div>`;
 
         if (inCart > 0) {
-          return `<div class="variant-cell in-cart" title="Nel carrello (Max 1)"><button class="cart-qty-btn" style="border-radius:6px 0 0 6px;" onclick="changeQty('${v.id}', -1)">-</button><div class="cart-qty-val" title="Nel carrello">${m}</div></div>`;
+          return `<div class="variant-cell in-cart" title="Nel carrello (Max 1)"><button class="cart-qty-btn" style="border-radius:6px 0 0 6px;" onclick="changeQty('${v.id}', -1)">-</button><div class="cart-qty-val" title="Nel carrello">${escHtml(m)}</div></div>`;
         }
 
-        return `<div class="variant-cell" title="${m} — Disponibili: ${v.quantita}" onclick="changeQty('${v.id}', 1)">${m}<span class="variant-cell-qty">${v.quantita}</span></div>`;
+        return `<div class="variant-cell" title="${escHtml(m)} — Disponibili: ${v.quantita}" onclick="changeQty('${v.id}', 1)">${escHtml(m)}<span class="variant-cell-qty">${v.quantita}</span></div>`;
       }).join('');
       return `<div class="variant-color-group">
-        <div class="variant-color-name">${col}</div>
+        <div class="variant-color-name">${escHtml(col)}</div>
         <div class="variant-size-row">${cells}</div>
       </div>`;
     }).join('');
@@ -455,7 +625,7 @@
     return `<div class="variant-matrix-wrap">${blocks}</div>`;
   }
 
-  // === FUNZIONI PER APRIRE E CHIUDERE LA FOTO INGRANDITA ===
+  // === FOTO INGRANDITA ===
   function openLightbox(element) {
     document.getElementById('lightbox-img').src = element.getAttribute('data-fullimg');
     document.getElementById('lightbox-caption').innerHTML = element.getAttribute('data-caption');
@@ -464,13 +634,12 @@
   function closeLightbox() {
     document.getElementById('lightbox').classList.remove('show');
   }
-  // =========================================================
 
   function renderGrid() {
     const grid = document.getElementById('grid');
 
     if (filteredGroups.length === 0) {
-      grid.innerHTML = '<div id="empty-msg">Nessun prodotto trovato in base ai filtri selezionati.</div>';
+      grid.innerHTML = PRODUCTS.length === 0 ? '' : '<div id="empty-msg">Nessun prodotto trovato in base ai filtri selezionati.</div>';
       return;
     }
 
@@ -478,18 +647,16 @@
 
     let html = visibleGroups.map(g => {
       const img = g.immagine || 'https://via.placeholder.com/300x200?text=Foto+non+disponibile';
-      
-      // Costruiamo la didascalia in modo sicuro sostituendo virgolette e apici per evitare blocchi HTML
       const rawCaption = g.nome + (g.codiceProdotto ? ` - Cod. ${g.codiceProdotto}` : '');
-      const safeCaption = rawCaption.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      const safeCaption = escHtml(rawCaption);
 
       return `
         <div class="card">
-          <img src="${img}" loading="lazy" data-fullimg="${img}" data-caption="${safeCaption}" onclick="openLightbox(this)" onerror="this.src='https://via.placeholder.com/300x200?text=Foto+Mancante'">
+          <img src="${escHtml(img)}" loading="lazy" decoding="async" data-fullimg="${escHtml(img)}" data-caption="${safeCaption}" onclick="openLightbox(this)" onerror="this.onerror=null;this.src='https://via.placeholder.com/300x200?text=Foto+Mancante'">
           <div class="card-body">
-            <h3>${g.nome}</h3>
-            <p style="font-size:11px;color:#999;margin-bottom:2px;">${g.catalogo || ''}${g.codiceProdotto ? ' · Cod. ' + g.codiceProdotto : ''}</p>
-            <p>${g.descrizione || ''}</p>
+            <h3>${escHtml(g.nome)}</h3>
+            <p style="font-size:11px;color:#999;margin-bottom:2px;">${escHtml(g.catalogo || '')}${g.codiceProdotto ? ' · Cod. ' + escHtml(g.codiceProdotto) : ''}</p>
+            <p>${escHtml(g.descrizione || '')}</p>
             <div class="price">€ ${(g.prezzo / DIVISORE_IVA).toFixed(2)} <span class="iva-label">+ IVA</span></div>
             ${renderVariantMatrix(g)}
           </div>
@@ -509,18 +676,19 @@
     grid.innerHTML = html;
   }
 
+  // ===== CARRELLO =====
   function changeQty(id, delta) {
     const p = PRODUCTS.find(x => x.id == id);
     if (!p || !p.disponibile) return;
-    
+
     if (!CART[id]) {
       if (delta > 0) CART[id] = { product: p, qty: 1 };
     } else {
       CART[id].qty += delta;
-      if (CART[id].qty > 1) CART[id].qty = 1; 
+      if (CART[id].qty > 1) CART[id].qty = 1;
       if (CART[id].qty <= 0) delete CART[id];
     }
-    renderGrid(); 
+    renderGrid();
     renderCart();
   }
 
@@ -536,15 +704,15 @@
     const items = Object.values(CART);
     document.getElementById('cart-count').innerText = items.reduce((s, i) => s + i.qty, 0);
     const itemsEl = document.getElementById('cart-items');
-    
+
     if (items.length === 0) {
       itemsEl.innerHTML = '<p style="color:#888;text-align:center;margin-top:30px;">Il carrello è vuoto</p>';
     } else {
       itemsEl.innerHTML = items.map(i => `
         <div class="cart-item">
           <div class="cart-item-info">
-            <div style="font-weight:600;">${i.product.nome}</div>
-            <div class="cart-item-variant">${variantLabel(i.product)} — € ${((i.qty * i.product.prezzo) / DIVISORE_IVA).toFixed(2)} <span class="iva-label">+ IVA</span></div>
+            <div style="font-weight:600;">${escHtml(i.product.nome)}</div>
+            <div class="cart-item-variant">${escHtml(variantLabel(i.product))} — € ${((i.qty * i.product.prezzo) / DIVISORE_IVA).toFixed(2)} <span class="iva-label">+ IVA</span></div>
           </div>
           <div class="cart-item-controls">
             <button onclick="changeQty('${i.product.id}', -1)">-</button>
@@ -552,7 +720,7 @@
           </div>
         </div>`).join('');
     }
-    
+
     const total = items.reduce((s, i) => s + i.qty * i.product.prezzo, 0);
     document.getElementById('cart-total').innerHTML = 'Totale: € ' + (total / DIVISORE_IVA).toFixed(2) + ' <span class="iva-label">+ IVA</span>';
   }
@@ -582,6 +750,7 @@
     toggleCart(false);
   }
 
+  // ===== REPORT =====
   function renderReportMatrix(g) {
     const misure = sortSizes([...new Set(g.variants.map(v => v.misura).filter(Boolean))]);
     const colori = [...new Set(g.variants.map(v => v.colore).filter(Boolean))].sort();
@@ -596,7 +765,7 @@
     const map = {};
     g.variants.forEach(v => { map[(v.misura || '') + '|' + (v.colore || '')] = v; });
 
-    const header = `<tr><th></th>${misure.map(m => `<th>${m}</th>`).join('')}</tr>`;
+    const header = `<tr><th></th>${misure.map(m => `<th>${escHtml(m)}</th>`).join('')}</tr>`;
     const rows = colori.map(col => {
       const cells = misure.map(m => {
         const v = map[m + '|' + col];
@@ -604,59 +773,75 @@
         if (!v.disponibile) return `<td><div class="report-cell out">×</div></td>`;
         return `<td><div class="report-cell">${v.quantita}</div></td>`;
       }).join('');
-      return `<tr><th class="color-label">${col}</th>${cells}</tr>`;
+      return `<tr><th class="color-label">${escHtml(col)}</th>${cells}</tr>`;
     }).join('');
 
     return `<table class="variant-matrix" style="max-width:450px;"><thead>${header}</thead><tbody>${rows}</tbody></table>`;
   }
 
+  // Il report richiede la disponibilità aggiornata: mostra un conto alla rovescia sul pulsante
   function openReport() {
+    const btn = document.getElementById('report-btn');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      const left = Math.ceil(EXPECTED_SECONDS - (Date.now() - t0) / 1000);
+      btn.innerHTML = '⏳ Aggiorno dati... ' + (left > 0 ? left + 's' : 'quasi pronto');
+    }, 250);
+    btn.innerHTML = '⏳ Aggiorno dati... ' + EXPECTED_SECONDS + 's';
+
+    let fresh = true;
     fetch(API_URL + '?action=products')
       .then(r => r.json())
       .then(data => {
-        PRODUCTS = data.products || PRODUCTS; 
-        
-        const search = document.getElementById('search').value.toLowerCase();
-        const productsPerReport = PRODUCTS.filter(p => {
-          const matchCat = ACTIVE_CAT === 'Tutti' || p.categoria === ACTIVE_CAT;
-          const matchCatalog = ACTIVE_CATALOGS.size === 0 || ACTIVE_CATALOGS.has(p.catalogo);
-          const matchSearch = p.nome.toLowerCase().includes(search) || (p.descrizione || '').toLowerCase().includes(search) || (p.codiceProdotto || '').toLowerCase().includes(search);
-          return matchCat && matchCatalog && matchSearch;
-        });
-
-        const groups = groupProducts(productsPerReport);
-        const now = new Date();
-        const dateStr = now.toLocaleDateString('it-IT') + ' alle ' + now.toLocaleTimeString('it-IT');
-        const catalogLabel = ACTIVE_CATALOGS.size === 0 ? 'Tutti i cataloghi' : [...ACTIVE_CATALOGS].join(', ');
-
-        const cardsHtml = groups.map(g => {
-          const img = g.immagine || 'https://via.placeholder.com/300x400?text=Foto+Mancante';
-          const matrixHtml = renderReportMatrix(g);
-          const waText = encodeURIComponent(`Ciao! Vorrei chiedere informazioni / ordinare il prodotto: ${g.nome} (Cod. ${g.codiceProdotto || '-'})`);
-
-          return `
-            <div class="report-card html2pdf__page-break">
-              <img src="${img}" onerror="this.src='https://via.placeholder.com/300x400?text=Foto'">
-              <div class="report-card-info">
-                <h4>${g.nome}</h4>
-                <p><strong>Codice:</strong> ${g.codiceProdotto || '-'} | <strong>Catalogo:</strong> ${g.catalogo || '-'} | <strong>Prezzo:</strong> € ${(g.prezzo / DIVISORE_IVA).toFixed(2)} + IVA</p>
-                <div class="report-matrix-wrap">${matrixHtml}</div>
-                <br>
-                <a class="report-order-btn" href="https://wa.me/${WHATSAPP_NUMBER}?text=${waText}">Ordina Articolo su WhatsApp</a>
-              </div>
-            </div>`;
-        }).join('');
-
-        document.getElementById('report-view').innerHTML = `
-          <h2>Strumento di Vendita e Magazzino</h2>
-          <div class="report-date">Filtro attivo: ${catalogLabel} — Generato il ${dateStr}</div>
-          <div>${cardsHtml}</div>`;
-
-        document.getElementById('report-container').classList.add('show');
-        document.querySelector('header').style.display = 'none';
-        document.querySelector('.controls').style.display = 'none';
-        document.getElementById('grid').style.display = 'none';
+        if (!data || !data.ok || !Array.isArray(data.products)) throw new Error('Risposta API non valida');
+        writeCache(data.products);
+        applyProducts(data.products);
+      })
+      .catch(() => { fresh = false; })
+      .finally(() => {
+        clearInterval(iv);
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
+        buildReport(fresh);
       });
+  }
+
+  function buildReport(fresh) {
+    const groups = groupProducts(PRODUCTS.filter(matchesFilters));
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('it-IT') + ' alle ' + now.toLocaleTimeString('it-IT');
+    const catalogLabel = ACTIVE_CATALOGS.size === 0 ? 'Tutti i cataloghi' : [...ACTIVE_CATALOGS].join(', ');
+    const staleNote = fresh ? '' : ' — ATTENZIONE: aggiornamento non riuscito, dati dell\'ultimo caricamento';
+
+    const cardsHtml = groups.map(g => {
+      const img = g.immagine || 'https://via.placeholder.com/300x400?text=Foto+Mancante';
+      const matrixHtml = renderReportMatrix(g);
+      const waText = encodeURIComponent(`Ciao! Vorrei chiedere informazioni / ordinare il prodotto: ${g.nome} (Cod. ${g.codiceProdotto || '-'})`);
+
+      return `
+        <div class="report-card html2pdf__page-break">
+          <img src="${escHtml(img)}" onerror="this.onerror=null;this.src='https://via.placeholder.com/300x400?text=Foto'">
+          <div class="report-card-info">
+            <h4>${escHtml(g.nome)}</h4>
+            <p><strong>Codice:</strong> ${escHtml(g.codiceProdotto || '-')} | <strong>Catalogo:</strong> ${escHtml(g.catalogo || '-')} | <strong>Prezzo:</strong> € ${(g.prezzo / DIVISORE_IVA).toFixed(2)} + IVA</p>
+            <div class="report-matrix-wrap">${matrixHtml}</div>
+            <br>
+            <a class="report-order-btn" href="https://wa.me/${WHATSAPP_NUMBER}?text=${waText}">Ordina Articolo su WhatsApp</a>
+          </div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('report-view').innerHTML = `
+      <h2>Strumento di Vendita e Magazzino</h2>
+      <div class="report-date">Filtro attivo: ${escHtml(catalogLabel)} — Generato il ${dateStr}${staleNote}</div>
+      <div>${cardsHtml}</div>`;
+
+    document.getElementById('report-container').classList.add('show');
+    document.querySelector('header').style.display = 'none';
+    document.querySelector('.controls').style.display = 'none';
+    document.getElementById('grid').style.display = 'none';
   }
 
   function closeReport() {
@@ -678,7 +863,7 @@
       margin:       10,
       filename:     'Catalogo_Vendita.pdf',
       image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2, useCORS: true }, 
+      html2canvas:  { scale: 2, useCORS: true },
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
       pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
     };
