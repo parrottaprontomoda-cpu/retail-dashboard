@@ -40,6 +40,15 @@
     .pwBtns button { flex:1; border-radius:12px; padding:10px; font-size:14px; font-weight:600; cursor:pointer; }
     #pwCancel { background:#fff; border:1px solid #e2e8f0; color:#475569; }
     #pwOk { background:#059669; border:0; color:#fff; }
+
+    /* Biometria */
+    #bioBtn { display:none; width:100%; margin-bottom:14px; padding:14px; border-radius:12px; border:2px solid #059669;
+              background:#ecfdf5; color:#047857; font-size:15px; font-weight:700; cursor:pointer; }
+    #bioMsg { display:none; font-size:12px; margin:0 0 12px; color:#b45309; }
+    #bioOff { display:none; margin-top:14px; background:none; border:0; color:#94a3b8; font-size:12px;
+              text-decoration:underline; cursor:pointer; width:100%; }
+    #pwEnroll { display:none; }
+    .bioIcon { font-size:44px; text-align:center; margin:4px 0 8px; }
   </style>
 </head>
 <body class="min-h-screen text-slate-800 flex flex-col items-center justify-center p-4 sm:p-8">
@@ -73,7 +82,7 @@
         </div>
       </a>
 
-      <!-- Card 2: Analisi Store (PROTETTA: nessun link diretto, l'URL è in data-url) -->
+      <!-- Card 2: Analisi Store (PROTETTA: password o impronta) -->
       <a id="storeLink" href="#" onclick="return openPw(event)"
          data-url="https://parrottaprontomoda-cpu.github.io/retail-dashboard/analisistorepos.html"
          class="group block bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
@@ -104,7 +113,6 @@
         </div>
       </a>
 
-
       <!-- Card 4: Catalog Manager -->
       <a href="https://parrottaprontomoda-cpu.github.io/retail-dashboard/catalogmanager.html" target="_blank" rel="noopener noreferrer"
          class="group block bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
@@ -122,21 +130,42 @@
     </div>
 
     <div class="text-center mt-12 text-slate-400 text-xs font-medium uppercase tracking-wider">
-      Sistemi di Analisi e Controllo &copy; 2026 &middot; v3
+      Sistemi di Analisi e Controllo &copy; 2026 &middot; v4
     </div>
   </div>
 
-  <!-- Modale password -->
+  <!-- Modale accesso: impronta + password -->
   <div id="pwModal">
     <div id="pwBox">
-      <h3>🔒 Accesso riservato</h3>
-      <p class="sub">Inserisci la password per aprire Analisi Store</p>
-      <input id="pwInput" type="password" inputmode="numeric" autocomplete="off" placeholder="Password">
-      <p id="pwError">Password errata. Riprova.</p>
-      <div class="pwBtns">
-        <button id="pwCancel" type="button" onclick="closePw()">Annulla</button>
-        <button id="pwOk" type="button" onclick="checkPw()">Accedi</button>
+
+      <!-- Passo 1: accesso -->
+      <div id="pwLogin">
+        <h3>🔒 Accesso riservato</h3>
+        <p class="sub">Apri Analisi Store con l'impronta oppure con la password</p>
+
+        <button id="bioBtn" type="button" onclick="bioLogin()">👆 Usa impronta digitale</button>
+        <p id="bioMsg"></p>
+
+        <input id="pwInput" type="password" inputmode="numeric" autocomplete="off" placeholder="Password">
+        <p id="pwError">Password errata. Riprova.</p>
+        <div class="pwBtns">
+          <button id="pwCancel" type="button" onclick="closePw()">Annulla</button>
+          <button id="pwOk" type="button" onclick="checkPw()">Accedi</button>
+        </div>
+        <button id="bioOff" type="button" onclick="bioDisable()">Disattiva impronta su questo dispositivo</button>
       </div>
+
+      <!-- Passo 2: proposta di attivazione (dopo password corretta) -->
+      <div id="pwEnroll">
+        <div class="bioIcon">👆</div>
+        <h3 style="text-align:center;">Attivare l'impronta?</h3>
+        <p class="sub" style="text-align:center;">La prossima volta potrai entrare con l'impronta, senza digitare la password.</p>
+        <div class="pwBtns">
+          <button id="pwCancel2" type="button" style="background:#fff;border:1px solid #e2e8f0;color:#475569;" onclick="enrollSkip()">Non ora</button>
+          <button type="button" style="background:#059669;border:0;color:#fff;" onclick="bioEnroll()">Attiva</button>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -144,6 +173,7 @@
     // Hash SHA-256 di "retailhub:" + password (la password non compare in chiaro)
     var PW_HASH = "1e0c24db2923d6222884bdfa46cc745fee028788e03ab1afb4065667fb5a6b37";
     var SALT = "retailhub:";
+    var CRED_KEY = "retailhub_bio_cred_v1";
 
     function sha256(str){
   var rr=function(v,a){return (v>>>a)|(v<<(32-a));};
@@ -177,36 +207,151 @@
   return out;
 }
 
+    // ---------- Utilità ----------
+    function $(id) { return document.getElementById(id); }
 
-    function openPw(e) {
+    function storeUrl() { return $("storeLink").getAttribute("data-url"); }
+
+    // Apre la dashboard; se il browser blocca il popup (capita dopo il prompt biometrico) naviga nella stessa scheda
+    function goStore() {
+      closePw();
+      var w = window.open(storeUrl(), "_blank");
+      if (w) { try { w.opener = null; } catch (e) {} }
+      else { window.location.href = storeUrl(); }
+    }
+
+    function rnd(n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return a; }
+
+    function b64uEnc(buf) {
+      var s = "", b = new Uint8Array(buf);
+      for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+      return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    }
+    function b64uDec(str) {
+      str = str.replace(/-/g, "+").replace(/_/g, "/");
+      while (str.length % 4) str += "=";
+      var s = atob(str), a = new Uint8Array(s.length);
+      for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i);
+      return a;
+    }
+
+    function getCred() { try { return localStorage.getItem(CRED_KEY); } catch (e) { return null; } }
+    function setCred(v) { try { localStorage.setItem(CRED_KEY, v); } catch (e) {} }
+    function delCred() { try { localStorage.removeItem(CRED_KEY); } catch (e) {} }
+
+    async function bioAvailable() {
+      try {
+        return !!(window.isSecureContext && window.PublicKeyCredential && navigator.credentials &&
+                  await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
+      } catch (e) { return false; }
+    }
+
+    function showMsg(t) {
+      var m = $("bioMsg");
+      m.textContent = t;
+      m.style.display = t ? "block" : "none";
+    }
+
+    // ---------- Biometria (WebAuthn) ----------
+    async function bioLogin() {
+      showMsg("");
+      var id = getCred();
+      if (!id) return;
+      try {
+        var cred = await navigator.credentials.get({
+          publicKey: {
+            challenge: rnd(32),
+            rpId: location.hostname,
+            allowCredentials: [{ type: "public-key", id: b64uDec(id), transports: ["internal"] }],
+            userVerification: "required",
+            timeout: 60000
+          }
+        });
+        if (cred) goStore();
+      } catch (e) {
+        // annullato, impronta non riconosciuta o credenziale non più valida
+        showMsg("Impronta non riconosciuta o annullata. Riprova oppure usa la password.");
+      }
+    }
+
+    async function bioEnroll() {
+      try {
+        var cred = await navigator.credentials.create({
+          publicKey: {
+            challenge: rnd(32),
+            rp: { name: "Retail Hub", id: location.hostname },
+            user: { id: rnd(16), name: "retail-hub", displayName: "Retail Hub" },
+            pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+            authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required", residentKey: "discouraged" },
+            attestation: "none",
+            timeout: 60000
+          }
+        });
+        if (cred) setCred(b64uEnc(cred.rawId));
+      } catch (e) {
+        // attivazione annullata/non riuscita: la password era corretta, si entra comunque
+      }
+      goStore();
+    }
+
+    function enrollSkip() { goStore(); }
+
+    function bioDisable() {
+      delCred();
+      $("bioBtn").style.display = "none";
+      $("bioOff").style.display = "none";
+      showMsg("Impronta disattivata su questo dispositivo.");
+    }
+
+    // ---------- Modale ----------
+    async function openPw(e) {
       if (e) e.preventDefault();
-      document.getElementById("pwError").style.display = "none";
-      var inp = document.getElementById("pwInput");
+      $("pwError").style.display = "none";
+      showMsg("");
+      $("pwLogin").style.display = "block";
+      $("pwEnroll").style.display = "none";
+      var inp = $("pwInput");
       inp.value = "";
-      document.getElementById("pwModal").className = "open";
-      setTimeout(function () { inp.focus(); }, 50);
+      $("pwModal").className = "open";
+
+      var hasCred = !!getCred();
+      $("bioBtn").style.display = hasCred ? "block" : "none";
+      $("bioOff").style.display = hasCred ? "block" : "none";
+
+      if (hasCred) {
+        // Parte subito il prompt dell'impronta (siamo ancora dentro il tap dell'utente)
+        bioLogin();
+      } else {
+        setTimeout(function () { inp.focus(); }, 50);
+      }
       return false;
     }
-    function closePw() {
-      document.getElementById("pwModal").className = "";
-    }
-    function checkPw() {
-      var inp = document.getElementById("pwInput");
+
+    function closePw() { $("pwModal").className = ""; }
+
+    async function checkPw() {
+      var inp = $("pwInput");
       if (sha256(SALT + inp.value) === PW_HASH) {
-        closePw();
-        window.open(document.getElementById("storeLink").getAttribute("data-url"), "_blank", "noopener");
+        // Password corretta: se il telefono supporta l'impronta e non è ancora attiva, la propone
+        if (!getCred() && await bioAvailable()) {
+          $("pwLogin").style.display = "none";
+          $("pwEnroll").style.display = "block";
+        } else {
+          goStore();
+        }
       } else {
-        var box = document.getElementById("pwBox");
-        document.getElementById("pwError").style.display = "block";
+        var box = $("pwBox");
+        $("pwError").style.display = "block";
         box.classList.remove("shake"); void box.offsetWidth; box.classList.add("shake");
         inp.select();
       }
     }
-    document.getElementById("pwInput").addEventListener("keydown", function (e) {
+
+    $("pwInput").addEventListener("keydown", function (e) {
       if (e.key === "Enter") checkPw();
       if (e.key === "Escape") closePw();
     });
-    document.getElementById("pwModal").addEventListener("click", function (e) {
+    $("pwModal").addEventListener("click", function (e) {
       if (e.target === this) closePw();
     });
   </script>
