@@ -148,6 +148,10 @@
 
         <input id="pwInput" type="password" inputmode="numeric" autocomplete="off" placeholder="Password">
         <p id="pwError">Password errata. Riprova.</p>
+        <label id="bioEnrollRow" style="display:none; align-items:center; gap:8px; margin-top:12px; font-size:13px; color:#047857; font-weight:600; cursor:pointer;">
+          <input type="checkbox" id="bioEnrollChk" checked style="width:18px; height:18px;">
+          Attiva l'impronta su questo dispositivo
+        </label>
         <div class="pwBtns">
           <button id="pwCancel" type="button" onclick="closePw()">Annulla</button>
           <button id="pwOk" type="button" onclick="checkPw()">Accedi</button>
@@ -256,7 +260,11 @@
     async function bioLogin() {
       showMsg("");
       var id = getCred();
-      if (!id) return;
+      if (!id) {
+        showMsg("Per attivare l'impronta inserisci la password una volta, con la casella spuntata.");
+        $("pwInput").focus();
+        return;
+      }
       try {
         var cred = await navigator.credentials.get({
           publicKey: {
@@ -298,13 +306,34 @@
 
     function bioDisable() {
       delCred();
-      $("bioBtn").style.display = "none";
-      $("bioOff").style.display = "none";
+      updateBioUI();
       showMsg("Impronta disattivata su questo dispositivo.");
     }
 
+    // Stato disponibilità biometria (calcolato all'avvio e a ogni apertura)
+    var BIO_OK = false;
+
+    function updateBioUI() {
+      var has = !!getCred();
+      // Il pulsante impronta è sempre visibile se il dispositivo la supporta
+      $("bioBtn").style.display = (BIO_OK || has) ? "block" : "none";
+      $("bioBtn").textContent = has ? "👆 Usa impronta digitale" : "👆 Impronta digitale (da attivare)";
+      $("bioOff").style.display = has ? "block" : "none";
+      $("bioEnrollRow").style.display = (BIO_OK && !has) ? "flex" : "none";
+    }
+
+    function refreshBio(showHint) {
+      bioAvailable().then(function (ok) {
+        BIO_OK = ok;
+        updateBioUI();
+        if (!ok && showHint && !getCred()) {
+          showMsg("Impronta non disponibile qui: apri il sito con Chrome o Safari (non dal browser interno di WhatsApp/Telegram) e controlla che il blocco schermo con impronta sia attivo.");
+        }
+      });
+    }
+
     // ---------- Modale ----------
-    async function openPw(e) {
+    function openPw(e) {
       if (e) e.preventDefault();
       $("pwError").style.display = "none";
       showMsg("");
@@ -314,11 +343,10 @@
       inp.value = "";
       $("pwModal").className = "open";
 
-      var hasCred = !!getCred();
-      $("bioBtn").style.display = hasCred ? "block" : "none";
-      $("bioOff").style.display = hasCred ? "block" : "none";
+      updateBioUI();
+      refreshBio(true);
 
-      if (hasCred) {
+      if (getCred()) {
         // Parte subito il prompt dell'impronta (siamo ancora dentro il tap dell'utente)
         bioLogin();
       } else {
@@ -329,13 +357,12 @@
 
     function closePw() { $("pwModal").className = ""; }
 
-    async function checkPw() {
+    function checkPw() {
       var inp = $("pwInput");
       if (sha256(SALT + inp.value) === PW_HASH) {
-        // Password corretta: se il telefono supporta l'impronta e non è ancora attiva, la propone
-        if (!getCred() && await bioAvailable()) {
-          $("pwLogin").style.display = "none";
-          $("pwEnroll").style.display = "block";
+        // Password corretta: se la casella è spuntata, attiva subito l'impronta (dentro il tap dell'utente)
+        if (!getCred() && BIO_OK && $("bioEnrollChk").checked) {
+          bioEnroll();
         } else {
           goStore();
         }
@@ -346,6 +373,8 @@
         inp.select();
       }
     }
+
+    refreshBio(false);
 
     $("pwInput").addEventListener("keydown", function (e) {
       if (e.key === "Enter") checkPw();
