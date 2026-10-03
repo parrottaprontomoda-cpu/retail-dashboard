@@ -454,6 +454,13 @@
         return null;
     }
 
+    // Normalizza card/CF: maiuscolo, senza spazi, senza zeri iniziali se numerica
+    function normKey(v) {
+        let s = String(v || '').trim().toUpperCase().replace(/\s+/g, '');
+        if (/^\d+$/.test(s)) s = s.replace(/^0+(?=\d)/, '');
+        return s;
+    }
+
     // Default URLs e Prompt AI
     const DEFAULT_VENDITE_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRSwk2BhmMriyZotR2gLYtOkHic0lM3-0efkhaKhJ7gxDyQyqbGF0noTp9RV9GQgEHWTeuSskT57sVI/pub?gid=1352769388&single=true&output=csv";
     const DEFAULT_CLIENTI_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQV21qGAaTgxM8CSrpkGWxazYoumArELFHobCdJ3r_yPgVFJjldtcYxdeaCnjecpQSomxzTalrcQJUg/pub?gid=1650500047&single=true&output=csv";
@@ -474,6 +481,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
     let rawData = [];
     let columns = [];
     let clientDict = {}; 
+    let clientDictNorm = {};
     let clientSalesStats = {}; 
     let clientStatsCurrentFilter = {};
     
@@ -525,6 +533,31 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         setSelect('filterStore', urlFilters.negozio);
         setSelect('filterMonth', urlFilters.mese);
         setSelect('filterDay', urlFilters.data);
+    }
+
+    // ---------------------------------------------------------------
+    // DATA AUTOMATICA: OGGI oppure ULTIMO GIORNO DISPONIBILE
+    // ---------------------------------------------------------------
+    let defaultDateSkipUrl = !!urlFilters.data; // se l'URL contiene ?data=... viene rispettato solo al primo caricamento
+
+    function getDefaultDay() {
+        const days = Array.from(document.getElementById('filterDay').options)
+            .map(o => o.value).filter(v => v !== 'ALL').sort();
+        if (!days.length) return null;
+        const today = moment().format('YYYY-MM-DD');
+        if (days.includes(today)) return today;
+        const past = days.filter(d => d <= today);
+        return past.length ? past[past.length - 1] : days[days.length - 1];
+    }
+
+    function applyDefaultDate() {
+        if (defaultDateSkipUrl) { defaultDateSkipUrl = false; return; }
+        const d = getDefaultDay();
+        if (!d) return;
+        if (!urlFilters.mese) document.getElementById('filterMonth').value = 'ALL';
+        document.getElementById('filterDay').value = d;
+        document.getElementById('dailySummaryDate').value = d;
+        updateDailySummary();
     }
 
     window.onload = () => loadData(false);
@@ -596,6 +629,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         }
 
         clientDict = {};
+        clientDictNorm = {};
         if (clientsCsv) {
             Papa.parse(clientsCsv, {
                 header: true, skipEmptyLines: true,
@@ -632,6 +666,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
                 buildGlobalCRMStats();
                 setupFilters();
                 applyUrlFilters();
+                applyDefaultDate();   // Imposta automaticamente oggi o l'ultimo giorno disponibile
                 updateDashboard();
 
                 btn.disabled = false;
@@ -693,9 +728,13 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
     function buildClientDict(res) {
         let cols = res.meta.fields;
         if(!cols || cols.length === 0) return;
+
+        clientDict = {};
+        clientDictNorm = {};
         
         let c_card = cols.length > 6 ? cols[6] : cols[0]; 
-        let c_nome = guessCol(cols, ['nome']);
+        // "nome" ma NON "cognome"
+        let c_nome = cols.find(c => /nome/i.test(c) && !/cogn/i.test(c)) || null;
         let c_cognome = guessCol(cols, ['cognom']);
         let c_citta = guessCol(cols, ['citt']);
         let c_tel = guessCol(cols, ['telef', 'cell']);
@@ -722,9 +761,32 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
                 punti: c_punti ? (row[c_punti] || '') : ''
             };
 
-            if (cardVal) clientDict[cardVal] = obj;
-            if (cfVal) clientDict[cfVal] = obj;
+            if (cardVal) { clientDict[cardVal] = obj; clientDictNorm[normKey(cardVal)] = obj; }
+            if (cfVal)   { clientDict[cfVal] = obj;   clientDictNorm[normKey(cfVal)] = obj; }
         });
+    }
+
+    function getClientInfo(key) {
+        return clientDict[key] || clientDictNorm[normKey(key)] || null;
+    }
+
+    function findClientKey(search) {
+        if (!search) return null;
+        if (clientSalesStats[search]) return search;
+        const n = normKey(search);
+        const keys = Object.keys(clientSalesStats);
+        let k = keys.find(x => normKey(x) === n);
+        if (k) return k;
+        const info = getClientInfo(search);
+        if (info) {
+            k = keys.find(x => normKey(x) === normKey(info.card) || (info.cf && normKey(x) === normKey(info.cf)));
+            if (k) return k;
+        }
+        if (n.length >= 3) {               // ricerca parziale: attiva la scheda se resta un solo cliente
+            const part = keys.filter(x => normKey(x).includes(n));
+            if (part.length === 1) return part[0];
+        }
+        return null;
     }
 
     function buildGlobalCRMStats() {
@@ -891,16 +953,21 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
             if(transId) storeStats[store].transSet.add(transId);
         });
 
+        // Includi TUTTI i punti vendita, anche quelli senza operazioni nel giorno selezionato
+        Object.keys(storeTotalCash).forEach(s => {
+            if (!storeStats[s]) storeStats[s] = { incasso: 0, contanteGiorno: 0, pos: 0, credito: 0, capi: 0, sconto: 0, transSet: new Set() };
+        });
+
         tbody.innerHTML = '';
-        let stores = Object.keys(storeStats).sort((a,b) => storeStats[b].incasso - storeStats[a].incasso);
+        let stores = Object.keys(storeStats).sort((a,b) => (storeStats[b].incasso - storeStats[a].incasso) || a.localeCompare(b));
         
         if(stores.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-muted py-4">Nessuna operazione in questa data</td></tr>'; return;
+            tbody.innerHTML = '<tr><td colspan="9" class="text-muted py-4">Nessun punto vendita disponibile</td></tr>'; return;
         }
 
         stores.forEach(s => {
             let st = storeStats[s];
-            let numTrans = st.transSet.size > 0 ? st.transSet.size : "-";
+            let numTrans = st.capi === 0 ? 0 : (st.transSet.size > 0 ? st.transSet.size : "-");
             let saldoCassaStore = storeTotalCash[s] || 0;
             
             totalIncasso += st.incasso; totalContanteGiorno += st.contanteGiorno; totalPos += st.pos;
@@ -1111,7 +1178,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
             });
             clientEntries.sort((a, b) => b.incasso - a.incasso);
             let topClientsText = clientEntries.slice(0, 3).map(c => {
-                let anag = clientDict[c.card];
+                let anag = getClientInfo(c.card);
                 let name = (anag && anag.nome) ? `${anag.nome} ${anag.cognome}`.trim() : c.card;
                 return `${name} (${formatEur(c.incasso)})`;
             }).join(', ') || 'Nessuno';
@@ -1327,7 +1394,7 @@ ${userPrompt}`;
 
         cards.forEach(card => {
             let cf = stats.clientStatsCurrentFilter[card];
-            let anag = clientDict[card] || {};
+            let anag = getClientInfo(card) || {};
             let global = clientSalesStats[card];
             let scontoMedio = cf.listino > 0 ? ((cf.sconto / cf.listino) * 100).toFixed(1) : "0";
             let recency = (global && global.lastDateMoment) ? (moment().diff(global.lastDateMoment, 'days') + " gg") : "-";
@@ -1391,14 +1458,12 @@ ${userPrompt}`;
 
     function renderClientCrmProfile(searchCard) {
         let profileBox = document.getElementById('clientProfileBox');
-        
-        if (!searchCard || !clientSalesStats[searchCard]) {
-            profileBox.classList.add('d-none');
-            return;
-        }
+        const key = findClientKey(searchCard);
 
-        if (clientDict[searchCard]) {
-            let cli = clientDict[searchCard];
+        if (!key) { profileBox.classList.add('d-none'); return; }
+
+        const cli = getClientInfo(key) || getClientInfo(searchCard);
+        if (cli) {
             document.getElementById('cpNome').textContent = cli.nome || '-';
             document.getElementById('cpCognome').textContent = cli.cognome || '-';
             document.getElementById('cpCf').textContent = cli.cf || '-';
@@ -1412,27 +1477,16 @@ ${userPrompt}`;
             ['cpNome','cpCognome','cpCf','cpCitta','cpTel','cpMail','cpData','cpStore','cpPunti'].forEach(id => document.getElementById(id).textContent = '-');
         }
 
-        let cst = clientSalesStats[searchCard];
-        document.getElementById('cpBadgeCard').textContent = `Card/CF: ${searchCard}`;
-        
-        let recencyDays = "-";
-        if(cst.lastDateMoment) {
-            recencyDays = moment().diff(cst.lastDateMoment, 'days');
-        }
-        
+        let cst = clientSalesStats[key];
+        document.getElementById('cpBadgeCard').textContent = `Card/CF: ${key}`;
+
+        let recencyDays = cst.lastDateMoment ? moment().diff(cst.lastDateMoment, 'days') : "-";
         let scontoMedio = cst.listino > 0 ? (cst.sconto / cst.listino) * 100 : 0;
-        
-        let favStore = "-";
+
         let stores = Object.keys(cst.stores);
-        if(stores.length > 0) {
-            favStore = stores.reduce((a, b) => cst.stores[a] > cst.stores[b] ? a : b);
-        }
-        
-        let favProd = "-";
+        let favStore = stores.length ? stores.reduce((a, b) => cst.stores[a] > cst.stores[b] ? a : b) : "-";
         let prods = Object.keys(cst.products);
-        if(prods.length > 0) {
-            favProd = prods.reduce((a, b) => cst.products[a] > cst.products[b] ? a : b);
-        }
+        let favProd = prods.length ? prods.reduce((a, b) => cst.products[a] > cst.products[b] ? a : b) : "-";
 
         document.getElementById('crmRecency').textContent = recencyDays !== "-" ? `${recencyDays} gg` : "-";
         document.getElementById('crmFrequency').textContent = cst.dateSet.size;
@@ -1449,12 +1503,8 @@ ${userPrompt}`;
         }
         if (scontoMedio > 40) aiAdvice += "🏷️ <strong>Cacciatore di Sconti:</strong> Compra in saldo. Evita le proposte a prezzo pieno.<br>";
         else if (scontoMedio < 10 && cst.incasso > 100) aiAdvice += "💎 <strong>Cliente Premium:</strong> Punta su qualità, servizio e nuove collezioni a prezzo intero.<br>";
-
-        if (favProd !== "-") {
-            aiAdvice += `🎯 <strong>Azione Diretta:</strong> Il suo articolo preferito è <em>"${favProd}"</em>. Proponi varianti in cross-selling.`;
-        }
-
-        if(aiAdvice === "") aiAdvice = "Dati insufficienti per generare un pattern. Incoraggiare ulteriori visite in store.";
+        if (favProd !== "-") aiAdvice += `🎯 <strong>Azione Diretta:</strong> Il suo articolo preferito è <em>"${favProd}"</em>. Proponi varianti in cross-selling.`;
+        if (aiAdvice === "") aiAdvice = "Dati insufficienti per generare un pattern. Incoraggiare ulteriori visite in store.";
         document.getElementById('crmAiAction').innerHTML = aiAdvice;
 
         profileBox.classList.remove('d-none');
@@ -1640,7 +1690,7 @@ ${userPrompt}`;
         dataTableInstance = $('#dataTable').DataTable({
             data: data,                  // Passiamo i dati grezzi qui!
             columns: dtColumns,          // Passiamo la struttura colonne
-            deferRender: true,           // MAGIA: Renderizza HTML solo per la pagina visibile!
+            deferRender: true,           // Renderizza HTML solo per la pagina visibile
             language: { url: 'https://cdn.datatables.net/plug-ins/1.13.4/i18n/it-IT.json' },
             pageLength: 15,
             autoWidth: false,
