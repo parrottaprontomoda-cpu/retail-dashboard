@@ -127,6 +127,22 @@
           Apri Strumento <i class="ph-bold ph-arrow-right ml-1"></i>
         </div>
       </a>
+
+      <!-- Card 5: Gestione Ordini / Web App (Nuovo pulsante) -->
+      <a href="https://script.google.com/macros/s/AKfycbwJaJ1ZIiNbqZu6Vbej4Kva8RyxIPGrwWo41nVGvJ4bkuKdcD_BnvHykMR8wy0QmNM2/exec" target="_blank" rel="noopener noreferrer"
+         class="group block bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+        <div class="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center mb-5 group-hover:bg-rose-600 group-hover:text-white transition-colors duration-300">
+          <i class="ph-fill ph-clipboard-text text-2xl"></i>
+        </div>
+        <h2 class="text-lg font-bold text-slate-900 mb-2">Gestione Operativa</h2>
+        <p class="text-sm text-slate-500 mb-6 leading-relaxed">
+          Accedi all'applicazione dedicata per la gestione delle operazioni e dei flussi aggiuntivi.
+        </p>
+        <div class="flex items-center text-rose-600 text-sm font-semibold group-hover:gap-2 transition-all">
+          Apri Strumento <i class="ph-bold ph-arrow-right ml-1"></i>
+        </div>
+      </a>
+
     </div>
 
     <div class="text-center mt-12 text-slate-400 text-xs font-medium uppercase tracking-wider">
@@ -246,7 +262,7 @@
     async function bioAvailable() {
       try {
         return !!(window.isSecureContext && window.PublicKeyCredential && navigator.credentials &&
-                  await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
+                 await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
       } catch (e) { return false; }
     }
 
