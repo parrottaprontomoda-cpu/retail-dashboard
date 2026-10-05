@@ -40,13 +40,14 @@
   .card img { width: 100%; height: 220px; object-fit: contain; background: #ffffff; padding: 10px; border-bottom: 1px solid var(--border); cursor: zoom-in; transition: transform 0.2s ease; display: block; }
   .card img:hover { transform: scale(1.03); }
   .img-wrap { overflow: hidden; }
-  .mat-badge { position: absolute; left: 8px; bottom: 10px; background: var(--mat); color: #fff; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 12px; pointer-events: none; box-shadow: 0 2px 6px rgba(0,0,0,0.25); max-width: calc(100% - 16px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ribbon-wrap { position: absolute; top: 0; right: 0; width: 120px; height: 120px; overflow: hidden; pointer-events: none; }
+  .ribbon { position: absolute; top: 24px; right: -38px; width: 160px; text-align: center; transform: rotate(45deg); background: var(--mat); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; padding: 5px 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.35); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tipo-badge { position: absolute; left: 8px; top: 8px; background: rgba(28,28,28,0.85); color: #fff; font-size: 10px; font-weight: bold; padding: 3px 8px; border-radius: 10px; pointer-events: none; text-transform: uppercase; letter-spacing: .3px; }
 
   .card-body { padding: 10px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
   .card-body h3 { font-size: 14px; margin: 0; }
   .card-body p { font-size: 12px; color: #666; margin: 0; flex: 1; }
-  .mat-line { font-size: 12px; font-weight: bold; color: var(--mat); background: #e8f0fe; border-radius: 6px; padding: 3px 8px; align-self: flex-start; }
+  .mat-line { font-size: 13px; font-weight: bold; color: #fff; background: var(--mat); border-radius: 6px; padding: 4px 10px; align-self: flex-start; }
 
   .price { font-weight: bold; font-size: 14px; }
   .iva-label { font-size: 11px; color: #888; font-weight: normal; margin-left: 2px; }
@@ -400,6 +401,14 @@
   }
 
   function applyProducts(list) {
+    const serverHasFields = list.some(p => ('tipo' in p) || ('materiale' in p));
+    list.forEach(p => {
+      p.tipo = catKey(p.tipo ?? p.Tipo ?? p.TIPO);
+      p.materiale = catKey(p.materiale ?? p.Materiale ?? p.MATERIALE);
+    });
+    if (!serverHasFields && !document.body.classList.contains('shared-mode')) {
+      setTimeout(() => setBanner('⚠️ Il server non invia Tipo/Materiale: ripubblica una nuova versione dell\'Apps Script'), 0);
+    }
     PRODUCTS = list;
     if (!firstApplyDone) { readStateFromUrl(); firstApplyDone = true; }
 
@@ -791,12 +800,12 @@
           <div class="img-wrap">
             <img src="${escHtml(img)}" loading="lazy" decoding="async" data-fullimg="${escHtml(img)}" data-caption="${safeCaption}" onclick="openLightbox(this)" onerror="this.onerror=null;this.src='https://via.placeholder.com/300x200?text=Foto+Mancante'">
             ${g.tipo ? `<span class="tipo-badge">${escHtml(g.tipo)}</span>` : ''}
-            ${g.materiale ? `<span class="mat-badge">🧵 ${escHtml(g.materiale)}</span>` : ''}
+            ${g.materiale ? `<div class="ribbon-wrap"><div class="ribbon" title="${escHtml(g.materiale)}">${escHtml(g.materiale)}</div></div>` : ''}
           </div>
           <div class="card-body">
             <h3>${escHtml(g.nome)}</h3>
             <p style="font-size:11px;color:#999;margin-bottom:2px;">${escHtml(g.catalogo || '')}${g.codiceProdotto ? ' · Cod. ' + escHtml(g.codiceProdotto) : ''}</p>
-            ${g.materiale ? `<div class="mat-line">Materiale: ${escHtml(g.materiale)}</div>` : ''}
+            ${g.materiale ? `<div class="mat-line">🧵 Materiale: ${escHtml(g.materiale)}</div>` : ''}
             <p>${escHtml(g.descrizione || '')}</p>
             <div class="price">€ ${(g.prezzo / DIVISORE_IVA).toFixed(2)} <span class="iva-label">+ IVA</span>${packSize > 1 ? ` <span class="pack-label">📦 collo da ${packSize} pz</span>` : ''}</div>
             ${renderVariantMatrix(g)}
