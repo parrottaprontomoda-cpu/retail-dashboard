@@ -403,6 +403,8 @@
   function applyProducts(list) {
     const serverHasFields = list.some(p => ('tipo' in p) || ('materiale' in p));
     list.forEach(p => {
+      p.misura = catKey(p.misura);   // 4 (numero) e "4" (testo) devono essere la stessa taglia
+      p.colore = catKey(p.colore);
       p.tipo = catKey(p.tipo ?? p.Tipo ?? p.TIPO);
       p.materiale = catKey(p.materiale ?? p.Materiale ?? p.MATERIALE);
     });
