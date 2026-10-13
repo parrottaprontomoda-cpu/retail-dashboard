@@ -31,6 +31,14 @@
         .refresh-option.quick:hover { border-color: #198754; }
         .refresh-option.full:hover { border-color: #0d6efd; }
         .refresh-option .ro-icon { font-size: 1.8rem; }
+        /* Sezione Confronto Anni: comprimi / allarga a schermo intero */
+        #comparisonSection.cmp-collapsed #cmpBody { display: none; }
+        #comparisonSection.cmp-expanded { position: fixed; inset: 0; z-index: 1055; margin: 0; border-radius: 0; overflow-y: auto; border-left: none !important; }
+        #comparisonSection.cmp-expanded .card-body { padding: 24px 32px; }
+        #comparisonSection.cmp-expanded .cmp-chart { height: 58vh !important; }
+        #comparisonSection.cmp-expanded .cmp-table-col { width: 100%; }
+        #comparisonSection.cmp-expanded .cmp-header { position: sticky; top: -24px; background: #fff; z-index: 5; padding: 8px 0; border-bottom: 1px solid #e9ecef; }
+        body.cmp-noscroll { overflow: hidden; }
     </style>
 </head>
 <body>
@@ -453,8 +461,19 @@
         <!-- CONFRONTO ANNI (STORICO + ATTUALE) -->
         <div class="card d-none" id="comparisonSection" style="border-left: 5px solid #6f42c1 !important;">
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                <div class="cmp-header d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
                     <h5 class="card-title fw-bold mb-0"><i class="fas fa-history me-2" style="color:#6f42c1;"></i>Confronto Anni (Storico + Attuale)</h5>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnCmpCollapse" onclick="toggleCmpCollapse()" title="Nascondi o mostra grafici e tabelle storiche">
+                            <i class="fas fa-chevron-up me-1"></i>Nascondi
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnCmpExpand" onclick="toggleCmpExpand()" title="Allarga a tutto schermo (Esc per tornare indietro)">
+                            <i class="fas fa-expand me-1"></i>Allarga
+                        </button>
+                    </div>
+                </div>
+                <div id="cmpBody">
+                <div class="d-flex justify-content-end flex-wrap gap-2 mb-2">
                     <div class="d-flex flex-wrap gap-2">
                         <select id="cmpStore" class="form-select form-select-sm" style="width:auto;" onchange="renderComparison()">
                             <option value="ALL">Tutta la rete</option>
@@ -485,15 +504,15 @@
                     <div id="cmpYears" class="d-flex flex-wrap gap-1"></div>
                     <span class="small text-muted ms-1">Clicca sui singoli anni per aggiungerli o toglierli (es. 2019 contro 2026).</span>
                 </div>
-                <div class="chart-container mb-4" style="height: 340px;"><canvas id="cmpChart"></canvas></div>
+                <div class="chart-container cmp-chart mb-4" style="height: 340px;"><canvas id="cmpChart"></canvas></div>
                 <div class="row">
-                    <div class="col-lg-6">
+                    <div class="col-lg-6 cmp-table-col">
                         <h6 class="fw-bold text-secondary" id="cmpMonthTitle">Andamento mensile</h6>
                         <div class="table-responsive">
                             <table class="table table-sm table-hover text-center align-middle" id="cmpMonthTable"></table>
                         </div>
                     </div>
-                    <div class="col-lg-6">
+                    <div class="col-lg-6 cmp-table-col">
                         <h6 class="fw-bold text-secondary" id="cmpStoreTitle">Confronto per negozio</h6>
                         <div class="table-responsive">
                             <table class="table table-sm table-hover text-center align-middle" id="cmpStoreTable"></table>
@@ -501,6 +520,7 @@
                         <small class="text-muted">Clicca su un negozio per vederne grafico e andamento mensile.</small>
                     </div>
                 </div>
+                </div><!-- /cmpBody -->
             </div>
         </div>
 
@@ -906,6 +926,98 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         return `<td class="fw-bold ${cls}"><i class="fas ${icon} me-1 small"></i>${p >= 0 ? '+' : ''}${p.toFixed(1)}%</td>`;
     }
 
+    // ---- Selezione anni del confronto (ricordata nel browser) ----
+    // Modalità "last": ultimi N anni (si aggiorna da sola al cambio d'anno); "custom": anni scelti a mano
+    let cmpAllYears = [];
+    let cmpYearsPref = { mode: 'last', n: 3 };
+    try {
+        const saved = JSON.parse(localStorage.getItem('cmpYearsPref') || 'null');
+        if (saved && (saved.mode === 'last' || saved.mode === 'custom')) cmpYearsPref = saved;
+    } catch (e) {}
+
+    function saveCmpYearsPref() {
+        try { localStorage.setItem('cmpYearsPref', JSON.stringify(cmpYearsPref)); } catch (e) {}
+    }
+
+    function resolveCmpYears() {
+        let sel;
+        if (cmpYearsPref.mode === 'custom') {
+            sel = cmpAllYears.filter(y => (cmpYearsPref.years || []).includes(y));
+        } else {
+            sel = cmpYearsPref.n > 0 ? cmpAllYears.slice(-cmpYearsPref.n) : cmpAllYears.slice();
+        }
+        return sel.length ? sel : cmpAllYears.slice(-3);
+    }
+
+    function setCmpYearsQuick(n) {
+        cmpYearsPref = { mode: 'last', n: n };
+        saveCmpYearsPref();
+        renderComparison();
+    }
+
+    function toggleCmpYear(y) {
+        const set = new Set(resolveCmpYears());
+        if (set.has(y)) {
+            if (set.size <= 1) return;      // almeno un anno deve restare selezionato
+            set.delete(y);
+        } else {
+            set.add(y);
+        }
+        cmpYearsPref = { mode: 'custom', years: Array.from(set).sort((a, b) => a - b) };
+        saveCmpYearsPref();
+        renderComparison();
+    }
+
+    function renderCmpYearControls(selected) {
+        const box = document.getElementById('cmpYears');
+        box.innerHTML = cmpAllYears.map(y =>
+            `<button type="button" class="btn btn-sm ${selected.includes(y) ? 'btn-primary' : 'btn-outline-primary'}" onclick="toggleCmpYear(${y})">${y}</button>`
+        ).join('');
+        document.querySelectorAll('.cmp-quick').forEach(b => {
+            const active = cmpYearsPref.mode === 'last' && +b.dataset.n === cmpYearsPref.n;
+            b.classList.toggle('btn-secondary', active);
+            b.classList.toggle('btn-outline-secondary', !active);
+        });
+    }
+
+    // ---- Nascondi / Allarga sezione Confronto Anni ----
+    function applyCmpCollapse(collapsed) {
+        const sec = document.getElementById('comparisonSection');
+        sec.classList.toggle('cmp-collapsed', collapsed);
+        document.getElementById('btnCmpCollapse').innerHTML = collapsed
+            ? '<i class="fas fa-chevron-down me-1"></i>Mostra'
+            : '<i class="fas fa-chevron-up me-1"></i>Nascondi';
+        try { localStorage.setItem('cmpCollapsed', collapsed ? '1' : '0'); } catch (e) {}
+    }
+
+    function toggleCmpCollapse() {
+        const sec = document.getElementById('comparisonSection');
+        const collapse = !sec.classList.contains('cmp-collapsed');
+        if (collapse && sec.classList.contains('cmp-expanded')) toggleCmpExpand(); // chiudendo esce anche dallo schermo intero
+        applyCmpCollapse(collapse);
+        if (!collapse && charts.cmpChart) setTimeout(() => charts.cmpChart.resize(), 50);
+    }
+
+    function toggleCmpExpand() {
+        const sec = document.getElementById('comparisonSection');
+        const expand = !sec.classList.contains('cmp-expanded');
+        if (expand && sec.classList.contains('cmp-collapsed')) applyCmpCollapse(false);
+        sec.classList.toggle('cmp-expanded', expand);
+        document.body.classList.toggle('cmp-noscroll', expand);
+        document.getElementById('btnCmpExpand').innerHTML = expand
+            ? '<i class="fas fa-compress me-1"></i>Riduci'
+            : '<i class="fas fa-expand me-1"></i>Allarga';
+        if (!expand) sec.scrollIntoView({ block: 'start' });
+        else sec.scrollTop = 0;
+        if (charts.cmpChart) setTimeout(() => charts.cmpChart.resize(), 50);
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape' && document.getElementById('comparisonSection').classList.contains('cmp-expanded')) toggleCmpExpand();
+    });
+
+    try { if (localStorage.getItem('cmpCollapsed') === '1') applyCmpCollapse(true); } catch (e) {}
+
     function renderComparison() {
         const section = document.getElementById('comparisonSection');
         if (!section) return;
@@ -944,7 +1056,9 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         sel.value = stores.has(prevSel) ? prevSel : 'ALL';
         const selStore = sel.value;
 
-        const yearsArr = Array.from(years).sort((a, b) => a - b);
+        cmpAllYears = Array.from(years).sort((a, b) => a - b);
+        const yearsArr = resolveCmpYears();
+        renderCmpYearControls(yearsArr);
         const thisYear = moment().year();
         const curMonth = moment().month() + 1;
         const val = o => metric === 'capi' ? o.capi : o.incasso;
@@ -955,6 +1069,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         keys.forEach(k => {
             const [s, yS, mS] = k.split('|');
             const y = +yS, m = +mS, v = val(combined[k]);
+            if (!ym[y]) return;                 // anno non selezionato
             if (selStore === 'ALL' || s === selStore) ym[y][m] += v;
             if (period === 'full' || m <= curMonth) {
                 if (!storeYear[s]) storeYear[s] = {};
