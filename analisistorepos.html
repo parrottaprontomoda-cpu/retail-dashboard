@@ -26,6 +26,11 @@
         .crm-stat-box { background: #f8f9fa; border: 1px solid #e9ecef; padding: 12px; border-radius: 8px; text-align: center; height: 100%; }
         .crm-stat-val { font-size: 1.4rem; font-weight: bold; color: #0d6efd; }
         .crm-stat-lbl { font-size: 0.8rem; color: #6c757d; text-transform: uppercase; font-weight: bold; }
+        .refresh-option { cursor: pointer; border: 2px solid #e9ecef; border-radius: 12px; padding: 18px; transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s; height: 100%; background: #fff; text-align: left; width: 100%; }
+        .refresh-option:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(0,0,0,0.08); }
+        .refresh-option.quick:hover { border-color: #198754; }
+        .refresh-option.full:hover { border-color: #0d6efd; }
+        .refresh-option .ro-icon { font-size: 1.8rem; }
     </style>
 </head>
 <body>
@@ -33,13 +38,46 @@
     <div class="text-center header-title">
         <h1 class="fw-bold"><i class="fas fa-chart-line me-2"></i> Dashboard Direzionale & CRM</h1>
         <p class="mb-2 opacity-75">Analisi intelligente e Gestione Clienti integrata con Google Sheets</p>
-        <button id="btnRefresh" class="btn btn-light fw-bold mt-2 text-primary" onclick="loadData(true)">
+        <button id="btnRefresh" class="btn btn-light fw-bold mt-2 text-primary" onclick="openRefreshChoice()">
             <i class="fas fa-sync-alt me-2"></i>Aggiorna Dati
         </button>
         <button id="btnReportAI" class="btn btn-warning fw-bold mt-2 text-dark ms-2" data-bs-toggle="modal" data-bs-target="#reportModal">
             <i class="fas fa-brain me-2"></i>Report & Analisi AI
         </button>
         <div class="mt-2 small opacity-75" id="cacheStatus"></div>
+    </div>
+
+    <!-- MODALE SCELTA TIPO AGGIORNAMENTO -->
+    <div class="modal fade" id="refreshModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, #0d6efd, #8a2be2); color: white;">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-sync-alt me-2"></i>Che tipo di aggiornamento vuoi fare?</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="refreshInfo" class="alert alert-secondary small mb-3"></div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <button type="button" class="refresh-option quick" onclick="chooseRefresh('quick')">
+                                <div class="ro-icon text-success mb-2"><i class="fas fa-bolt"></i></div>
+                                <div class="fw-bold fs-5 text-success">Aggiornamento Veloce</div>
+                                <div class="text-muted small mt-1">Aggiunge solo le nuove righe inserite nel foglio VENDITE dall'ultimo aggiornamento. Ideale durante la giornata.</div>
+                                <div class="small mt-2 text-secondary"><i class="fas fa-info-circle me-1"></i>Se rileva modifiche o cancellazioni su righe già esistenti passa da solo al completo.</div>
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <button type="button" class="refresh-option full" onclick="chooseRefresh('full')">
+                                <div class="ro-icon text-primary mb-2"><i class="fas fa-database"></i></div>
+                                <div class="fw-bold fs-5 text-primary">Aggiornamento Completo</div>
+                                <div class="text-muted small mt-1">Ricarica e ricalcola tutto il database da zero (vendite e clienti).</div>
+                                <div class="small mt-2 text-secondary"><i class="fas fa-info-circle me-1"></i>Usalo se hai corretto o cancellato righe vecchie, o una volta al giorno per sicurezza.</div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- MODALE REPORT STATISTICO + ANALISI AI + EXPORT -->
@@ -503,6 +541,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
     let charts = {};
     let dataTableInstance = null;
     let debounceTimer;
+    let refreshBusy = false;
 
     // ---------------------------------------------------------------
     // FILTRI DA INDIRIZZO (URL)
@@ -572,7 +611,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         let bsCollapse = bootstrap.Collapse.getInstance(collapseEl);
         if(bsCollapse) bsCollapse.hide();
         
-        loadData(true);
+        loadData(true); // cambio sorgenti = sempre aggiornamento completo
     }
 
     // ---------------------------------------------------------------
@@ -617,14 +656,130 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         if (fromCache) {
             el.innerHTML = `<span class="text-success"><i class="fas fa-bolt me-1"></i>Caricato istantaneamente dalla memoria locale (Dati del ${moment(ts).format('DD/MM/YYYY HH:mm')})</span>`;
         } else {
-            el.innerHTML = `<span class="text-primary"><i class="fas fa-cloud-download-alt me-1"></i>Scaricato da Google Fogli al ${moment(ts).format('DD/MM/YYYY HH:mm')}</span>`;
+            el.innerHTML = `<span class="text-primary"><i class="fas fa-cloud-download-alt me-1"></i>Aggiornamento completo da Google Fogli al ${moment(ts).format('DD/MM/YYYY HH:mm')} (${rawData.length.toLocaleString('it-IT')} righe)</span>`;
+        }
+    }
+
+    function setRefreshButton(busy, label) {
+        const btn = document.getElementById('btnRefresh');
+        refreshBusy = busy;
+        btn.disabled = busy;
+        btn.innerHTML = busy
+            ? `<i class="fas fa-spinner fa-spin me-2"></i>${label || 'Scaricamento Dati...'}`
+            : `<i class="fas fa-sync-alt me-2"></i>${label || 'Aggiorna Dati'}`;
+    }
+
+    // ---------------------------------------------------------------
+    // SCELTA TIPO DI AGGIORNAMENTO (VELOCE / COMPLETO)
+    // ---------------------------------------------------------------
+    async function openRefreshChoice() {
+        if (refreshBusy) return;
+
+        // Se non c'è ancora nulla in memoria, l'unica opzione sensata è il completo
+        if (rawData.length === 0) { loadData(true); return; }
+
+        const cached = await loadCache();
+        const info = document.getElementById('refreshInfo');
+        if (cached && cached.ts) {
+            info.innerHTML = `<i class="fas fa-clock me-1"></i>Ultimo aggiornamento: <strong>${moment(cached.ts).format('DD/MM/YYYY HH:mm')}</strong> (${moment(cached.ts).fromNow()}) &nbsp;|&nbsp; Righe in memoria: <strong>${rawData.length.toLocaleString('it-IT')}</strong>`;
+        } else {
+            info.innerHTML = `<i class="fas fa-info-circle me-1"></i>Righe in memoria: <strong>${rawData.length.toLocaleString('it-IT')}</strong>`;
+        }
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('refreshModal')).show();
+    }
+
+    function chooseRefresh(mode) {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('refreshModal'));
+        if (modal) modal.hide();
+        if (mode === 'quick') quickRefresh();
+        else loadData(true);
+    }
+
+    // ---------------------------------------------------------------
+    // AGGIORNAMENTO VELOCE: elabora solo le righe aggiunte in coda
+    // ---------------------------------------------------------------
+    async function quickRefresh() {
+        const cached = await loadCache();
+        const vUrl = document.getElementById('urlVenditeInput').value.trim();
+        const cUrl = document.getElementById('urlClientiInput').value.trim();
+
+        if (!cached || !cached.salesCsv || cached.vUrl !== vUrl || rawData.length === 0) {
+            loadData(true);
+            return;
+        }
+
+        setRefreshButton(true, 'Aggiornamento veloce...');
+        const statusEl = document.getElementById('cacheStatus');
+        statusEl.innerHTML = '<span class="text-secondary"><i class="fas fa-bolt me-1"></i>Controllo nuove righe su Google Fogli...</span>';
+
+        try {
+            const ts = new Date().getTime();
+            const [salesCsv, clientsCsv] = await Promise.all([
+                fetch(vUrl + "&_t=" + ts).then(r => r.ok ? r.text() : ""),
+                cUrl ? fetch(cUrl + "&_t=" + ts).then(r => r.ok ? r.text() : "") : Promise.resolve("")
+            ]);
+
+            if (!salesCsv) throw new Error("Download del foglio Vendite non riuscito.");
+
+            // Aggiorna anagrafiche clienti (operazione leggera) se scaricate
+            if (clientsCsv && clientsCsv !== cached.clientsCsv) {
+                Papa.parse(clientsCsv, { header: true, skipEmptyLines: true, complete: res => buildClientDict(res) });
+            }
+
+            const oldCsv = cached.salesCsv.replace(/\s+$/, '');
+            const newCsv = salesCsv.replace(/\s+$/, '');
+
+            // Nessuna novità
+            if (newCsv === oldCsv) {
+                await saveCache(salesCsv, clientsCsv || cached.clientsCsv);
+                statusEl.innerHTML = `<span class="text-success"><i class="fas fa-check-circle me-1"></i>Aggiornamento veloce ${moment().format('HH:mm')}: nessuna nuova riga (${rawData.length.toLocaleString('it-IT')} righe totali)</span>`;
+                if (clientsCsv) updateDashboard();
+                setRefreshButton(false);
+                return;
+            }
+
+            // Il vecchio contenuto deve essere identico all'inizio del nuovo, seguito da un "a capo".
+            // Se non è così, qualche riga esistente è stata modificata o cancellata: serve il completo.
+            const boundary = newCsv.slice(oldCsv.length, oldCsv.length + 2);
+            if (!newCsv.startsWith(oldCsv) || !/^\r?\n/.test(boundary)) {
+                statusEl.innerHTML = '<span class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i>Rilevate modifiche su righe già esistenti: eseguo l\'aggiornamento completo...</span>';
+                await saveCache(salesCsv, clientsCsv || cached.clientsCsv);
+                processCsvData(salesCsv, clientsCsv || cached.clientsCsv, document.getElementById('btnRefresh'), false);
+                updateCacheStatus(Date.now(), false);
+                return;
+            }
+
+            const tail = newCsv.slice(oldCsv.length).replace(/^\r?\n/, '');
+            const parsed = Papa.parse(tail, { header: false, skipEmptyLines: true });
+            const newRows = parsed.data.map(arr => {
+                const obj = {};
+                columns.forEach((c, i) => { obj[c] = arr[i] !== undefined ? arr[i] : ''; });
+                return obj;
+            });
+
+            const prevDefaultDay = getDefaultDay();
+            const dayWasDefault = document.getElementById('filterDay').value === prevDefaultDay;
+
+            newRows.forEach(row => { rawData.push(row); addRowToCRMStats(row); });
+
+            extractMonthsAndStores();          // aggiorna elenchi negozi/mesi/date mantenendo le selezioni
+            if (dayWasDefault) applyDefaultDate(); // se stavi guardando l'ultimo giorno, passa al nuovo ultimo giorno
+            updateDashboard();
+
+            await saveCache(salesCsv, clientsCsv || cached.clientsCsv);
+            statusEl.innerHTML = `<span class="text-success"><i class="fas fa-bolt me-1"></i>Aggiornamento veloce ${moment().format('HH:mm')}: <strong>+${newRows.length.toLocaleString('it-IT')}</strong> nuove righe (${rawData.length.toLocaleString('it-IT')} totali)</span>`;
+            setRefreshButton(false);
+
+        } catch (err) {
+            statusEl.innerHTML = `<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Aggiornamento veloce non riuscito: ${err.message}</span>`;
+            setRefreshButton(false, 'Riprova');
         }
     }
 
     function processCsvData(salesCsv, clientsCsv, btn, fromCache) {
         if (!salesCsv) {
             alert("Errore nel download del file Vendite. Controlla il link CSV.");
-            btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Aggiorna Dati';
+            setRefreshButton(false);
             return;
         }
 
@@ -643,7 +798,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
             complete: function(results) {
                 if(results.data.length === 0) {
                     alert("Il file CSV Vendite è vuoto.");
-                    btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Aggiorna Dati';
+                    setRefreshButton(false);
                     return;
                 }
                 rawData = results.data;
@@ -669,15 +824,13 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
                 applyDefaultDate();   // Imposta automaticamente oggi o l'ultimo giorno disponibile
                 updateDashboard();
 
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Aggiorna Dati';
+                setRefreshButton(false);
             }
         });
     }
 
     async function loadData(forceRefresh) {
-        const btn = document.getElementById('btnRefresh');
-        btn.disabled = true;
+        setRefreshButton(true, 'Caricamento...');
 
         if (!forceRefresh) {
             const cached = await loadCache();
@@ -685,7 +838,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
             
             if (cached && cached.salesCsv && cached.vUrl === vUrlNow) {
                 console.log("🎯 Dati trovati in cache locale. Caricamento veloce avviato.");
-                processCsvData(cached.salesCsv, cached.clientsCsv, btn, true);
+                processCsvData(cached.salesCsv, cached.clientsCsv, document.getElementById('btnRefresh'), true);
                 updateCacheStatus(cached.ts, true);
                 return;
             } else {
@@ -693,15 +846,15 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
             }
         }
 
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Scaricamento Dati...';
-        document.getElementById('cacheStatus').innerHTML = '<span class="text-secondary"><i class="fas fa-network-wired me-1"></i>Connessione a Google Fogli in corso...</span>';
+        setRefreshButton(true, 'Aggiornamento completo...');
+        document.getElementById('cacheStatus').innerHTML = '<span class="text-secondary"><i class="fas fa-network-wired me-1"></i>Connessione a Google Fogli in corso (aggiornamento completo)...</span>';
 
         let vUrl = document.getElementById('urlVenditeInput').value.trim();
         let cUrl = document.getElementById('urlClientiInput').value.trim();
 
         if (!vUrl) {
             alert("Devi inserire almeno il link del foglio Vendite!");
-            btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Aggiorna Dati';
+            setRefreshButton(false);
             return;
         }
 
@@ -712,16 +865,14 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
             let salesCsv = results[0];
             let clientsCsv = results[1];
 
-            if (salesCsv) {
-                await saveCache(salesCsv, clientsCsv);
-                updateCacheStatus(Date.now(), false);
-            }
+            if (salesCsv) await saveCache(salesCsv, clientsCsv);
 
-            processCsvData(salesCsv, clientsCsv, btn, false);
+            processCsvData(salesCsv, clientsCsv, document.getElementById('btnRefresh'), false);
+            if (salesCsv) updateCacheStatus(Date.now(), false);
 
         }).catch(err => {
             alert("Errore di connessione. Dettaglio: " + err.message);
-            btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt me-2"></i>Riprova';
+            setRefreshButton(false, 'Riprova');
         });
     }
 
@@ -789,48 +940,51 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         return null;
     }
 
+    // Aggiunge UNA riga alle statistiche CRM (usata sia dal completo che dal veloce)
+    function addRowToCRMStats(row) {
+        let cardValRaw = (row[COL_CARD] || '').trim();
+        if(!cardValRaw) return;
+        
+        let cardUpper = cardValRaw.toUpperCase();
+        let dateVal = (row[COL_DATA] || '').trim();
+        let mDate = moment(dateVal, ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
+        let storeVal = (row[COL_STORE] || 'Sconosciuto').trim();
+        let descVal = (row[COL_DESC] || '').trim();
+        
+        let qta = parseEuro(row[COL_QTA]); if(qta === 0) qta = 1; 
+        let pListinoUnit = parseEuro(row[COL_LISTINO]);
+        let pNettoUnit = parseEuro(row[COL_NETTO]);
+        let rigaNetto = pNettoUnit * qta;
+        let rigaListino = pListinoUnit * qta;
+        let scontoRiga = rigaListino - rigaNetto; if(scontoRiga < 0) scontoRiga = 0;
+
+        if(!clientSalesStats[cardUpper]) {
+            clientSalesStats[cardUpper] = {
+                incasso: 0, capi: 0, sconto: 0, listino: 0,
+                dateSet: new Set(), stores: {}, products: {}, lastDateMoment: null
+            };
+        }
+        
+        let cst = clientSalesStats[cardUpper];
+        cst.incasso += rigaNetto; cst.capi += qta; cst.sconto += scontoRiga; cst.listino += rigaListino;
+        
+        if(mDate.isValid()) {
+            cst.dateSet.add(mDate.format("YYYY-MM-DD"));
+            if(!cst.lastDateMoment || mDate.isAfter(cst.lastDateMoment)) cst.lastDateMoment = mDate;
+        }
+        
+        if(!cst.stores[storeVal]) cst.stores[storeVal] = 0;
+        cst.stores[storeVal] += rigaNetto;
+
+        if(descVal) {
+            if(!cst.products[descVal]) cst.products[descVal] = 0;
+            cst.products[descVal] += qta;
+        }
+    }
+
     function buildGlobalCRMStats() {
         clientSalesStats = {};
-        rawData.forEach(row => {
-            let cardValRaw = (row[COL_CARD] || '').trim();
-            if(!cardValRaw) return;
-            
-            let cardUpper = cardValRaw.toUpperCase();
-            let dateVal = (row[COL_DATA] || '').trim();
-            let mDate = moment(dateVal, ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
-            let storeVal = (row[COL_STORE] || 'Sconosciuto').trim();
-            let descVal = (row[COL_DESC] || '').trim();
-            
-            let qta = parseEuro(row[COL_QTA]); if(qta === 0) qta = 1; 
-            let pListinoUnit = parseEuro(row[COL_LISTINO]);
-            let pNettoUnit = parseEuro(row[COL_NETTO]);
-            let rigaNetto = pNettoUnit * qta;
-            let rigaListino = pListinoUnit * qta;
-            let scontoRiga = rigaListino - rigaNetto; if(scontoRiga < 0) scontoRiga = 0;
-
-            if(!clientSalesStats[cardUpper]) {
-                clientSalesStats[cardUpper] = {
-                    incasso: 0, capi: 0, sconto: 0, listino: 0,
-                    dateSet: new Set(), stores: {}, products: {}, lastDateMoment: null
-                };
-            }
-            
-            let cst = clientSalesStats[cardUpper];
-            cst.incasso += rigaNetto; cst.capi += qta; cst.sconto += scontoRiga; cst.listino += rigaListino;
-            
-            if(mDate.isValid()) {
-                cst.dateSet.add(mDate.format("YYYY-MM-DD"));
-                if(!cst.lastDateMoment || mDate.isAfter(cst.lastDateMoment)) cst.lastDateMoment = mDate;
-            }
-            
-            if(!cst.stores[storeVal]) cst.stores[storeVal] = 0;
-            cst.stores[storeVal] += rigaNetto;
-
-            if(descVal) {
-                if(!cst.products[descVal]) cst.products[descVal] = 0;
-                cst.products[descVal] += qta;
-            }
-        });
+        rawData.forEach(addRowToCRMStats);
     }
 
     function setupFilters() {
@@ -860,15 +1014,15 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         document.getElementById('filterSection').classList.remove('d-none');
         document.getElementById('summaryToggleWrapper').classList.remove('d-none');
         
-        document.getElementById('colTransazione').addEventListener('change', function() { COL_TRANS = this.value; buildGlobalCRMStats(); updateDashboard(); updateDailySummary(); });
-        document.getElementById('colDescrizione').addEventListener('change', function() { COL_DESC = this.value; buildGlobalCRMStats(); updateDashboard(); });
-        document.getElementById('colCardCliente').addEventListener('change', function() { COL_CARD = this.value; buildGlobalCRMStats(); updateDashboard(); });
-        document.getElementById('colCodInt').addEventListener('change', function() { COL_COD_INT = this.value; updateDashboard(); });
-        document.getElementById('colEan').addEventListener('change', function() { COL_EAN = this.value; updateDashboard(); });
-        document.getElementById('colStore').addEventListener('change', function() { COL_STORE = this.value; buildGlobalCRMStats(); updateDashboard(); extractMonthsAndStores(); });
-        document.getElementById('colContante').addEventListener('change', function() { COL_CONTANTE = this.value; updateDailySummary(); });
-        document.getElementById('colPos').addEventListener('change', function() { COL_POS = this.value; updateDailySummary(); });
-        document.getElementById('colCredito').addEventListener('change', function() { COL_CREDITO = this.value; updateDailySummary(); });
+        document.getElementById('colTransazione').onchange = function() { COL_TRANS = this.value; buildGlobalCRMStats(); updateDashboard(); updateDailySummary(); };
+        document.getElementById('colDescrizione').onchange = function() { COL_DESC = this.value; buildGlobalCRMStats(); updateDashboard(); };
+        document.getElementById('colCardCliente').onchange = function() { COL_CARD = this.value; buildGlobalCRMStats(); updateDashboard(); };
+        document.getElementById('colCodInt').onchange = function() { COL_COD_INT = this.value; updateDashboard(); };
+        document.getElementById('colEan').onchange = function() { COL_EAN = this.value; updateDashboard(); };
+        document.getElementById('colStore').onchange = function() { COL_STORE = this.value; buildGlobalCRMStats(); updateDashboard(); extractMonthsAndStores(); };
+        document.getElementById('colContante').onchange = function() { COL_CONTANTE = this.value; updateDailySummary(); };
+        document.getElementById('colPos').onchange = function() { COL_POS = this.value; updateDailySummary(); };
+        document.getElementById('colCredito').onchange = function() { COL_CREDITO = this.value; updateDailySummary(); };
     }
     
     function changeDataColumn() {
@@ -1652,16 +1806,14 @@ ${userPrompt}`;
 
         let dateColIdx = columns.indexOf(COL_DATA);
 
-        // Prepariamo la configurazione delle colonne per DataTables
         let dtColumns = columns.map(col => {
             return {
                 title: col,
                 data: col,
-                // Questa funzione crea i badge o formatta la data *solo* quando la riga viene visualizzata
+                defaultContent: '',
                 render: function (cellData, type, row) {
-                    let cellVal = cellData !== null ? cellData : '';
+                    let cellVal = (cellData !== null && cellData !== undefined) ? String(cellData) : '';
                     
-                    // Se stiamo "disegnando" la cella a schermo (type === 'display')
                     if (type === 'display' && cellVal.trim() !== '') {
                         if (col === COL_CARD) {
                             return `<span class="badge bg-primary card-filter-btn px-2 py-1" title="Filtra lo storico di questa Card" onclick="filterByCard('${cellVal.trim()}')"><i class="fas fa-id-card me-1"></i>${cellVal}</span>`;
@@ -1674,30 +1826,26 @@ ${userPrompt}`;
                         }
                     }
                     
-                    // Se DataTables ci sta chiedendo come "ordinare" (type === 'sort') la colonna data
                     if (col === COL_DATA && type === 'sort') {
                         let m = moment(cellVal.trim(), ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"]);
                         return m.isValid() ? m.format('YYYYMMDDHHmmss') : cellVal;
                     }
                     
-                    // Altrimenti restituisci il testo normale
                     return cellVal;
                 }
             };
         });
 
-        // Inizializza DataTables passandogli direttamente l'array JSON (velocissimo)
         dataTableInstance = $('#dataTable').DataTable({
-            data: data,                  // Passiamo i dati grezzi qui!
-            columns: dtColumns,          // Passiamo la struttura colonne
-            deferRender: true,           // Renderizza HTML solo per la pagina visibile
+            data: data,
+            columns: dtColumns,
+            deferRender: true,
             language: { url: 'https://cdn.datatables.net/plug-ins/1.13.4/i18n/it-IT.json' },
             pageLength: 15,
             autoWidth: false,
             order: dateColIdx >= 0 ? [[ dateColIdx, 'desc' ]] : [] 
         });
         
-        // Assicura che l'intestazione mantenga il tema scuro
         $('#dataTable thead').addClass('table-dark');
     }
 </script>
