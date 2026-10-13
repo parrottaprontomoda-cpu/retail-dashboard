@@ -140,6 +140,20 @@
                         </div>
                     </div>
                     
+                    <!-- Archivio storico vecchio gestionale -->
+                    <div class="row mt-1">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold" style="color:#6f42c1;"><i class="fas fa-history me-1"></i> Foglio ARCHIVI (storico vecchio gestionale):</label>
+                            <input type="text" id="urlArchivioInput" class="form-control" style="border-color:#6f42c1;" placeholder="Link CSV pubblicato del foglio ARCHIVI...">
+                            <small class="text-muted d-block mt-1">Colonne lette per nome: DATA, PREZZO, PREZZO NETTO, QUANTITA', TOTALE, MESE, ANNO, STORE. Viene scaricato una sola volta e tenuto in memoria; per riscaricarlo usa "Ricarica storico".</small>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold" style="color:#6f42c1;"><i class="fas fa-exchange-alt me-1"></i> Abbinamento nomi negozio (vecchio = nuovo):</label>
+                            <textarea id="storeAliasesInput" class="form-control" rows="3" placeholder="Una riga per negozio, es.&#10;CZ CENTRO = CATANZARO&#10;NEG2 = LAMEZIA"></textarea>
+                            <small class="text-muted d-block mt-1">Serve solo se nel vecchio programma i negozi avevano nomi diversi da quelli attuali.</small>
+                        </div>
+                    </div>
+
                     <!-- Box Prompt Personalizzabile AI -->
                     <div class="row mt-2">
                         <div class="col-12 mb-3">
@@ -441,6 +455,52 @@
             </div>
         </div>
 
+        <!-- CONFRONTO ANNI (STORICO + ATTUALE) -->
+        <div class="card d-none" id="comparisonSection" style="border-left: 5px solid #6f42c1 !important;">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                    <h5 class="card-title fw-bold mb-0"><i class="fas fa-history me-2" style="color:#6f42c1;"></i>Confronto Anni (Storico + Attuale)</h5>
+                    <div class="d-flex flex-wrap gap-2">
+                        <select id="cmpStore" class="form-select form-select-sm" style="width:auto;" onchange="renderComparison()">
+                            <option value="ALL">Tutta la rete</option>
+                        </select>
+                        <select id="cmpMetric" class="form-select form-select-sm" style="width:auto;" onchange="renderComparison()">
+                            <option value="incasso">Incasso €</option>
+                            <option value="capi">Capi venduti</option>
+                        </select>
+                        <select id="cmpPeriod" class="form-select form-select-sm" style="width:auto;" onchange="renderComparison()" title="Periodo usato nella tabella per negozio">
+                            <option value="ytd">Progressivo (Gen → mese corrente)</option>
+                            <option value="full">Anno intero</option>
+                        </select>
+                        <select id="cmpOverlap" class="form-select form-select-sm" style="width:auto;" onchange="renderComparison()" title="Cosa fare se lo stesso negozio/mese è presente sia nello storico sia nel nuovo sistema">
+                            <option value="sum">Mesi in entrambi: somma</option>
+                            <option value="new">Mesi in entrambi: usa nuovo sistema</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" onclick="loadArchive(true)">
+                            <i class="fas fa-sync-alt me-1"></i>Ricarica storico
+                        </button>
+                    </div>
+                </div>
+                <div class="small text-muted mb-3" id="archiveStatus"></div>
+                <div class="chart-container mb-4" style="height: 340px;"><canvas id="cmpChart"></canvas></div>
+                <div class="row">
+                    <div class="col-lg-6">
+                        <h6 class="fw-bold text-secondary" id="cmpMonthTitle">Andamento mensile</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover text-center align-middle" id="cmpMonthTable"></table>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <h6 class="fw-bold text-secondary" id="cmpStoreTitle">Confronto per negozio</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover text-center align-middle" id="cmpStoreTable"></table>
+                        </div>
+                        <small class="text-muted">Clicca su un negozio per vederne grafico e andamento mensile.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Data Table -->
         <div class="card">
             <div class="card-body">
@@ -515,6 +575,8 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
     document.getElementById('urlClientiInput').value = localStorage.getItem('urlClienti') || DEFAULT_CLIENTI_URL;
     document.getElementById('geminiApiKeyInput').value = localStorage.getItem('geminiApiKey') || "";
     document.getElementById('aiPromptInput').value = localStorage.getItem('aiPrompt') || DEFAULT_AI_PROMPT;
+    document.getElementById('urlArchivioInput').value = localStorage.getItem('urlArchivio') || "";
+    document.getElementById('storeAliasesInput').value = localStorage.getItem('storeAliases') || "";
 
     let rawData = [];
     let columns = [];
@@ -599,9 +661,14 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         updateDailySummary();
     }
 
-    window.onload = () => loadData(false);
+    window.onload = () => { loadData(false); loadArchive(false); };
 
     function updateUrls() {
+        const oldArchUrl = localStorage.getItem('urlArchivio') || '';
+        const newArchUrl = document.getElementById('urlArchivioInput').value.trim();
+        localStorage.setItem('urlArchivio', newArchUrl);
+        localStorage.setItem('storeAliases', document.getElementById('storeAliasesInput').value);
+        if (newArchUrl !== oldArchUrl) loadArchive(true);
         localStorage.setItem('urlVendite', document.getElementById('urlVenditeInput').value.trim());
         localStorage.setItem('urlClienti', document.getElementById('urlClientiInput').value.trim());
         localStorage.setItem('geminiApiKey', document.getElementById('geminiApiKeyInput').value.trim());
@@ -765,6 +832,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
             extractMonthsAndStores();          // aggiorna elenchi negozi/mesi/date mantenendo le selezioni
             if (dayWasDefault) applyDefaultDate(); // se stavi guardando l'ultimo giorno, passa al nuovo ultimo giorno
             updateDashboard();
+            renderComparison();
 
             await saveCache(salesCsv, clientsCsv || cached.clientsCsv);
             statusEl.innerHTML = `<span class="text-success"><i class="fas fa-bolt me-1"></i>Aggiornamento veloce ${moment().format('HH:mm')}: <strong>+${newRows.length.toLocaleString('it-IT')}</strong> nuove righe (${rawData.length.toLocaleString('it-IT')} totali)</span>`;
@@ -774,6 +842,297 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
             statusEl.innerHTML = `<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Aggiornamento veloce non riuscito: ${err.message}</span>`;
             setRefreshButton(false, 'Riprova');
         }
+    }
+
+    // ---------------------------------------------------------------
+    // STORICO VECCHIO GESTIONALE (foglio ARCHIVI) + CONFRONTO ANNI
+    // ---------------------------------------------------------------
+    const ARCH_CACHE_KEY = 'archivio_cache_v1';
+    const DATE_FORMATS = ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "DD/MM/YYYY HH:mm:ss", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"];
+    const MESI_IT = ['GEN','FEB','MAR','APR','MAG','GIU','LUG','AGO','SET','OTT','NOV','DIC'];
+    let archiveAgg = {};     // "STORE ORIGINALE|ANNO|MESE" -> { incasso, capi, listino }
+    let archiveInfo = null;  // { ts, rows }
+
+    function normHeader(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9%]/g, ''); }
+
+    function getStoreAliases() {
+        const map = {};
+        (localStorage.getItem('storeAliases') || '').split(/\r?\n/).forEach(line => {
+            const p = line.split('=');
+            if (p.length >= 2) {
+                const oldName = p[0].trim().toUpperCase();
+                const newName = p.slice(1).join('=').trim().toUpperCase();
+                if (oldName && newName) map[oldName] = newName;
+            }
+        });
+        return map;
+    }
+
+    // Accetta 1-12, "01", "2023-01", "Gennaio", "GEN"
+    function parseMonth(v) {
+        const s = String(v || '').trim().toUpperCase();
+        if (!s) return null;
+        if (/^\d{1,2}$/.test(s)) { const n = parseInt(s, 10); return (n >= 1 && n <= 12) ? n : null; }
+        const m = s.match(/^\d{4}[-\/](\d{1,2})/);
+        if (m) return parseInt(m[1], 10);
+        const idx = MESI_IT.indexOf(s.substring(0, 3));
+        return idx >= 0 ? idx + 1 : null;
+    }
+
+    function aggregateArchive(results) {
+        const cols = results.meta.fields || [];
+        const find = (...names) => cols.find(c => names.includes(normHeader(c))) || null;
+
+        const cData   = find('DATA');
+        const cTot    = find('TOTALE');
+        const cQta    = find('QUANTITA', 'QUANTIT', 'QTA');
+        const cNetto  = find('PREZZONETTO');
+        const cPrezzo = find('PREZZO');
+        const cMese   = find('MESE');
+        const cAnno   = find('ANNO');
+        const cStore  = find('STORE', 'NEGOZIO');
+
+        if (!cStore || (!cTot && !cNetto)) {
+            throw new Error("intestazioni non riconosciute (servono almeno STORE e TOTALE o PREZZO NETTO)");
+        }
+
+        const agg = {};
+        let rows = 0;
+        results.data.forEach(r => {
+            const store = String(r[cStore] || '').trim().toUpperCase();
+            if (!store) return;
+
+            let year = cAnno ? parseInt(String(r[cAnno] || '').trim(), 10) : NaN;
+            let month = cMese ? parseMonth(r[cMese]) : null;
+            if ((isNaN(year) || !month) && cData) {
+                const d = moment(String(r[cData] || '').trim(), DATE_FORMATS);
+                if (d.isValid()) {
+                    if (isNaN(year)) year = d.year();
+                    if (!month) month = d.month() + 1;
+                }
+            }
+            if (isNaN(year) || !month) return;
+
+            const qtaRaw = cQta ? String(r[cQta] || '').trim() : '';
+            const qta = qtaRaw === '' ? 1 : parseEuro(qtaRaw);
+            let tot = cTot ? parseEuro(r[cTot]) : 0;
+            if (!tot && cNetto) tot = parseEuro(r[cNetto]) * qta;
+            const listino = cPrezzo ? parseEuro(r[cPrezzo]) * qta : tot;
+
+            const k = `${store}|${year}|${month}`;
+            if (!agg[k]) agg[k] = { incasso: 0, capi: 0, listino: 0 };
+            agg[k].incasso += tot;
+            agg[k].capi += qta;
+            agg[k].listino += listino;
+            rows++;
+        });
+        return { agg, rows };
+    }
+
+    function setArchiveStatus(fresh) {
+        const st = document.getElementById('archiveStatus');
+        if (!archiveInfo) { st.innerHTML = ''; return; }
+        st.innerHTML = `<i class="fas fa-archive me-1"></i>Storico ARCHIVI: <strong>${archiveInfo.rows.toLocaleString('it-IT')}</strong> righe ${fresh ? 'scaricate ora' : 'in memoria locale'} (del ${moment(archiveInfo.ts).format('DD/MM/YYYY HH:mm')}).`;
+    }
+
+    async function loadArchive(force) {
+        const url = (localStorage.getItem('urlArchivio') || '').trim();
+        const st = document.getElementById('archiveStatus');
+
+        if (!url) {
+            archiveAgg = {}; archiveInfo = null;
+            st.innerHTML = '<i class="fas fa-info-circle me-1"></i>Nessun archivio storico collegato: aggiungi il link del foglio ARCHIVI in "Collegamento Sorgenti Dati".';
+            renderComparison();
+            return;
+        }
+
+        if (!force) {
+            try {
+                const c = await localforage.getItem(ARCH_CACHE_KEY);
+                if (c && c.url === url && c.agg) {
+                    archiveAgg = c.agg; archiveInfo = { ts: c.ts, rows: c.rows };
+                    setArchiveStatus(false);
+                    renderComparison();
+                    return;
+                }
+            } catch (e) {}
+        }
+
+        st.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Scaricamento storico ARCHIVI in corso...';
+        try {
+            const r = await fetch(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now());
+            if (!r.ok) throw new Error('errore di rete ' + r.status);
+            const csv = await r.text();
+            const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
+            const res = aggregateArchive(parsed);
+            archiveAgg = res.agg;
+            archiveInfo = { ts: Date.now(), rows: res.rows };
+            // In memoria salviamo solo i totali per negozio/mese: occupano pochissimo spazio
+            await localforage.setItem(ARCH_CACHE_KEY, { url, ts: archiveInfo.ts, rows: res.rows, agg: res.agg });
+            setArchiveStatus(true);
+        } catch (err) {
+            st.innerHTML = `<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Storico non caricato: ${err.message}. Verifica che il foglio ARCHIVI sia pubblicato sul web in formato CSV.</span>`;
+        }
+        renderComparison();
+    }
+
+    function buildCurrentAgg() {
+        const agg = {};
+        rawData.forEach(row => {
+            const store = (row[COL_STORE] || '').trim().toUpperCase();
+            if (!store) return;
+            const d = moment((row[COL_DATA] || '').trim(), DATE_FORMATS);
+            if (!d.isValid()) return;
+            let qta = parseEuro(row[COL_QTA]); if (qta === 0) qta = 1;
+            const k = `${store}|${d.year()}|${d.month() + 1}`;
+            if (!agg[k]) agg[k] = { incasso: 0, capi: 0, listino: 0 };
+            agg[k].incasso += parseEuro(row[COL_NETTO]) * qta;
+            agg[k].capi += qta;
+            agg[k].listino += parseEuro(row[COL_LISTINO]) * qta;
+        });
+        return agg;
+    }
+
+    function deltaCell(curr, prev) {
+        if (!prev || !curr) return '<td class="text-muted">-</td>';
+        const p = (curr - prev) / Math.abs(prev) * 100;
+        const cls = p >= 0 ? 'text-success' : 'text-danger';
+        const icon = p >= 0 ? 'fa-arrow-up' : 'fa-arrow-down';
+        return `<td class="fw-bold ${cls}"><i class="fas ${icon} me-1 small"></i>${p >= 0 ? '+' : ''}${p.toFixed(1)}%</td>`;
+    }
+
+    function renderComparison() {
+        const section = document.getElementById('comparisonSection');
+        if (!section) return;
+
+        const aliases = getStoreAliases();
+        const current = buildCurrentAgg();
+        const overlap = document.getElementById('cmpOverlap').value;
+        const metric  = document.getElementById('cmpMetric').value;
+        const period  = document.getElementById('cmpPeriod').value;
+
+        // Unisce nuovo sistema + storico (con abbinamento nomi negozio)
+        const combined = {};
+        const add = (k, v) => {
+            if (!combined[k]) combined[k] = { incasso: 0, capi: 0, listino: 0 };
+            combined[k].incasso += v.incasso; combined[k].capi += v.capi; combined[k].listino += v.listino;
+        };
+        Object.keys(current).forEach(k => add(k, current[k]));
+        Object.keys(archiveAgg).forEach(k => {
+            const [s, y, m] = k.split('|');
+            const nk = `${aliases[s] || s}|${y}|${m}`;
+            if (overlap === 'new' && current[nk]) return;
+            add(nk, archiveAgg[k]);
+        });
+
+        const keys = Object.keys(combined);
+        if (!keys.length) { section.classList.add('d-none'); return; }
+        section.classList.remove('d-none');
+
+        const stores = new Set(), years = new Set();
+        keys.forEach(k => { const [s, y] = k.split('|'); stores.add(s); years.add(parseInt(y, 10)); });
+
+        const sel = document.getElementById('cmpStore');
+        const prevSel = sel.value || 'ALL';
+        sel.innerHTML = '<option value="ALL">Tutta la rete</option>' +
+            Array.from(stores).sort().map(s => `<option value="${s.replace(/"/g, '&quot;')}">${s}</option>`).join('');
+        sel.value = stores.has(prevSel) ? prevSel : 'ALL';
+        const selStore = sel.value;
+
+        const yearsArr = Array.from(years).sort((a, b) => a - b);
+        const thisYear = moment().year();
+        const curMonth = moment().month() + 1;
+        const val = o => metric === 'capi' ? o.capi : o.incasso;
+        const fmt = v => metric === 'capi' ? Math.round(v).toLocaleString('it-IT') : formatEur(v);
+
+        const ym = {}; yearsArr.forEach(y => ym[y] = Array(13).fill(0));
+        const storeYear = {};
+        keys.forEach(k => {
+            const [s, yS, mS] = k.split('|');
+            const y = +yS, m = +mS, v = val(combined[k]);
+            if (selStore === 'ALL' || s === selStore) ym[y][m] += v;
+            if (period === 'full' || m <= curMonth) {
+                if (!storeYear[s]) storeYear[s] = {};
+                storeYear[s][y] = (storeYear[s][y] || 0) + v;
+            }
+        });
+
+        // --- Grafico: una linea per anno ---
+        const palette = ['#ced4da', '#adb5bd', '#20c997', '#fd7e14', '#6f42c1', '#0dcaf0', '#198754'];
+        const monthLabels = moment.monthsShort().map(m => m.charAt(0).toUpperCase() + m.slice(1));
+        const datasets = yearsArr.map((y, i) => {
+            const isLast = i === yearsArr.length - 1;
+            const color = isLast ? '#0d6efd' : palette[(yearsArr.length - 2 - i + palette.length) % palette.length];
+            return {
+                label: String(y),
+                data: ym[y].slice(1).map((v, mi) => (y === thisYear && mi + 1 > curMonth) || v === 0 ? null : v),
+                borderColor: color, backgroundColor: color,
+                borderWidth: isLast ? 3 : 2, tension: 0.3, spanGaps: false, pointRadius: isLast ? 4 : 2
+            };
+        });
+        if (charts.cmpChart) charts.cmpChart.destroy();
+        charts.cmpChart = new Chart(document.getElementById('cmpChart').getContext('2d'), {
+            type: 'line',
+            data: { labels: monthLabels, datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: true, position: 'top' },
+                    tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.parsed.y)}` } }
+                },
+                scales: { y: { beginAtZero: true, ticks: { callback: v => metric === 'capi' ? v : '€ ' + v.toLocaleString('it-IT') } } }
+            }
+        });
+
+        // --- Tabella mensile: mesi x anni + variazione ultimo anno vs precedente ---
+        const showDelta = yearsArr.length >= 2;
+        const lastY = yearsArr[yearsArr.length - 1], prevY = yearsArr[yearsArr.length - 2];
+        document.getElementById('cmpMonthTitle').textContent =
+            `Andamento mensile — ${selStore === 'ALL' ? 'Tutta la rete' : selStore}`;
+
+        let mh = '<thead class="table-light"><tr><th class="text-start">Mese</th>' +
+            yearsArr.map(y => `<th>${y}</th>`).join('') +
+            (showDelta ? `<th>Δ ${lastY} vs ${prevY}</th>` : '') + '</tr></thead><tbody>';
+        for (let m = 1; m <= 12; m++) {
+            const rowCls = m === curMonth ? ' class="table-warning"' : '';
+            mh += `<tr${rowCls}><td class="text-start fw-semibold">${monthLabels[m - 1]}</td>` +
+                yearsArr.map(y => `<td>${ym[y][m] ? fmt(ym[y][m]) : '<span class="text-muted">-</span>'}</td>`).join('') +
+                (showDelta ? deltaCell(ym[lastY][m], ym[prevY][m]) : '') + '</tr>';
+        }
+        const ytd = y => ym[y].slice(1, curMonth + 1).reduce((a, b) => a + b, 0);
+        const tot = y => ym[y].slice(1).reduce((a, b) => a + b, 0);
+        mh += `<tr class="table-info fw-bold"><td class="text-start">Progressivo Gen→${monthLabels[curMonth - 1]}</td>` +
+            yearsArr.map(y => `<td>${fmt(ytd(y))}</td>`).join('') +
+            (showDelta ? deltaCell(ytd(lastY), ytd(prevY)) : '') + '</tr>';
+        mh += `<tr class="table-secondary fw-bold"><td class="text-start">Totale anno</td>` +
+            yearsArr.map(y => `<td>${fmt(tot(y))}</td>`).join('') +
+            (showDelta ? '<td class="text-muted small">anno in corso</td>' : '') + '</tr></tbody>';
+        document.getElementById('cmpMonthTable').innerHTML = mh;
+
+        // --- Tabella per negozio ---
+        document.getElementById('cmpStoreTitle').textContent =
+            `Confronto per negozio — ${period === 'ytd' ? 'progressivo Gen→' + monthLabels[curMonth - 1] : 'anno intero'}`;
+        const storeList = Object.keys(storeYear).sort((a, b) => ((storeYear[b][lastY] || 0) - (storeYear[a][lastY] || 0)) || a.localeCompare(b));
+        let sh = '<thead class="table-light"><tr><th class="text-start">Negozio</th>' +
+            yearsArr.map(y => `<th>${y}</th>`).join('') +
+            (showDelta ? `<th>Δ ${lastY} vs ${prevY}</th>` : '') + '</tr></thead><tbody>';
+        storeList.forEach(s => {
+            const active = s === selStore ? ' table-primary' : '';
+            sh += `<tr class="cmp-store-row${active}" data-store="${s.replace(/"/g, '&quot;')}" style="cursor:pointer;"><td class="text-start fw-semibold store-link">${s}</td>` +
+                yearsArr.map(y => `<td>${storeYear[s][y] ? fmt(storeYear[s][y]) : '<span class="text-muted">-</span>'}</td>`).join('') +
+                (showDelta ? deltaCell(storeYear[s][lastY] || 0, storeYear[s][prevY] || 0) : '') + '</tr>';
+        });
+        sh += '</tbody>';
+        const storeTable = document.getElementById('cmpStoreTable');
+        storeTable.innerHTML = sh;
+        storeTable.querySelectorAll('.cmp-store-row').forEach(tr => {
+            tr.addEventListener('click', () => {
+                const s = tr.getAttribute('data-store');
+                sel.value = (sel.value === s) ? 'ALL' : s;   // secondo clic = torna a tutta la rete
+                renderComparison();
+            });
+        });
     }
 
     function processCsvData(salesCsv, clientsCsv, btn, fromCache) {
@@ -823,6 +1182,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
                 applyUrlFilters();
                 applyDefaultDate();   // Imposta automaticamente oggi o l'ultimo giorno disponibile
                 updateDashboard();
+                renderComparison();
 
                 setRefreshButton(false);
             }
