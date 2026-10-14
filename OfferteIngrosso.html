@@ -214,7 +214,7 @@
                         <span class="small ms-2" id="sEsito"></span>
                     </div></div>
                     <div class="card"><div class="card-body">
-                        <h6 class="fw-bold"><i class="fas fa-database me-2"></i>Origine vendite</h6>
+                        <h6 class="fw-bold"><i class="fas fa-database me-2"></i>Origine dati</h6>
                         <div class="small" id="infoVendite">-</div>
                     </div></div>
                 </div>
@@ -393,6 +393,7 @@ const TIPI = {
 };
 const SEGNAPOSTO = ['{CLIENTE}', '{REFERENTE}', '{OFFERTA}', '{DESCRIZIONE}', '{SCONTO}', '{SCADENZA}', '{CONDIZIONI}', '{CATEGORIA}', '{BRAND}', '{AZIENDA}'];
 const ESITI = ['INVIATO', 'INTERESSATO', 'ORDINE', 'NESSUNA RISPOSTA', 'NON INTERESSATO'];
+const TIPI_PAG = { CO: 'Contanti', AS: 'Assegni', BO: 'Bonifici', MYPA: 'MyPOS', ALTRO: 'Non indicato' };
 const PARAMETRI = [
     ['NOME_AZIENDA', 'Nome azienda (firma messaggi)'],
     ['SOGLIA_CONTANTI_GG', 'Fino a quanti giorni è "Contanti"'],
@@ -408,6 +409,17 @@ const PARAMETRI = [
     ['COL_QTA', 'Colonna quantità (lettera)'],
     ['COL_CATEGORIA', 'Colonna categoria/descrizione (lettera)'],
     ['COL_BRAND', 'Colonna brand (lettera, es. U)'],
+    ['CONT_FILE_ID', 'ID file schede contabili (vuoto = foglio SCADENZE)'],
+    ['CONT_FOGLIO', 'Nome foglio schede contabili'],
+    ['CONT_COL_DATA', 'Contabilità: colonna data'],
+    ['CONT_COL_CLIENTE', 'Contabilità: colonna cliente'],
+    ['CONT_COL_ANNOT', 'Contabilità: colonna annotazioni'],
+    ['CONT_COL_MERCE', 'Contabilità: colonna merce (C/MERCI)'],
+    ['CONT_COL_SCONTI', 'Contabilità: colonna sconti'],
+    ['CONT_COL_TIPO', 'Contabilità: colonna forma di pagamento (TP)'],
+    ['CONT_COL_IMPORTO', 'Contabilità: colonna importo incassato'],
+    ['CONT_COL_SCAD', 'Contabilità: colonna scadenza assegno'],
+    ['ASSEGNO_PAGATO_A', 'Assegno incassato alla SCADENZA o alla CONSEGNA'],
     ['IMPORTO_UNITARIO', 'Importo unitario da moltiplicare per quantità (SI/NO)'],
     ['CATEGORIA_PRIMA_PAROLA', 'Categoria = prima parola della descrizione (SI/NO)']
 ];
@@ -772,7 +784,7 @@ function renderClienti() {
         <td style="min-width:110px">${barPot(c.potenziale)}</td>
         <td class="text-end">${eur(c.acq12)}</td>
         <td class="text-end">${trendTxt(c.trend)}</td>
-        <td class="text-end">${eur(c.aperto)}${c.scaduto > 0 ? `<br><small class="text-danger">scad. ${eur(c.scaduto)}</small>` : ''}</td>
+        <td class="text-end">${eur(c.aperto)}${c.scaduto > 0 ? `<br><small class="text-danger">scad. ${eur(c.scaduto)}</small>` : ''}${c.portafoglio > 0 ? `<br><small class="text-warning">ass. ${eur(c.portafoglio)}</small>` : ''}</td>
         <td>${c.giorniDaUltimo === null ? '-' : c.giorniDaUltimo + ' gg fa'}</td>
         <td>${c.ultimoInvioGg === null ? '<span class="text-muted">mai</span>' : c.ultimoInvioGg + ' gg fa'}</td>
     </tr>`).join('') || '<tr><td colspan="10" class="text-center text-muted py-4">Nessun cliente</td></tr>';
@@ -823,13 +835,18 @@ function apriCliente(cod) {
                 <div class="small fw-bold text-secondary">CAPACITÀ DI PAGAMENTO</div>
                 <div class="big">${CLS[c.classe].lbl}</div>
                 <div class="small">Concordati: <b>${c.giorniConc} gg</b> · Effettivi: <b>${c.giorniEff} gg</b><br>
-                Media reale pagamenti: ${c.mediaGiorniPagamento === null ? 'n.d.' : c.mediaGiorniPagamento + ' gg'}<br>Fido: ${eur(c.fido)}</div>
+                Giorni medi di incasso: ${c.mediaGiorniPagamento === null ? 'n.d.' : c.mediaGiorniPagamento + ' gg'}<br>Fido: ${eur(c.fido)}
+                ${c.portafoglio > 0 ? `<br>Assegni in portafoglio: <b>${eur(c.portafoglio)}</b>` : ''}
+                ${c.credito > 0 ? `<br>Credito a suo favore: ${eur(c.credito)}` : ''}
+                ${c.ultimoPagamento ? `<br>Ultimo incasso: ${fmtD(c.ultimoPagamento)}` : ''}</div>
+                ${Object.keys(c.mixPagamenti || {}).length ? (() => { const m = c.mixPagamenti, tot = Object.keys(m).reduce((a, k) => a + m[k], 0);
+                    return `<div class="small mt-2"><b>Come paga:</b> ${Object.keys(m).sort((a, b) => m[b] - m[a]).map(k => `<span class="badge bg-light text-dark border me-1">${TIPI_PAG[k] || esc(k)} ${Math.round(m[k] / tot * 100)}%</span>`).join('')}</div>`; })() : ''}
             </div></div>
             <div class="col-md-4"><div class="score-box">
                 <div class="small fw-bold text-secondary">RISCHIO</div>
                 <div class="big text-${FASCIA_COL[c.fascia]}">${c.fascia} <small class="fs-6 text-muted">${c.rischio}/100</small></div>
                 <div class="small">${c.motiviRischio.length ? c.motiviRischio.map(esc).join('<br>') : 'Nessun segnale di rischio'}</div>
-                ${c.datiPagamento ? '' : '<div class="small text-muted mt-1">Nessuno storico pagamenti nel foglio SCADENZE.</div>'}
+                ${c.datiPagamento ? `<div class="small text-muted mt-1">Fonte: ${esc(c.fontePagamenti)}</div>` : '<div class="small text-muted mt-1">Nessun movimento contabile trovato per questo cliente.</div>'}
             </div></div>
             <div class="col-md-4"><div class="score-box">
                 <div class="small fw-bold text-secondary">POTENZIALITÀ</div>
@@ -853,7 +870,7 @@ function apriCliente(cod) {
                 ${c.topCat.length ? c.topCat.map(t => `<span class="badge bg-light text-dark border me-1 mb-1">${esc(t.cat)} · ${eur(t.imp)}</span>`).join('') : '<span class="text-muted small">-</span>'}
             </div>
             <div class="col-lg-5">
-                <h6 class="fw-bold">Scadenze aperte <small class="text-muted">(${eur(c.aperto)})</small></h6>
+                <h6 class="fw-bold">Partite aperte <small class="text-muted">(${eur(c.aperto)})</small></h6>
                 ${c.scadenzeAperte.length ? `<table class="table table-sm small"><thead><tr><th>Doc.</th><th>Scadenza</th><th class="text-end">Residuo</th><th class="text-end">Ritardo</th></tr></thead><tbody>
                 ${c.scadenzeAperte.map(s => `<tr class="${s.ritardo > 0 ? 'text-danger' : ''}"><td>${esc(s.doc)}</td><td>${fmtD(s.scadenza)}</td><td class="text-end">${eur(s.residuo)}</td><td class="text-end">${s.ritardo ? s.ritardo + ' gg' : '-'}</td></tr>`).join('')}</tbody></table>` : '<div class="text-muted small mb-2">Nessuna scadenza aperta</div>'}
                 <h6 class="fw-bold">Offerte ricevute</h6>
@@ -1250,7 +1267,9 @@ function renderImpostazioniServer() {
     const v = DATA.vendite || {};
     const col = v.colonne || {};
     $('infoVendite').innerHTML = `File: <b>${esc(v.fonte || '-')}</b> · foglio <b>${esc(v.foglio || '-')}</b> · righe lette: <b>${(v.righe || 0).toLocaleString('it-IT')}</b><br>
-        Colonne riconosciute: ${Object.keys(col).map(k => `<span class="badge ${col[k] === '(nessuna)' && (k === 'data' || k === 'cliente' || k === 'imp') ? 'bg-danger' : 'bg-light text-dark border'} me-1">${k}: ${esc(col[k])}</span>`).join('')}`;
+        Colonne riconosciute: ${Object.keys(col).map(k => `<span class="badge ${col[k] === '(nessuna)' && (k === 'data' || k === 'cliente' || k === 'imp') ? 'bg-danger' : 'bg-light text-dark border'} me-1">${k}: ${esc(col[k])}</span>`).join('')}` +
+        (DATA.contabilita ? `<hr class="my-2"><b>Schede contabili</b>: ${esc(DATA.contabilita.fonte)} · foglio <b>${esc(DATA.contabilita.foglio)}</b> · movimenti letti: <b>${(DATA.contabilita.righe || 0).toLocaleString('it-IT')}</b><br>
+            ${Object.keys(DATA.contabilita.colonne || {}).map(k => `<span class="badge bg-light text-dark border me-1">${k}: ${esc(DATA.contabilita.colonne[k])}</span>`).join('')}` : '<hr class="my-2"><span class="text-muted">Pagamenti letti dal foglio SCADENZE.</span>');
 }
 
 async function salvaParametri() {
