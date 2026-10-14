@@ -293,6 +293,7 @@
                     <div class="card"><div class="card-body">
                         <h6 class="fw-bold"><i class="fas fa-database me-2"></i>Origine dati</h6>
                         <div class="small" id="infoVendite">-</div>
+                        <button class="btn btn-sm btn-primary mt-2" onclick="impostaFoglioNote()"><i class="fas fa-plug me-1"></i>Imposta vendite da foglio note e pagamenti da ARCHCONT</button>
                         <hr class="my-2">
                         <div class="small text-muted mb-2">Le vendite vengono lette in modo incrementale: a ogni aggiornamento solo le righe aggiunte in fondo al foglio. Se hai corretto o cancellato righe vecchie, usa la rilettura completa.</div>
                         <button class="btn btn-sm btn-outline-danger" onclick="if (confirm('Rileggere da capo tutto il foglio vendite? Con molte righe può richiedere qualche minuto.')) carica(true, true)"><i class="fas fa-database me-1"></i>Rilettura completa vendite</button>
@@ -719,7 +720,11 @@ function filtroBase(ignora) {
 }
 
 function renderVendite() {
-    if (!DATA || !DATA.venditeAgg) { $('vInfo').textContent = 'Nessun dato vendite: controlla l\'origine dati nelle Impostazioni.'; return; }
+    if (!DATA || !DATA.venditeAgg || !DATA.venditeAgg.nomi.length) {
+        $('vInfo').innerHTML = `<div class="alert alert-warning mb-0"><i class="fas fa-exclamation-triangle me-1"></i>Nessuna vendita letta dal foglio <b>${esc((DATA && DATA.vendite && DATA.vendite.foglio) || '-')}</b>.
+            <button class="btn btn-sm btn-primary ms-2" onclick="impostaFoglioNote()"><i class="fas fa-plug me-1"></i>Leggi le vendite dal foglio note</button></div>`;
+        return;
+    }
     const va = DATA.venditeAgg;
     const anno = $('vAnno').value === '' ? null : +$('vAnno').value;
     const mese = $('vMese').value === '' ? null : +$('vMese').value;
@@ -1694,6 +1699,28 @@ function renderImpostazioniServer() {
         Colonne riconosciute: ${Object.keys(col).map(k => `<span class="badge ${col[k] === '(nessuna)' && (k === 'data' || k === 'cliente' || k === 'imp') ? 'bg-danger' : 'bg-light text-dark border'} me-1">${k}: ${esc(col[k])}</span>`).join('')}` +
         (DATA.contabilita ? `<hr class="my-2"><b>Schede contabili</b>: ${esc(DATA.contabilita.fonte)} · foglio <b>${esc(DATA.contabilita.foglio)}</b> · movimenti letti: <b>${(DATA.contabilita.righe || 0).toLocaleString('it-IT')}</b><br>
             ${Object.keys(DATA.contabilita.colonne || {}).map(k => `<span class="badge bg-light text-dark border me-1">${k}: ${esc(DATA.contabilita.colonne[k])}</span>`).join('')}` : '<hr class="my-2"><span class="text-muted">Pagamenti letti dal foglio SCADENZE.</span>');
+}
+
+// Imposta in un clic le origini dati: vendite dal foglio "note", pagamenti dal foglio ARCHCONT
+async function impostaFoglioNote() {
+    if (!confirm('Impostare la lettura delle vendite dal foglio "note" (file vendite) e dei pagamenti dal foglio ARCHCONT, e rileggere tutto?\nLa prima lettura delle vendite può richiedere uno o due minuti.')) return;
+    const imp = {
+        VENDITE_FILE_ID: '1OlxI1A6wuhvH0gnfo3VnkyQ58kWBgIfJAVIjUIuZw-I', VENDITE_FOGLIO: 'note',
+        COL_DATA: 'B', COL_CLIENTE: 'I', COL_DOCUMENTO: '-', COL_IMPORTO: 'G', COL_QTA: 'D', COL_CATEGORIA: 'E', COL_BRAND: 'U',
+        IMPORTO_UNITARIO: 'NO', CATEGORIA_PRIMA_PAROLA: 'SI',
+        CONT_FILE_ID: '1vfVTGkTljzzsNyXqkItXr7reVQjqRgBNwxha7aUerUQ', CONT_FOGLIO: 'ARCHCONT',
+        CONT_COL_DATA: 'A', CONT_COL_CLIENTE: 'B', CONT_COL_ANNOT: 'C', CONT_COL_MERCE: 'D', CONT_COL_SCONTI: 'F',
+        CONT_COL_DOC: 'H', CONT_COL_TIPO: 'I', CONT_COL_IMPORTO: 'J', CONT_COL_SCAD: 'K'
+    };
+    try {
+        await api('saveSettings', { settings: imp });
+        toast('Origini dati impostate: lettura in corso...');
+        await carica(true, true);
+        const v = DATA.vendite || {};
+        toast(DATA.venditeAgg && DATA.venditeAgg.nomi.length
+            ? `Vendite lette: ${(v.righe || 0).toLocaleString('it-IT')} righe, ${DATA.venditeAgg.nomi.length} nominativi.`
+            : 'Ancora nessuna vendita letta: guarda gli avvisi in alto.', DATA.venditeAgg && DATA.venditeAgg.nomi.length ? 'success' : 'warning');
+    } catch (e) { toast(esc(e.message), 'danger'); }
 }
 
 async function salvaParametri() {
