@@ -101,7 +101,8 @@
         <div class="tab-pane fade" id="tClienti">
             <div class="card"><div class="card-body">
                 <div class="row g-2 mb-3">
-                    <div class="col-md-4"><input id="fCerca" class="form-control" placeholder="Cerca cliente, città, P.IVA..." oninput="renderClienti()"></div>
+                    <div class="col-md-3"><input id="fCerca" class="form-control" placeholder="Cerca cliente, città, P.IVA..." oninput="renderClienti()"></div>
+                    <div class="col-md-1"><button class="btn btn-primary w-100" title="Nuovo cliente" onclick="apriFormCliente()"><i class="fas fa-user-plus"></i></button></div>
                     <div class="col-md-3"><select id="fSeg" class="form-select" onchange="renderClienti()"><option value="">Tutti i segmenti</option></select></div>
                     <div class="col-md-2"><select id="fCls" class="form-select" onchange="renderClienti()"><option value="">Tutti i pagamenti</option></select></div>
                     <div class="col-md-2"><select id="fFascia" class="form-select" onchange="renderClienti()"><option value="">Tutti i rischi</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
@@ -209,6 +210,40 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
     </div>
     <div class="modal-body" id="mcBody"></div>
+</div></div></div>
+
+<!-- MODALE NUOVO / MODIFICA CLIENTE -->
+<div class="modal fade" id="mFormCliente" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+    <div class="modal-header" style="background:#2b6cb0;color:#fff;">
+        <h5 class="modal-title fw-bold" id="fcTitolo">Nuovo cliente</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+        <input type="hidden" id="fcNuovo">
+        <div class="row g-2">
+            <div class="col-md-3"><label class="form-label small fw-bold">Codice</label><input id="fcCodice" class="form-control" placeholder="automatico"></div>
+            <div class="col-md-6"><label class="form-label small fw-bold">Ragione sociale *</label><input id="fcNome" class="form-control"></div>
+            <div class="col-md-3"><label class="form-label small fw-bold">P.IVA</label><input id="fcPiva" class="form-control" maxlength="16"></div>
+            <div class="col-md-4"><label class="form-label small fw-bold">Referente</label><input id="fcReferente" class="form-control"></div>
+            <div class="col-md-4"><label class="form-label small fw-bold">Telefono (WhatsApp)</label><input id="fcTel" class="form-control" placeholder="es. 3331234567"></div>
+            <div class="col-md-4"><label class="form-label small fw-bold">Email</label><input id="fcEmail" type="email" class="form-control"></div>
+            <div class="col-md-4"><label class="form-label small fw-bold">Città</label><input id="fcCitta" class="form-control"></div>
+            <div class="col-md-4"><label class="form-label small fw-bold">Giorni di pagamento concordati</label>
+                <input id="fcGiorni" type="number" min="0" class="form-control" list="dlGiorni" placeholder="0 = contanti">
+                <datalist id="dlGiorni"><option value="0"><option value="30"><option value="60"><option value="90"><option value="120"></datalist>
+                <div class="form-text" id="fcClasse"></div>
+            </div>
+            <div class="col-md-4"><label class="form-label small fw-bold">Fido €</label><input id="fcFido" type="number" min="0" step="100" class="form-control"></div>
+            <div class="col-md-4"><label class="form-label small fw-bold">Inizio rapporto</label><input id="fcInizio" type="date" class="form-control"></div>
+            <div class="col-md-4"><label class="form-label small fw-bold">Stato</label><select id="fcAttivo" class="form-select"><option value="SI">Attivo</option><option value="NO">Non attivo</option></select></div>
+            <div class="col-12"><label class="form-label small fw-bold">Note</label><textarea id="fcNote" class="form-control" rows="2"></textarea></div>
+        </div>
+        <div class="small text-muted mt-2">Rischio e potenzialità vengono ricalcolati da vendite e scadenze dopo il salvataggio.</div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+        <button class="btn btn-primary fw-bold" id="btnSalvaCli" onclick="salvaCliente()"><i class="fas fa-save me-1"></i>Salva cliente</button>
+    </div>
 </div></div></div>
 
 <!-- MODALE OFFERTA -->
@@ -615,7 +650,8 @@ function esportaClienti() {
 function apriCliente(cod) {
     const c = cliente(cod);
     if (!c) return;
-    $('mcTitolo').innerHTML = `${esc(c.nome)} <small class="opacity-75 ms-2">${esc(c.codice)}</small>`;
+    $('mcTitolo').innerHTML = `${esc(c.nome)} <small class="opacity-75 ms-2">${esc(c.codice)}</small>
+        <button class="btn btn-sm btn-light ms-3" onclick="apriFormCliente('${esc(c.codice)}')"><i class="fas fa-pen me-1"></i>Modifica</button>`;
     const idonee = DATA.offerte.filter(o => o.attiva && !offertaScaduta(o) && valuta(o, c).idoneo);
     $('mcBody').innerHTML = `
         <div class="row g-3 mb-3">
@@ -685,6 +721,64 @@ function apriCliente(cod) {
                        scales: { y: { beginAtZero: true, ticks: { callback: v => '€ ' + v.toLocaleString('it-IT') } } } }
         });
     }, 200);
+}
+
+// ---------- Nuovo / modifica cliente ----------
+function aggiornaClasseForm() {
+    const g = +$('fcGiorni').value || 0, cfg = (DATA && DATA.cfg) || {};
+    const k = g <= (cfg.SOGLIA_CONTANTI_GG || 7) ? 'CONTANTI' : g <= (cfg.SOGLIA_BREVE_GG || 60) ? 'BREVE' : 'LUNGO';
+    $('fcClasse').innerHTML = `Classe di partenza: <b>${CLS[k].lbl}</b>`;
+}
+
+function apriFormCliente(cod) {
+    if (!DATA) { toast('Collegati prima ai Fogli Google.', 'warning'); return; }
+    const c = cod ? cliente(cod) : null;
+    const m = bootstrap.Modal.getInstance($('mCliente'));
+    if (m) m.hide();
+    $('fcTitolo').textContent = c ? 'Modifica cliente' : 'Nuovo cliente';
+    $('fcNuovo').value = c ? '' : '1';
+    $('fcCodice').value = c ? c.codice : '';
+    $('fcCodice').readOnly = !!c;
+    $('fcNome').value = c ? c.nome : '';
+    $('fcPiva').value = c ? c.piva : '';
+    $('fcReferente').value = c ? c.referente : '';
+    $('fcTel').value = c ? c.tel : '';
+    $('fcEmail').value = c ? c.email : '';
+    $('fcCitta').value = c ? c.citta : '';
+    $('fcGiorni').value = c ? c.giorniConc : 0;
+    $('fcFido').value = c ? c.fido : 0;
+    $('fcInizio').value = c ? (c.inizioRapporto || '') : oggiISO();
+    $('fcAttivo').value = c && !c.attivo ? 'NO' : 'SI';
+    $('fcNote').value = c ? c.note : '';
+    $('fcGiorni').oninput = aggiornaClasseForm;
+    aggiornaClasseForm();
+    bootstrap.Modal.getOrCreateInstance($('mFormCliente')).show();
+}
+
+async function salvaCliente() {
+    const nuovo = $('fcNuovo').value === '1';
+    const cli = {
+        codice: $('fcCodice').value.trim(), nome: $('fcNome').value.trim(), piva: $('fcPiva').value.trim().toUpperCase(),
+        referente: $('fcReferente').value.trim(), tel: $('fcTel').value.trim(), email: $('fcEmail').value.trim(),
+        citta: $('fcCitta').value.trim(), giorniConc: +$('fcGiorni').value || 0, fido: +$('fcFido').value || 0,
+        inizioRapporto: $('fcInizio').value, attivo: $('fcAttivo').value === 'SI', note: $('fcNote').value.trim()
+    };
+    if (!cli.nome) { toast('Inserisci la ragione sociale.', 'warning'); return; }
+    if (cli.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cli.email)) { toast('Email non valida.', 'warning'); return; }
+    if (cli.piva) {
+        const doppio = DATA.clienti.find(c => c.codice !== cli.codice && c.piva && c.piva.replace(/\s/g, '').toUpperCase() === cli.piva.replace(/\s/g, ''));
+        if (doppio && !confirm(`La P.IVA è già usata da "${doppio.nome}". Salvare comunque?`)) return;
+    }
+    const btn = $('btnSalvaCli');
+    btn.disabled = true;
+    try {
+        const r = await api('saveCliente', { cliente: cli, nuovo: nuovo });
+        bootstrap.Modal.getInstance($('mFormCliente')).hide();
+        toast(nuovo ? `Cliente ${esc(r.codice)} aggiunto.` : 'Cliente aggiornato.');
+        await carica(true);
+        apriCliente(r.codice);
+    } catch (e) { toast(esc(e.message), 'danger'); }
+    finally { btn.disabled = false; }
 }
 
 // ---------- Offerte ----------
