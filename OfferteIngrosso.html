@@ -56,6 +56,7 @@
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tClienti" type="button"><i class="fas fa-users me-1"></i>Clienti</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tOfferte" type="button"><i class="fas fa-tags me-1"></i>Offerte</button></li>
         <li class="nav-item"><button class="nav-link" id="tabCampagnaBtn" data-bs-toggle="pill" data-bs-target="#tCampagna" type="button"><i class="fas fa-paper-plane me-1"></i>Campagna</button></li>
+        <li class="nav-item"><button class="nav-link" id="tabBrandBtn" data-bs-toggle="pill" data-bs-target="#tBrand" type="button"><i class="fas fa-copyright me-1"></i>Brand</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tRegistro" type="button"><i class="fas fa-clipboard-list me-1"></i>Registro invii</button></li>
         <li class="nav-item"><button class="nav-link" id="tabImpBtn" data-bs-toggle="pill" data-bs-target="#tImpostazioni" type="button"><i class="fas fa-cog me-1"></i>Impostazioni</button></li>
     </ul>
@@ -103,9 +104,10 @@
                 <div class="row g-2 mb-3">
                     <div class="col-md-3"><input id="fCerca" class="form-control" placeholder="Cerca cliente, città, P.IVA..." oninput="renderClienti()"></div>
                     <div class="col-md-1"><button class="btn btn-primary w-100" title="Nuovo cliente" onclick="apriFormCliente()"><i class="fas fa-user-plus"></i></button></div>
-                    <div class="col-md-3"><select id="fSeg" class="form-select" onchange="renderClienti()"><option value="">Tutti i segmenti</option></select></div>
+                    <div class="col-md-2"><select id="fSeg" class="form-select" onchange="renderClienti()"><option value="">Tutti i segmenti</option></select></div>
+                    <div class="col-md-2"><select id="fBrand" class="form-select" onchange="renderClienti()"><option value="">Tutti i brand</option></select></div>
                     <div class="col-md-2"><select id="fCls" class="form-select" onchange="renderClienti()"><option value="">Tutti i pagamenti</option></select></div>
-                    <div class="col-md-2"><select id="fFascia" class="form-select" onchange="renderClienti()"><option value="">Tutti i rischi</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+                    <div class="col-md-1"><select id="fFascia" class="form-select" onchange="renderClienti()" title="Rischio"><option value="">Rischio</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
                     <div class="col-md-1"><button class="btn btn-outline-secondary w-100" title="Esporta CSV" onclick="esportaClienti()"><i class="fas fa-download"></i></button></div>
                 </div>
                 <div class="table-responsive">
@@ -153,6 +155,31 @@
                 <div id="cmpLista" class="mt-2"></div>
                 <details class="mt-3"><summary class="small text-muted" id="cmpEsclusiTit"></summary><div id="cmpEsclusi" class="small mt-2"></div></details>
             </div></div>
+        </div>
+
+        <!-- BRAND -->
+        <div class="tab-pane fade" id="tBrand">
+            <div class="row g-3">
+                <div class="col-lg-7">
+                    <div class="card"><div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                            <h6 class="fw-bold mb-0"><i class="fas fa-copyright me-2 text-primary"></i>Brand acquistati dai clienti ingrosso</h6>
+                            <input id="bCerca" class="form-control form-control-sm" style="width:200px" placeholder="Cerca brand..." oninput="renderBrand()">
+                        </div>
+                        <div style="position:relative;height:260px;" class="mb-3"><canvas id="chartBrand"></canvas></div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle mb-0">
+                                <thead class="table-light"><tr><th>Brand</th><th class="text-end">Acquisti 12m</th><th class="text-end">Anno prima</th><th class="text-end">Trend</th><th class="text-end">Quota</th><th class="text-end" title="Clienti che lo hanno acquistato negli ultimi 12 mesi">Clienti</th><th class="text-end" title="Lo compravano l'anno prima, negli ultimi 12 mesi no">Persi</th><th class="text-end" title="Primo acquisto negli ultimi 12 mesi">Nuovi</th></tr></thead>
+                                <tbody id="tbBrand"></tbody>
+                            </table>
+                        </div>
+                        <div class="small text-muted mt-2">Clicca un brand per vedere chi lo compra, chi lo ha abbandonato e a chi proporlo.</div>
+                    </div></div>
+                </div>
+                <div class="col-lg-5">
+                    <div class="card"><div class="card-body" id="brandDett"><div class="text-muted">Seleziona un brand dall'elenco.</div></div></div>
+                </div>
+            </div>
         </div>
 
         <!-- REGISTRO -->
@@ -296,6 +323,19 @@
                 <label class="form-label small fw-bold">Solo clienti fermi da almeno (gg)</label>
                 <input id="oInatt" type="number" min="0" class="form-control" placeholder="0 = tutti" oninput="anteprimaIdonei()">
             </div>
+            <div class="col-md-7">
+                <label class="form-label small fw-bold">Brand (facoltativo, separati da virgola)</label>
+                <input id="oBrand" class="form-control" list="dlBrand" placeholder="es. PLAYTEX, LOVABLE" oninput="anteprimaIdonei()">
+                <datalist id="dlBrand"></datalist>
+            </div>
+            <div class="col-md-5">
+                <label class="form-label small fw-bold">Per questi brand, invia a</label>
+                <select id="oBrandModo" class="form-select" onchange="anteprimaIdonei()">
+                    <option value="COMPRA">Chi li acquista (ultimi 12 mesi)</option>
+                    <option value="ABBANDONATO">Chi li ha abbandonati</option>
+                    <option value="NON_COMPRA">Chi non li acquista ancora</option>
+                </select>
+            </div>
         </div>
         <div class="alert alert-info small py-2 mt-3 mb-0" id="oAnteprima"></div>
         <hr>
@@ -343,9 +383,15 @@ const TIPI = {
         msg: 'Buongiorno {REFERENTE}, sono arrivati i riassortimenti di {CATEGORIA} e degli altri articoli più venduti da {CLIENTE}.\n{DESCRIZIONE}\n{CONDIZIONI}\nVuole che le prepariamo una proposta?\n{AZIENDA}' },
     'Riattivazione clienti fermi': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'B', potMin: 0, inattivoGg: 90, sconto: 10,
         msg: 'Buongiorno {REFERENTE}, è un po\' che non ci sentiamo! Per {CLIENTE} c\'è uno sconto del {SCONTO}% sul prossimo ordine.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{AZIENDA}' },
+    'Novità brand': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'C', potMin: 0, inattivoGg: 0, sconto: 0, brandModo: 'COMPRA',
+        msg: 'Buongiorno {REFERENTE}, sono arrivate le novità {BRAND} che {CLIENTE} apprezza.\n{DESCRIZIONE}\n{CONDIZIONI}\nLe preparo una proposta?\n{AZIENDA}' },
+    'Recupero brand abbandonato': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'C', potMin: 0, inattivoGg: 0, sconto: 10, brandModo: 'ABBANDONATO',
+        msg: 'Buongiorno {REFERENTE}, è da un po\' che {CLIENTE} non riassortisce {BRAND}: per tornare a lavorarlo le riserviamo uno sconto del {SCONTO}%.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{AZIENDA}' },
+    'Proponi un nuovo brand': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'B', potMin: 40, inattivoGg: 0, sconto: 10, brandModo: 'NON_COMPRA',
+        msg: 'Buongiorno {REFERENTE}, vorremmo far provare a {CLIENTE} il brand {BRAND}, che sta andando molto bene presso i nostri clienti: sul primo ordine sconto del {SCONTO}%.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{AZIENDA}' },
     'Promo personalizzata': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'C', potMin: 0, inattivoGg: 0, sconto: 0, msg: '' }
 };
-const SEGNAPOSTO = ['{CLIENTE}', '{REFERENTE}', '{OFFERTA}', '{DESCRIZIONE}', '{SCONTO}', '{SCADENZA}', '{CONDIZIONI}', '{CATEGORIA}', '{AZIENDA}'];
+const SEGNAPOSTO = ['{CLIENTE}', '{REFERENTE}', '{OFFERTA}', '{DESCRIZIONE}', '{SCONTO}', '{SCADENZA}', '{CONDIZIONI}', '{CATEGORIA}', '{BRAND}', '{AZIENDA}'];
 const ESITI = ['INVIATO', 'INTERESSATO', 'ORDINE', 'NESSUNA RISPOSTA', 'NON INTERESSATO'];
 const PARAMETRI = [
     ['NOME_AZIENDA', 'Nome azienda (firma messaggi)'],
@@ -355,13 +401,15 @@ const PARAMETRI = [
     ['GIORNI_PAUSA_INVII', 'Pausa minima tra due offerte allo stesso cliente (gg)'],
     ['VENDITE_FILE_ID', 'ID file Google Sheets vendite (vuoto = questo file)'],
     ['VENDITE_FOGLIO', 'Nome foglio vendite'],
-    ['COL_DATA', 'Colonna data (vuoto = automatica)'],
-    ['COL_CLIENTE', 'Colonna codice cliente / P.IVA'],
-    ['COL_DOCUMENTO', 'Colonna documento'],
-    ['COL_IMPORTO', 'Colonna importo'],
-    ['COL_QTA', 'Colonna quantità'],
-    ['COL_CATEGORIA', 'Colonna categoria'],
-    ['IMPORTO_UNITARIO', 'Importo unitario da moltiplicare per quantità (SI/NO)']
+    ['COL_DATA', 'Colonna data (lettera es. B, oppure intestazione)'],
+    ['COL_CLIENTE', 'Colonna cliente: nome, codice o P.IVA (lettera)'],
+    ['COL_DOCUMENTO', 'Colonna documento (- = nessuna, conta un ordine al giorno)'],
+    ['COL_IMPORTO', 'Colonna importo riga (lettera)'],
+    ['COL_QTA', 'Colonna quantità (lettera)'],
+    ['COL_CATEGORIA', 'Colonna categoria/descrizione (lettera)'],
+    ['COL_BRAND', 'Colonna brand (lettera, es. U)'],
+    ['IMPORTO_UNITARIO', 'Importo unitario da moltiplicare per quantità (SI/NO)'],
+    ['CATEGORIA_PRIMA_PAROLA', 'Categoria = prima parola della descrizione (SI/NO)']
 ];
 
 let DATA = null;
@@ -449,6 +497,13 @@ function valuta(o, c) {
     if (RISK_ORD[c.fascia] > RISK_ORD[o.rischioMax || 'D']) motivi.push(`rischio ${c.fascia} oltre il massimo ${o.rischioMax}`);
     if (c.potenziale < (o.potMin || 0)) motivi.push(`potenzialità ${c.potenziale} sotto ${o.potMin}`);
     if (o.inattivoGg > 0 && c.giorniDaUltimo !== null && c.giorniDaUltimo < o.inattivoGg) motivi.push(`ha comprato ${c.giorniDaUltimo} gg fa`);
+    if (o.brand && o.brand.length) {
+        const att = o.brand.filter(b => c._attivi.indexOf(b) >= 0), per = o.brand.filter(b => c._persi.indexOf(b) >= 0);
+        const elenco = o.brand.join(', ');
+        if (o.brandModo === 'ABBANDONATO') { if (!per.length || att.length) motivi.push(`non ha abbandonato ${elenco}`); }
+        else if (o.brandModo === 'NON_COMPRA') { if (att.length || per.length) motivi.push(`acquista già ${att.concat(per).join(', ')}`); }
+        else if (!att.length) motivi.push(`non acquista ${elenco}`);
+    }
     if (c.invii.some(i => i.idOfferta === o.id)) avvisi.push('offerta già ricevuta');
     const pausa = (DATA.cfg && DATA.cfg.GIORNI_PAUSA_INVII) || 0;
     if (c.ultimoInvioGg !== null && c.ultimoInvioGg < pausa) avvisi.push(`contattato ${c.ultimoInvioGg} gg fa`);
@@ -467,13 +522,105 @@ function componiMessaggio(o, c) {
     const rep = {
         '{CLIENTE}': c.nome, '{REFERENTE}': c.referente || c.nome, '{OFFERTA}': o.titolo,
         '{DESCRIZIONE}': o.descrizione || '', '{SCONTO}': o.sconto || 0, '{SCADENZA}': o.al ? fmtD(o.al) : 'esaurimento scorte',
-        '{CONDIZIONI}': condizioni(o, c), '{CATEGORIA}': (c.topCat[0] && c.topCat[0].cat) || 'articoli',
+        '{CONDIZIONI}': condizioni(o, c), '{CATEGORIA}': (c.topCat[0] && c.topCat[0].cat) || 'articoli', '{BRAND}': brandPerMessaggio(o, c),
         '{AZIENDA}': (DATA.cfg && DATA.cfg.NOME_AZIENDA) || ''
     };
     let t = o.messaggio || `Buongiorno {REFERENTE}, abbiamo un'offerta per {CLIENTE}: {OFFERTA}.\n{DESCRIZIONE}\n{CONDIZIONI}\n{AZIENDA}`;
     Object.keys(rep).forEach(k => { t = t.split(k).join(rep[k]); });
     return t.replace(/\n{3,}/g, '\n\n').trim();
 }
+
+function brandPerMessaggio(o, c) {
+    if (o.brand && o.brand.length) {
+        return o.brand.find(b => c._attivi.indexOf(b) >= 0) || o.brand.find(b => c._persi.indexOf(b) >= 0) || o.brand.join(', ');
+    }
+    return c._attivi[0] || 'i nostri brand';
+}
+
+// ---------- Analisi brand ----------
+const giorniDa = iso => iso ? Math.round((Date.now() - new Date(iso).getTime()) / 86400000) : null;
+
+function preparaBrand() {
+    DATA.clienti.forEach(c => {
+        const m = c.brandMap || {};
+        const tot = Object.keys(m).reduce((a, b) => a + Math.max(0, m[b][0]), 0);
+        c._br = Object.keys(m).map(b => ({ brand: b, imp12: m[b][0], prev12: m[b][1], ultimo: m[b][2], primo: m[b][3], quota: tot > 0 ? Math.max(0, m[b][0]) / tot * 100 : 0 }))
+            .sort((a, b) => (b.imp12 - a.imp12) || (b.prev12 - a.prev12));
+        c._attivi = c._br.filter(x => x.imp12 > 0).map(x => x.brand);
+        c._persi = c._br.filter(x => x.imp12 <= 0 && x.prev12 > 0).map(x => x.brand);
+        c._fedelta = c._br.length && c._br[0].imp12 > 0 ? Math.round(c._br[0].quota) : null;
+    });
+    const S = {};
+    DATA.clienti.forEach(c => c._br.forEach(x => {
+        const s = S[x.brand] || (S[x.brand] = { brand: x.brand, imp12: 0, prev12: 0, clienti: 0, persi: 0, nuovi: 0 });
+        s.imp12 += x.imp12; s.prev12 += x.prev12;
+        if (x.imp12 > 0) s.clienti++;
+        if (x.imp12 <= 0 && x.prev12 > 0) s.persi++;
+        if (x.imp12 > 0 && x.prev12 <= 0 && giorniDa(x.primo) !== null && giorniDa(x.primo) < 365) s.nuovi++;
+    }));
+    const totale = Object.keys(S).reduce((a, k) => a + Math.max(0, S[k].imp12), 0);
+    DATA._brand = Object.keys(S).map(k => Object.assign(S[k], {
+        quota: totale > 0 ? Math.max(0, S[k].imp12) / totale * 100 : 0,
+        trend: S[k].prev12 > 0 ? Math.round((S[k].imp12 - S[k].prev12) / S[k].prev12 * 100) : null
+    })).sort((a, b) => b.imp12 - a.imp12);
+    $('dlBrand').innerHTML = DATA._brand.map(b => `<option value="${esc(b.brand)}">`).join('');
+}
+
+// Brand molto venduti in rete che il cliente non ha mai acquistato (ultimi 24 mesi)
+function brandDaProporre(c, n) {
+    const suoi = c._br.map(x => x.brand);
+    return DATA._brand.filter(b => b.clienti >= 2 && suoi.indexOf(b.brand) < 0).sort((a, b) => b.clienti - a.clienti).slice(0, n || 3).map(b => b.brand);
+}
+
+let brandSelezionato = null;
+
+function renderBrand() {
+    if (!DATA || !DATA._brand) return;
+    const q = ($('bCerca').value || '').trim().toUpperCase();
+    const l = DATA._brand.filter(b => !q || b.brand.indexOf(q) >= 0);
+    $('tbBrand').innerHTML = l.map(b => `<tr style="cursor:pointer" class="${b.brand === brandSelezionato ? 'table-primary' : ''}" onclick="selezionaBrand(DATA._brand[${DATA._brand.indexOf(b)}].brand)">
+        <td class="fw-semibold">${esc(b.brand)}</td><td class="text-end">${eur(b.imp12)}</td><td class="text-end text-muted">${eur(b.prev12)}</td>
+        <td class="text-end">${trendTxt(b.trend)}</td><td class="text-end">${b.quota.toFixed(1)}%</td><td class="text-end">${b.clienti}</td>
+        <td class="text-end ${b.persi ? 'text-danger fw-semibold' : 'text-muted'}">${b.persi}</td><td class="text-end ${b.nuovi ? 'text-success fw-semibold' : 'text-muted'}">${b.nuovi}</td></tr>`).join('')
+        || '<tr><td colspan="8" class="text-muted text-center py-3">Nessun dato brand: controlla la colonna brand nelle Impostazioni.</td></tr>';
+
+    const top = DATA._brand.slice(0, 10);
+    if (charts.brand) charts.brand.destroy();
+    charts.brand = new Chart($('chartBrand'), {
+        type: 'bar',
+        data: { labels: top.map(b => b.brand), datasets: [
+            { label: 'Ultimi 12 mesi', data: top.map(b => b.imp12), backgroundColor: '#2b6cb0', borderRadius: 3 },
+            { label: 'Anno prima', data: top.map(b => b.prev12), backgroundColor: '#b6c6dd', borderRadius: 3 }] },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } }, tooltip: { callbacks: { label: x => `${x.dataset.label}: ${eur(x.parsed.x)}` } } },
+            scales: { x: { ticks: { callback: v => '€ ' + v.toLocaleString('it-IT') } } },
+            onClick: (e, el) => { if (el.length) selezionaBrand(top[el[0].index].brand); } }
+    });
+}
+
+function selezionaBrand(b) {
+    brandSelezionato = b;
+    renderBrand();
+    const s = DATA._brand.find(x => x.brand === b);
+    const att = DATA.clienti.map(c => ({ c: c, x: c._br.find(y => y.brand === b) })).filter(o => o.x && o.x.imp12 > 0).sort((a, z) => z.x.imp12 - a.x.imp12);
+    const per = DATA.clienti.map(c => ({ c: c, x: c._br.find(y => y.brand === b) })).filter(o => o.x && o.x.imp12 <= 0 && o.x.prev12 > 0).sort((a, z) => z.x.prev12 - a.x.prev12);
+    const nonComp = DATA.clienti.filter(c => c.attivo && !c._br.some(y => y.brand === b)).length;
+    const riga = (o, val, extra) => `<li class="d-flex justify-content-between px-1 py-1 border-bottom" onclick="apriCliente('${esc(o.c.codice)}')"><span>${esc(o.c.nome)} ${extra || ''}</span><span>${val}</span></li>`;
+    $('brandDett').innerHTML = `
+        <h5 class="fw-bold mb-1">${esc(b)}</h5>
+        <div class="small text-muted mb-3">${eur(s.imp12)} negli ultimi 12 mesi (${s.quota.toFixed(1)}% dell'ingrosso) · trend ${trendTxt(s.trend)}</div>
+        <div class="d-grid gap-2 mb-3">
+            <button class="btn btn-sm btn-primary" onclick="offertaBrand(brandSelezionato,'Novità brand')"><i class="fas fa-star me-1"></i>Offerta novità per chi lo compra (${att.length})</button>
+            <button class="btn btn-sm btn-warning" ${per.length ? '' : 'disabled'} onclick="offertaBrand(brandSelezionato,'Recupero brand abbandonato')"><i class="fas fa-rotate-left me-1"></i>Recupera chi l'ha abbandonato (${per.length})</button>
+            <button class="btn btn-sm btn-outline-success" onclick="offertaBrand(brandSelezionato,'Proponi un nuovo brand')"><i class="fas fa-bullhorn me-1"></i>Proponilo a chi non lo compra (${nonComp})</button>
+        </div>
+        <h6 class="fw-bold small">Clienti che lo acquistano</h6>
+        <ul class="list-unstyled mini-list mb-3">${att.slice(0, 15).map(o => riga(o, `<b>${eur(o.x.imp12)}</b>`, `<small class="text-muted">${Math.round(o.x.quota)}% dei suoi acquisti</small>`)).join('') || '<li class="text-muted small">Nessuno</li>'}</ul>
+        <h6 class="fw-bold small text-danger">Clienti che lo hanno abbandonato</h6>
+        <ul class="list-unstyled mini-list mb-0">${per.slice(0, 15).map(o => riga(o, `<span class="text-muted">${eur(o.x.prev12)} anno prima</span>`, `<small class="text-muted">ultimo ${fmtD(o.x.ultimo)}</small>`)).join('') || '<li class="text-muted small">Nessuno</li>'}</ul>`;
+}
+
+function offertaBrand(b, tipo) { apriOfferta(null, { tipo: tipo, brand: [b] }); }
 
 function telWa(t) {
     let d = String(t || '').replace(/[^\d+]/g, '');
@@ -489,7 +636,7 @@ function telWa(t) {
 function renderTutto() {
     if (!DATA) return;
     // ogni sezione è indipendente: un errore in una non blocca le altre
-    [renderAvvisi, renderPanoramica, preparaFiltri, renderClienti, renderOfferte, () => preparaCampagna(), renderRegistro, renderImpostazioniServer]
+    [preparaBrand, renderAvvisi, renderPanoramica, preparaFiltri, renderClienti, renderOfferte, () => preparaCampagna(), renderBrand, renderRegistro, renderImpostazioniServer]
         .forEach(fn => { try { fn(); } catch (e) { console.error('Errore di visualizzazione:', e); } });
 }
 
@@ -587,6 +734,9 @@ function preparaFiltri() {
     sSeg.innerHTML = '<option value="">Tutti i segmenti</option>' + Object.keys(SEG).map(s => `<option value="${s}">${SEG[s].lbl}</option>`).join('');
     sCls.innerHTML = '<option value="">Tutti i pagamenti</option>' + Object.keys(CLS).map(s => `<option value="${s}">${CLS[s].lbl}</option>`).join('');
     sSeg.value = vSeg; sCls.value = vCls;
+    const sBr = $('fBrand'), vBr = sBr.value;
+    sBr.innerHTML = '<option value="">Tutti i brand</option>' + (DATA._brand || []).map(b => `<option value="${esc(b.brand)}">${esc(b.brand)}</option>`).join('');
+    sBr.value = vBr;
 }
 
 function filtraSegmento(s) {
@@ -597,10 +747,10 @@ function filtraSegmento(s) {
 
 function clientiFiltrati() {
     const q = $('fCerca').value.trim().toLowerCase();
-    const seg = $('fSeg').value, cls = $('fCls').value, fa = $('fFascia').value;
+    const seg = $('fSeg').value, cls = $('fCls').value, fa = $('fFascia').value, br = $('fBrand').value;
     let l = DATA.clienti.filter(c =>
         (!q || [c.nome, c.citta, c.piva, c.codice].join(' ').toLowerCase().indexOf(q) >= 0) &&
-        (!seg || c.segmento === seg) && (!cls || c.classe === cls) && (!fa || c.fascia === fa));
+        (!seg || c.segmento === seg) && (!cls || c.classe === cls) && (!fa || c.fascia === fa) && (!br || c._attivi.indexOf(br) >= 0));
     const k = ordinamento.k, d = ordinamento.dir;
     l.sort((a, b) => {
         let va = a[k], vb = b[k];
@@ -641,8 +791,8 @@ document.addEventListener('click', e => {
 });
 
 function esportaClienti() {
-    const r = [['Codice', 'Ragione Sociale', 'Città', 'Telefono', 'Email', 'Segmento', 'Pagamento', 'Giorni effettivi', 'Rischio', 'Fascia', 'Potenzialità', 'Acquisti 12m', 'Trend %', 'Esposizione', 'Scaduto', 'Azione consigliata']];
-    clientiFiltrati().forEach(c => r.push([c.codice, c.nome, c.citta, c.tel, c.email, SEG[c.segmento].lbl, CLS[c.classe].lbl, c.giorniEff, c.rischio, c.fascia, c.potenziale, String(c.acq12).replace('.', ','), c.trend, String(c.aperto).replace('.', ','), String(c.scaduto).replace('.', ','), c.azione]));
+    const r = [['Codice', 'Ragione Sociale', 'Città', 'Telefono', 'Email', 'Segmento', 'Pagamento', 'Giorni effettivi', 'Rischio', 'Fascia', 'Potenzialità', 'Acquisti 12m', 'Trend %', 'Esposizione', 'Scaduto', 'Brand preferiti', 'Brand abbandonati', 'Azione consigliata']];
+    clientiFiltrati().forEach(c => r.push([c.codice, c.nome, c.citta, c.tel, c.email, SEG[c.segmento].lbl, CLS[c.classe].lbl, c.giorniEff, c.rischio, c.fascia, c.potenziale, String(c.acq12).replace('.', ','), c.trend, String(c.aperto).replace('.', ','), String(c.scaduto).replace('.', ','), c._attivi.slice(0, 3).join(', '), c._persi.join(', '), c.azione]));
     scaricaCsv('clienti_ingrosso.csv', r);
 }
 
@@ -691,6 +841,14 @@ function apriCliente(cod) {
             <div class="col-lg-7">
                 <h6 class="fw-bold">Acquisti ultimi 24 mesi</h6>
                 <div style="height:220px;position:relative"><canvas id="chartCliente"></canvas></div>
+                <h6 class="fw-bold mt-3">Brand <small class="text-muted fw-normal">${c._fedelta !== null ? '· il primo brand vale il ' + c._fedelta + '% dei suoi acquisti' + (c._fedelta >= 60 ? ' (molto fedele)' : '') : ''}</small></h6>
+                ${c._br.filter(x => x.imp12 > 0).slice(0, 6).map(x => `<div class="d-flex align-items-center gap-2 small mb-1">
+                    <span style="width:120px" class="text-truncate fw-semibold">${esc(x.brand)}</span>
+                    <div class="pot-bar flex-grow-1"><div style="width:${x.quota.toFixed(0)}%"></div></div>
+                    <span style="width:90px" class="text-end">${eur(x.imp12)}</span>
+                    <span style="width:55px" class="text-end">${x.prev12 > 0 ? trendTxt(Math.round((x.imp12 - x.prev12) / x.prev12 * 100)) : '<span class="badge bg-success">nuovo</span>'}</span></div>`).join('') || '<div class="text-muted small">Nessun acquisto negli ultimi 12 mesi</div>'}
+                ${c._persi.length ? `<div class="small mt-2"><b class="text-danger">Abbandonati:</b> ${c._persi.map(b => `<span class="badge bg-danger-subtle text-danger border me-1">${esc(b)}</span>`).join('')}</div>` : ''}
+                ${brandDaProporre(c).length ? `<div class="small mt-1"><b class="text-success">Da proporre:</b> ${brandDaProporre(c).map(b => `<span class="badge bg-success-subtle text-success border me-1">${esc(b)}</span>`).join('')} <span class="text-muted">(molto venduti, lui non li compra)</span></div>` : ''}
                 <h6 class="fw-bold mt-3">Categorie più acquistate (12 mesi)</h6>
                 ${c.topCat.length ? c.topCat.map(t => `<span class="badge bg-light text-dark border me-1 mb-1">${esc(t.cat)} · ${eur(t.imp)}</span>`).join('') : '<span class="text-muted small">-</span>'}
             </div>
@@ -788,6 +946,7 @@ function descriviRegole(o) {
         <span class="badge bg-light text-dark border">Rischio max ${o.rischioMax}</span>
         ${o.potMin ? `<span class="badge bg-light text-dark border">Potenzialità ≥ ${o.potMin}</span>` : ''}
         ${o.inattivoGg ? `<span class="badge bg-light text-dark border">Fermi da ≥ ${o.inattivoGg} gg</span>` : ''}
+        ${o.brand && o.brand.length ? `<span class="badge bg-info text-dark">${{ COMPRA: 'Compra', ABBANDONATO: 'Ha abbandonato', NON_COMPRA: 'Non compra' }[o.brandModo || 'COMPRA']}: ${esc(o.brand.join(', '))}</span>` : ''}
         <span class="badge ${o.pagRich === 'CONTANTI' ? 'bg-success' : 'bg-secondary'}">${o.pagRich === 'CONTANTI' ? 'Pagamento contanti' : 'Condizioni abituali'}</span>`;
 }
 
@@ -819,7 +978,8 @@ function leggiForm() {
         sconto: +$('oSconto').value || 0, dal: $('oDal').value, al: $('oAl').value,
         pagamenti: Array.from(document.querySelectorAll('.oPag:checked')).map(x => x.value),
         pagRich: $('oPagRich').value, rischioMax: $('oRischio').value, potMin: +$('oPot').value || 0,
-        inattivoGg: +$('oInatt').value || 0, messaggio: $('oMsg').value, attiva: $('oAttiva').value === 'SI'
+        inattivoGg: +$('oInatt').value || 0, messaggio: $('oMsg').value, attiva: $('oAttiva').value === 'SI',
+        brand: $('oBrand').value.split(/[,;]+/).map(x => x.trim().toUpperCase()).filter(Boolean), brandModo: $('oBrandModo').value
     };
 }
 
@@ -830,9 +990,10 @@ function scriviForm(o) {
     $('oPagRich').value = o.pagRich || 'ABITUALE'; $('oRischio').value = o.rischioMax || 'D';
     $('oPot').value = o.potMin || 0; $('oPotVal').textContent = o.potMin || 0; $('oInatt').value = o.inattivoGg || '';
     $('oMsg').value = o.messaggio || ''; $('oAttiva').value = o.attiva === false ? 'NO' : 'SI';
+    $('oBrand').value = (o.brand || []).join(', '); $('oBrandModo').value = o.brandModo || 'COMPRA';
 }
 
-function apriOfferta(id) {
+function apriOfferta(id, preset) {
     if (!DATA) { toast('Collegati prima ai Fogli Google.', 'warning'); return; }
     $('oTipo').innerHTML = Object.keys(TIPI).map(t => `<option>${t}</option>`).join('');
     $('oChips').innerHTML = SEGNAPOSTO.map(s => `<span class="badge bg-light text-dark border chip me-1" onclick="inserisci('${s}')">${s}</span>`).join('');
@@ -841,8 +1002,12 @@ function apriOfferta(id) {
     if (o) scriviForm(o);
     else {
         const d = new Date(); d.setDate(d.getDate() + 30);
-        scriviForm({ tipo: 'Fine serie / Stock', dal: oggiISO(), al: d.toISOString().slice(0, 10) });
+        scriviForm({ tipo: (preset && preset.tipo) || 'Fine serie / Stock', dal: oggiISO(), al: d.toISOString().slice(0, 10) });
         applicaTipo(true);
+        if (preset && preset.brand) {
+            $('oBrand').value = preset.brand.join(', ');
+            $('oTitolo').value = `${preset.tipo} – ${preset.brand.join(', ')}`;
+        }
     }
     anteprimaIdonei();
     bootstrap.Modal.getOrCreateInstance($('mOfferta')).show();
@@ -856,6 +1021,7 @@ function applicaTipo(forza) {
     document.querySelectorAll('.oPag').forEach(x => { x.checked = t.pagamenti.indexOf(x.value) >= 0; });
     $('oPagRich').value = t.pagRich; $('oRischio').value = t.rischioMax;
     $('oPot').value = t.potMin; $('oPotVal').textContent = t.potMin; $('oInatt').value = t.inattivoGg || '';
+    $('oBrandModo').value = t.brandModo || 'COMPRA';
     if (forza || !+$('oSconto').value) $('oSconto').value = t.sconto;
     if (eraPreset) $('oMsg').value = t.msg;
     if (forza || !$('oTitolo').value) $('oTitolo').value = $('oTipo').value;
@@ -876,6 +1042,7 @@ function anteprimaIdonei() {
     const perSeg = Object.keys(SEG).map(s => [s, id.filter(c => c.segmento === s).length]).filter(x => x[1]);
     $('oAnteprima').innerHTML = `<i class="fas fa-users me-1"></i><b>${id.length} clienti idonei</b>` +
         (perSeg.length ? ' · ' + perSeg.map(x => `${SEG[x[0]].lbl}: ${x[1]}`).join(' · ') : '') +
+        (o.brand.length && o.brand.some(b => !DATA._brand.some(x => x.brand === b)) ? '<br><span class="text-warning">Uno dei brand indicati non compare nelle vendite: controlla come è scritto.</span>' : '') +
         (o.pagRich !== 'CONTANTI' && o.rischioMax >= 'C' ? '<br><span class="text-danger">Attenzione: offri condizioni di pagamento abituali anche a clienti a rischio C/D.</span>' : '');
 }
 
@@ -1008,7 +1175,7 @@ async function personalizza(cod, btn) {
     const o = DATA.offerte.find(x => x.id === $('cmpOfferta').value);
     const prompt = `Sei il commerciale di un'azienda di abbigliamento all'ingrosso in Italia. Riscrivi questo messaggio WhatsApp per il cliente, mantenendo TUTTI i dati dell'offerta (sconto, scadenza, condizioni di pagamento) senza inventarne di nuovi. Tono cordiale e professionale, massimo 6 righe, niente markdown, niente emoji eccessive. Rispondi solo con il testo del messaggio.
 
-Profilo cliente: ${c.nome} (${c.citta}); segmento "${SEG[c.segmento].lbl}"; categorie preferite: ${c.topCat.map(t => t.cat).join(', ') || 'n.d.'}; trend acquisti ${c.trend === null ? 'n.d.' : c.trend + '%'}; ultimo acquisto ${c.giorniDaUltimo === null ? 'mai' : c.giorniDaUltimo + ' giorni fa'}.
+Profilo cliente: ${c.nome} (${c.citta}); segmento "${SEG[c.segmento].lbl}"; categorie preferite: ${c.topCat.map(t => t.cat).join(', ') || 'n.d.'}; brand preferiti: ${c._attivi.slice(0, 3).join(', ') || 'n.d.'}; trend acquisti ${c.trend === null ? 'n.d.' : c.trend + '%'}; ultimo acquisto ${c.giorniDaUltimo === null ? 'mai' : c.giorniDaUltimo + ' giorni fa'}.
 Offerta: ${o.titolo} – ${o.descrizione}.
 
 Messaggio da riscrivere:
@@ -1083,7 +1250,7 @@ function renderImpostazioniServer() {
     const v = DATA.vendite || {};
     const col = v.colonne || {};
     $('infoVendite').innerHTML = `File: <b>${esc(v.fonte || '-')}</b> · foglio <b>${esc(v.foglio || '-')}</b> · righe lette: <b>${(v.righe || 0).toLocaleString('it-IT')}</b><br>
-        Colonne riconosciute: ${Object.keys(col).map(k => `<span class="badge ${col[k] === '(non trovata)' ? 'bg-danger' : 'bg-light text-dark border'} me-1">${k}: ${esc(col[k])}</span>`).join('')}`;
+        Colonne riconosciute: ${Object.keys(col).map(k => `<span class="badge ${col[k] === '(nessuna)' && (k === 'data' || k === 'cliente' || k === 'imp') ? 'bg-danger' : 'bg-light text-dark border'} me-1">${k}: ${esc(col[k])}</span>`).join('')}`;
 }
 
 async function salvaParametri() {
