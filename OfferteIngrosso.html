@@ -54,6 +54,7 @@
     <ul class="nav nav-pills mb-3 gap-1 flex-wrap" role="tablist">
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tPanoramica" type="button"><i class="fas fa-chart-pie me-1"></i>Panoramica</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tClienti" type="button"><i class="fas fa-users me-1"></i>Clienti</button></li>
+        <li class="nav-item"><button class="nav-link" id="tabVenditeBtn" data-bs-toggle="pill" data-bs-target="#tVendite" type="button"><i class="fas fa-chart-column me-1"></i>Vendite</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tOfferte" type="button"><i class="fas fa-tags me-1"></i>Offerte</button></li>
         <li class="nav-item"><button class="nav-link" id="tabCampagnaBtn" data-bs-toggle="pill" data-bs-target="#tCampagna" type="button"><i class="fas fa-paper-plane me-1"></i>Campagna</button></li>
         <li class="nav-item"><button class="nav-link" id="tabBrandBtn" data-bs-toggle="pill" data-bs-target="#tBrand" type="button"><i class="fas fa-copyright me-1"></i>Brand</button></li>
@@ -155,6 +156,42 @@
                 <div id="cmpLista" class="mt-2"></div>
                 <details class="mt-3"><summary class="small text-muted" id="cmpEsclusiTit"></summary><div id="cmpEsclusi" class="small mt-2"></div></details>
             </div></div>
+        </div>
+
+        <!-- VENDITE (tutto il foglio NOTE) -->
+        <div class="tab-pane fade" id="tVendite">
+            <div class="card"><div class="card-body">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-2"><label class="form-label small fw-bold text-secondary">Anno</label><select id="vAnno" class="form-select" onchange="renderVendite()"></select></div>
+                    <div class="col-md-2"><label class="form-label small fw-bold text-secondary">Mese</label><select id="vMese" class="form-select" onchange="renderVendite()"></select></div>
+                    <div class="col-md-3"><label class="form-label small fw-bold text-secondary">Brand</label><select id="vBrand" class="form-select" onchange="renderVendite()"></select></div>
+                    <div class="col-md-3"><label class="form-label small fw-bold text-secondary">Cliente</label><input id="vCliente" class="form-control" placeholder="Cerca nome..." oninput="clearTimeout(window._vt); window._vt = setTimeout(renderVendite, 300)"></div>
+                    <div class="col-md-2"><div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="vSoloAnag" onchange="renderVendite()"><label class="form-check-label small" for="vSoloAnag">Solo clienti in anagrafica</label></div></div>
+                </div>
+                <div class="small text-muted mt-2" id="vInfo"></div>
+            </div></div>
+            <div class="row g-3 mb-1" id="vKpi"></div>
+            <div class="row g-3">
+                <div class="col-lg-7"><div class="card h-100"><div class="card-body">
+                    <h6 class="fw-bold"><i class="fas fa-chart-line me-2 text-primary"></i>Andamento mensile, anno per anno</h6>
+                    <div style="position:relative;height:300px;"><canvas id="chartVendite"></canvas></div>
+                </div></div></div>
+                <div class="col-lg-5"><div class="card h-100"><div class="card-body">
+                    <h6 class="fw-bold"><i class="fas fa-table me-2 text-primary"></i>Mesi × anni</h6>
+                    <div class="table-responsive"><table class="table table-sm table-hover text-end align-middle small mb-0" id="tbMesiAnni"></table></div>
+                </div></div></div>
+            </div>
+            <div class="row g-3 mt-1">
+                <div class="col-lg-5"><div class="card"><div class="card-body">
+                    <h6 class="fw-bold"><i class="fas fa-copyright me-2 text-primary"></i>Brand nel periodo <small class="text-muted fw-normal">(clic per filtrare)</small></h6>
+                    <div class="table-responsive" style="max-height:480px"><table class="table table-sm table-hover align-middle small mb-0" id="tbVBrand"></table></div>
+                </div></div></div>
+                <div class="col-lg-7"><div class="card"><div class="card-body">
+                    <h6 class="fw-bold"><i class="fas fa-users me-2 text-primary"></i>Clienti nel periodo</h6>
+                    <div class="table-responsive" style="max-height:480px"><table class="table table-sm table-hover align-middle small mb-0" id="tbVClienti"></table></div>
+                    <div class="small text-muted mt-2">I nominativi non ancora in anagrafica si possono aggiungere con un clic. Punti vendita e fornitori si escludono con <i class="fas fa-eye-slash"></i>.</div>
+                </div></div></div>
+            </div>
         </div>
 
         <!-- BRAND -->
@@ -437,6 +474,7 @@ const PARAMETRI = [
     ['COL_QTA', 'Colonna quantità (lettera)'],
     ['COL_CATEGORIA', 'Colonna categoria/descrizione (lettera)'],
     ['COL_BRAND', 'Colonna brand (lettera, es. U)'],
+    ['ESCLUDI_NOMI', 'Nominativi da escludere dalle vendite (separati da virgola)'],
     ['CONT_FILE_ID', 'ID file schede contabili (vuoto = foglio SCADENZE)'],
     ['CONT_FOGLIO', 'Nome foglio schede contabili'],
     ['CONT_COL_DATA', 'Contabilità: colonna data'],
@@ -577,6 +615,188 @@ function brandPerMessaggio(o, c) {
     return c._attivi[0] || 'i nostri brand';
 }
 
+// ---------- Analisi vendite (tutto il foglio NOTE) ----------
+const MESI = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+
+function esclusi() {
+    return String((DATA.cfg && DATA.cfg.ESCLUDI_NOMI) || '').split(',').map(x => x.trim().toUpperCase()).filter(Boolean);
+}
+
+function indiciCliente(cod) {
+    const va = DATA.venditeAgg;
+    if (!va) return [];
+    return va.codici.map((c, i) => c === cod ? i : -1).filter(i => i >= 0);
+}
+
+function preparaVendite() {
+    const va = DATA.venditeAgg;
+    if (!va) return;
+    const anni = Array.from(new Set(va.righe.map(r => r[1]))).sort((a, b) => b - a);
+    const sA = $('vAnno'), prima = sA.value;
+    sA.innerHTML = '<option value="">Tutti gli anni</option>' + anni.map(a => `<option value="${a}">${a}</option>`).join('');
+    const annoCorr = new Date().getFullYear();
+    sA.value = prima && anni.indexOf(+prima) >= 0 ? prima : (anni.indexOf(annoCorr) >= 0 ? String(annoCorr) : String(anni[0] || ''));
+    const sM = $('vMese'), pm = sM.value;
+    sM.innerHTML = '<option value="">Tutti i mesi</option>' + MESI.map((m, i) => `<option value="${i + 1}">${m}</option>`).join('');
+    sM.value = pm;
+    const sB = $('vBrand'), pb = sB.value;
+    const tot = {};
+    va.righe.forEach(r => { tot[r[3]] = (tot[r[3]] || 0) + r[4]; });
+    const ord = Object.keys(tot).map(Number).sort((a, b) => tot[b] - tot[a]);
+    sB.innerHTML = '<option value="">Tutti i brand</option>' + ord.map(i => `<option value="${i}">${esc(va.brand[i])}</option>`).join('');
+    sB.value = pb;
+}
+
+// Mesi del periodo scelto e dello stesso periodo dell'anno prima (per il confronto)
+function mesiPeriodo(anno, mese) {
+    if (mese) return [mese];
+    const ora = new Date();
+    if (anno === ora.getFullYear()) return Array.from({ length: ora.getMonth() + 1 }, (_, i) => i + 1);
+    return Array.from({ length: 12 }, (_, i) => i + 1);
+}
+
+function filtroBase(ignora) {
+    const va = DATA.venditeAgg, esc0 = esclusi();
+    const q = $('vCliente').value.trim().toUpperCase();
+    const solo = $('vSoloAnag').checked;
+    const brand = $('vBrand').value === '' ? null : +$('vBrand').value;
+    const okNome = va.nomi.map((n, i) => (!q || n.indexOf(q) >= 0) && (!solo || va.codici[i]) && !esc0.some(e => n.indexOf(e) >= 0));
+    return r => okNome[r[0]] && (ignora === 'brand' || brand === null || r[3] === brand);
+}
+
+function renderVendite() {
+    if (!DATA || !DATA.venditeAgg) { $('vInfo').textContent = 'Nessun dato vendite: controlla l\'origine dati nelle Impostazioni.'; return; }
+    const va = DATA.venditeAgg;
+    const anno = $('vAnno').value === '' ? null : +$('vAnno').value;
+    const mese = $('vMese').value === '' ? null : +$('vMese').value;
+    const base = filtroBase(), baseNoBrand = filtroBase('brand');
+    const mesi = anno ? mesiPeriodo(anno, mese) : null;
+    const inPer = r => (!anno || r[1] === anno) && (!mese || r[2] === mese) && (!mesi || mesi.indexOf(r[2]) >= 0);
+    const inPrev = r => anno && r[1] === anno - 1 && mesi.indexOf(r[2]) >= 0;
+    const perRighe = va.righe.filter(r => base(r) && inPer(r));
+    const prevRighe = anno ? va.righe.filter(r => base(r) && inPrev(r)) : [];
+    const somma = (rr, k) => rr.reduce((a, r) => a + r[k], 0);
+    const inc = somma(perRighe, 4), incP = somma(prevRighe, 4);
+    const nCli = new Set(perRighe.map(r => r[0])).size, nCliP = new Set(prevRighe.map(r => r[0])).size;
+    const nBr = new Set(perRighe.map(r => r[3])).size;
+    const dP = (a, b) => b > 0 ? trendTxt(Math.round((a - b) / b * 100)) : '';
+    const etPer = anno ? (mese ? `${MESI[mese - 1]} ${anno}` : (mesi.length < 12 ? `Gen–${MESI[mesi.length - 1]} ${anno}` : `${anno}`)) : 'tutto il periodo';
+    $('vInfo').innerHTML = `Periodo: <b>${etPer}</b>${anno ? ` · confronto con lo stesso periodo del ${anno - 1}` : ''} · fonte: foglio ${esc((DATA.vendite || {}).foglio || '')}, ${va.nomi.length.toLocaleString('it-IT')} nominativi${esclusi().length ? ` · esclusi: ${esc(esclusi().join(', '))}` : ''}`;
+    const k = [
+        ['Venduto', eur(inc), dP(inc, incP)],
+        ['Capi', Math.round(somma(perRighe, 5)).toLocaleString('it-IT'), dP(somma(perRighe, 5), somma(prevRighe, 5))],
+        ['Clienti attivi', nCli, dP(nCli, nCliP)],
+        ['Media per cliente', eur(nCli ? inc / nCli : 0), dP(nCli ? inc / nCli : 0, nCliP ? incP / nCliP : 0)],
+        ['Brand venduti', nBr, ''],
+        [anno ? `Stesso periodo ${anno - 1}` : 'Anno prima', anno ? eur(incP) : '-', '']
+    ];
+    $('vKpi').innerHTML = k.map(x => `<div class="col-xl-2 col-md-4 col-6"><div class="card kpi"><div class="lbl">${x[0]}</div><div class="val">${x[1]}</div><div class="small">${x[2] ? 'vs anno prima ' + x[2] : '&nbsp;'}</div></div></div>`).join('');
+
+    // --- grafico e tabella mesi × anni (ignorano il filtro anno/mese) ---
+    const tutte = va.righe.filter(base);
+    const anni = Array.from(new Set(tutte.map(r => r[1]))).sort((a, b) => a - b);
+    const mat = {};
+    anni.forEach(a => mat[a] = Array(13).fill(0));
+    tutte.forEach(r => { mat[r[1]][r[2]] += r[4]; });
+    const ora = new Date();
+    const anniGraf = anni.slice(-4);
+    const pal = ['#ced4da', '#9aa9bf', '#20c997', '#2b6cb0'];
+    if (charts.vendite) charts.vendite.destroy();
+    charts.vendite = new Chart($('chartVendite'), {
+        type: 'line',
+        data: { labels: MESI, datasets: anniGraf.map((a, i) => ({
+            label: String(a), borderColor: pal[pal.length - anniGraf.length + i], backgroundColor: pal[pal.length - anniGraf.length + i],
+            borderWidth: a === anno || (i === anniGraf.length - 1 && !anno) ? 3 : 2, tension: .3,
+            data: mat[a].slice(1).map((v, m) => (a === ora.getFullYear() && m > ora.getMonth()) ? null : v) })) },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: x => `${x.dataset.label}: ${eur(x.parsed.y)}` } } },
+            scales: { y: { beginAtZero: true, ticks: { callback: v => '€ ' + v.toLocaleString('it-IT') } } } }
+    });
+    const ultimi = anni.slice(-4);
+    const ua = ultimi[ultimi.length - 1], pa = ultimi[ultimi.length - 2];
+    let t = `<thead class="table-light"><tr><th class="text-start">Mese</th>${ultimi.map(a => `<th>${a}</th>`).join('')}${pa ? `<th>Δ ${ua}</th>` : ''}</tr></thead><tbody>`;
+    for (let m = 1; m <= 12; m++) {
+        t += `<tr class="${mese === m ? 'table-warning' : ''}"><td class="text-start">${MESI[m - 1]}</td>${ultimi.map(a => `<td>${mat[a][m] ? eur(mat[a][m]) : '<span class="text-muted">-</span>'}</td>`).join('')}${pa ? `<td>${mat[pa][m] && mat[ua][m] ? trendTxt(Math.round((mat[ua][m] - mat[pa][m]) / mat[pa][m] * 100)) : ''}</td>` : ''}</tr>`;
+    }
+    const tot = a => mat[a].reduce((x, y) => x + y, 0);
+    t += `<tr class="table-info fw-bold"><td class="text-start">Totale</td>${ultimi.map(a => `<td>${eur(tot(a))}</td>`).join('')}${pa ? '<td></td>' : ''}</tr></tbody>`;
+    $('tbMesiAnni').innerHTML = anni.length ? t : '<tbody><tr><td class="text-muted">Nessun dato</td></tr></tbody>';
+
+    // --- brand nel periodo (ignora il filtro brand) ---
+    const perNB = va.righe.filter(r => baseNoBrand(r) && inPer(r)), prevNB = anno ? va.righe.filter(r => baseNoBrand(r) && inPrev(r)) : [];
+    const B = {};
+    perNB.forEach(r => { const b = B[r[3]] || (B[r[3]] = { inc: 0, qta: 0, cli: new Set(), prev: 0 }); b.inc += r[4]; b.qta += r[5]; b.cli.add(r[0]); });
+    prevNB.forEach(r => { (B[r[3]] || (B[r[3]] = { inc: 0, qta: 0, cli: new Set(), prev: 0 })).prev += r[4]; });
+    const totB = Object.keys(B).reduce((a, i) => a + Math.max(0, B[i].inc), 0);
+    const brSel = $('vBrand').value;
+    $('tbVBrand').innerHTML = `<thead class="table-light"><tr><th>Brand</th><th class="text-end">Venduto</th><th class="text-end">Capi</th><th class="text-end">Clienti</th><th class="text-end">Quota</th><th class="text-end">Δ</th></tr></thead><tbody>` +
+        Object.keys(B).map(Number).filter(i => B[i].inc || B[i].prev).sort((a, b) => B[b].inc - B[a].inc).map(i => `<tr style="cursor:pointer" class="${String(i) === brSel ? 'table-primary' : ''}" onclick="$('vBrand').value = ($('vBrand').value === '${i}' ? '' : '${i}'); renderVendite();">
+            <td class="fw-semibold">${esc(va.brand[i])}</td><td class="text-end">${eur(B[i].inc)}</td><td class="text-end">${Math.round(B[i].qta)}</td><td class="text-end">${B[i].cli.size}</td>
+            <td class="text-end">${totB ? (Math.max(0, B[i].inc) / totB * 100).toFixed(1) : 0}%</td><td class="text-end">${anno ? (B[i].prev > 0 ? trendTxt(Math.round((B[i].inc - B[i].prev) / B[i].prev * 100)) : (B[i].inc > 0 ? '<span class="badge bg-success">nuovo</span>' : '')) : ''}</td></tr>`).join('') + '</tbody>';
+
+    // --- clienti nel periodo ---
+    const C = {};
+    perRighe.forEach(r => { const c = C[r[0]] || (C[r[0]] = { inc: 0, qta: 0, br: {}, ultimo: 0, prev: 0 }); c.inc += r[4]; c.qta += r[5]; c.br[r[3]] = (c.br[r[3]] || 0) + r[4]; c.ultimo = Math.max(c.ultimo, r[1] * 100 + r[2]); });
+    prevRighe.forEach(r => { (C[r[0]] || (C[r[0]] = { inc: 0, qta: 0, br: {}, ultimo: 0, prev: 0 })).prev += r[4]; });
+    const lista = Object.keys(C).map(Number).filter(i => C[i].inc || C[i].prev).sort((a, b) => C[b].inc - C[a].inc);
+    $('tbVClienti').innerHTML = `<thead class="table-light"><tr><th>Cliente</th><th class="text-end">Venduto</th><th class="text-end">Capi</th><th>Brand principali</th><th class="text-end">Δ</th><th>Ultimo</th><th></th></tr></thead><tbody>` +
+        lista.slice(0, 300).map(i => {
+            const c = C[i], cod = va.codici[i];
+            const top = Object.keys(c.br).sort((a, b) => c.br[b] - c.br[a]).slice(0, 3).map(b => esc(va.brand[b])).join(', ');
+            const az = cod ? `<span class="badge bg-success">in anagrafica</span>`
+                : `<button class="btn btn-sm btn-outline-primary py-0" title="Aggiungi ai clienti ingrosso" onclick="event.stopPropagation(); apriFormCliente(null, { nome: DATA.venditeAgg.nomi[${i}] })"><i class="fas fa-user-plus"></i></button>
+                   <button class="btn btn-sm btn-outline-secondary py-0" title="Escludi (punto vendita, fornitore...)" onclick="event.stopPropagation(); escludiNome(${i})"><i class="fas fa-eye-slash"></i></button>`;
+            return `<tr style="cursor:pointer" onclick="apriVenditeNome(${i})"><td class="fw-semibold">${esc(va.nomi[i])}</td><td class="text-end">${eur(c.inc)}</td><td class="text-end">${Math.round(c.qta)}</td>
+                <td class="small">${top}</td><td class="text-end">${anno ? (c.prev > 0 ? trendTxt(Math.round((c.inc - c.prev) / c.prev * 100)) : (c.inc > 0 ? '<span class="badge bg-success">nuovo</span>' : '<span class="badge bg-danger">perso</span>')) : ''}</td>
+                <td class="small">${c.ultimo ? MESI[c.ultimo % 100 - 1] + ' ' + Math.floor(c.ultimo / 100) : '-'}</td><td class="text-nowrap">${az}</td></tr>`;
+        }).join('') + (lista.length > 300 ? `<tr><td colspan="7" class="text-muted">… altri ${lista.length - 300} nominativi: usa la ricerca</td></tr>` : '') + '</tbody>';
+}
+
+// Tabelle anno × mese e brand × anno per uno o più nominativi
+function dettaglioVendite(cis) {
+    const va = DATA.venditeAgg, set = new Set(cis);
+    const rr = va.righe.filter(r => set.has(r[0]));
+    if (!rr.length) return '<div class="text-muted small">Nessuna vendita nel foglio.</div>';
+    const anni = Array.from(new Set(rr.map(r => r[1]))).sort((a, b) => b - a);
+    const mat = {}; anni.forEach(a => mat[a] = Array(13).fill(0));
+    const B = {};
+    rr.forEach(r => { mat[r[1]][r[2]] += r[4]; const b = B[r[3]] || (B[r[3]] = {}); b[r[1]] = (b[r[1]] || 0) + r[4]; });
+    const cella = v => v ? Math.round(v).toLocaleString('it-IT') : '<span class="text-muted">-</span>';
+    let h1 = `<div class="table-responsive"><table class="table table-sm table-bordered text-end small mb-2"><thead class="table-light"><tr><th class="text-start">Anno</th>${MESI.map(m => `<th>${m}</th>`).join('')}<th>Totale €</th></tr></thead><tbody>`;
+    anni.forEach(a => { h1 += `<tr><td class="text-start fw-bold">${a}</td>${mat[a].slice(1).map(v => `<td>${cella(v)}</td>`).join('')}<td class="fw-bold">${eur(mat[a].reduce((x, y) => x + y, 0))}</td></tr>`; });
+    h1 += '</tbody></table></div>';
+    const bi = Object.keys(B).map(Number).sort((a, b) => (B[b][anni[0]] || 0) - (B[a][anni[0]] || 0) || Object.values(B[b]).reduce((x, y) => x + y, 0) - Object.values(B[a]).reduce((x, y) => x + y, 0)).slice(0, 15);
+    let h2 = `<div class="table-responsive"><table class="table table-sm table-bordered text-end small mb-0"><thead class="table-light"><tr><th class="text-start">Brand</th>${anni.map(a => `<th>${a}</th>`).join('')}</tr></thead><tbody>`;
+    bi.forEach(b => { h2 += `<tr><td class="text-start fw-semibold">${esc(va.brand[b])}</td>${anni.map(a => `<td>${cella(B[b][a])}</td>`).join('')}</tr>`; });
+    h2 += '</tbody></table></div>';
+    return h1 + h2;
+}
+
+function apriVenditeNome(i) {
+    const va = DATA.venditeAgg, cod = va.codici[i];
+    if (cod && cliente(cod)) { apriCliente(cod); return; }
+    $('mcTitolo').innerHTML = `${esc(va.nomi[i])} <small class="opacity-75 ms-2">non in anagrafica</small>`;
+    $('mcBody').innerHTML = `<div class="mb-3">
+            <button class="btn btn-sm btn-primary" onclick="apriFormCliente(null, { nome: DATA.venditeAgg.nomi[${i}] })"><i class="fas fa-user-plus me-1"></i>Aggiungi ai clienti ingrosso</button>
+            <button class="btn btn-sm btn-outline-secondary ms-1" onclick="escludiNome(${i}); bootstrap.Modal.getInstance($('mCliente')).hide();"><i class="fas fa-eye-slash me-1"></i>Escludi dall'analisi</button>
+            <div class="small text-muted mt-2">Aggiungendolo in anagrafica il sistema calcola anche pagamenti, rischio e potenzialità e lo include nelle offerte.</div>
+        </div>${dettaglioVendite([i])}`;
+    bootstrap.Modal.getOrCreateInstance($('mCliente')).show();
+}
+
+async function escludiNome(i) {
+    const nome = DATA.venditeAgg.nomi[i];
+    if (!confirm(`Escludere "${nome}" dall'analisi vendite (es. punto vendita o fornitore)?`)) return;
+    const nuovo = esclusi().concat([nome]).join(', ');
+    try {
+        await api('saveSettings', { settings: { ESCLUDI_NOMI: nuovo } });
+        DATA.cfg.ESCLUDI_NOMI = nuovo;
+        ls.set('oi_cache', JSON.stringify(DATA));
+        renderVendite();
+        toast(`"${esc(nome)}" escluso. Per riattivarlo modifica il parametro nelle Impostazioni.`);
+    } catch (e) { toast(esc(e.message), 'danger'); }
+}
+
 // ---------- Analisi brand ----------
 const giorniDa = iso => iso ? Math.round((Date.now() - new Date(iso).getTime()) / 86400000) : null;
 
@@ -676,7 +896,7 @@ function telWa(t) {
 function renderTutto() {
     if (!DATA) return;
     // ogni sezione è indipendente: un errore in una non blocca le altre
-    [preparaBrand, statoGemini, renderAvvisi, renderPanoramica, preparaFiltri, renderClienti, renderOfferte, () => preparaCampagna(), renderBrand, renderRegistro, renderImpostazioniServer]
+    [preparaBrand, preparaVendite, statoGemini, renderAvvisi, renderPanoramica, preparaFiltri, renderClienti, renderOfferte, () => preparaCampagna(), renderVendite, renderBrand, renderRegistro, renderImpostazioniServer]
         .forEach(fn => { try { fn(); } catch (e) { console.error('Errore di visualizzazione:', e); } });
 }
 
@@ -894,6 +1114,7 @@ function apriCliente(cod) {
                     <span style="width:55px" class="text-end">${x.prev12 > 0 ? trendTxt(Math.round((x.imp12 - x.prev12) / x.prev12 * 100)) : '<span class="badge bg-success">nuovo</span>'}</span></div>`).join('') || '<div class="text-muted small">Nessun acquisto negli ultimi 12 mesi</div>'}
                 ${c._persi.length ? `<div class="small mt-2"><b class="text-danger">Abbandonati:</b> ${c._persi.map(b => `<span class="badge bg-danger-subtle text-danger border me-1">${esc(b)}</span>`).join('')}</div>` : ''}
                 ${brandDaProporre(c).length ? `<div class="small mt-1"><b class="text-success">Da proporre:</b> ${brandDaProporre(c).map(b => `<span class="badge bg-success-subtle text-success border me-1">${esc(b)}</span>`).join('')} <span class="text-muted">(molto venduti, lui non li compra)</span></div>` : ''}
+                ${(() => { const cis = indiciCliente(c.codice); return cis.length ? `<h6 class="fw-bold mt-3">Vendite per anno, mese e brand</h6>${dettaglioVendite(cis)}` : ''; })()}
                 <h6 class="fw-bold mt-3">Categorie più acquistate (12 mesi)</h6>
                 ${c.topCat.length ? c.topCat.map(t => `<span class="badge bg-light text-dark border me-1 mb-1">${esc(t.cat)} · ${eur(t.imp)}</span>`).join('') : '<span class="text-muted small">-</span>'}
             </div>
@@ -933,7 +1154,7 @@ function aggiornaClasseForm() {
     $('fcClasse').innerHTML = `Classe di partenza: <b>${CLS[k].lbl}</b>`;
 }
 
-function apriFormCliente(cod) {
+function apriFormCliente(cod, preset) {
     if (!DATA) { toast('Collegati prima ai Fogli Google.', 'warning'); return; }
     const c = cod ? cliente(cod) : null;
     const m = bootstrap.Modal.getInstance($('mCliente'));
@@ -942,7 +1163,7 @@ function apriFormCliente(cod) {
     $('fcNuovo').value = c ? '' : '1';
     $('fcCodice').value = c ? c.codice : '';
     $('fcCodice').readOnly = !!c;
-    $('fcNome').value = c ? c.nome : '';
+    $('fcNome').value = c ? c.nome : ((preset && preset.nome) || '');
     $('fcPiva').value = c ? c.piva : '';
     $('fcReferente').value = c ? c.referente : '';
     $('fcTel').value = c ? c.tel : '';
