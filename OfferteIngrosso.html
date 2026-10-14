@@ -54,6 +54,7 @@
     <ul class="nav nav-pills mb-3 gap-1 flex-wrap" role="tablist">
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tPanoramica" type="button"><i class="fas fa-chart-pie me-1"></i>Panoramica</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tClienti" type="button"><i class="fas fa-users me-1"></i>Clienti</button></li>
+        <li class="nav-item"><button class="nav-link" id="tabCollegaBtn" data-bs-toggle="pill" data-bs-target="#tCollega" type="button"><i class="fas fa-link me-1"></i>Collega nomi <span class="badge bg-warning text-dark" id="kBadge"></span></button></li>
         <li class="nav-item"><button class="nav-link" id="tabVenditeBtn" data-bs-toggle="pill" data-bs-target="#tVendite" type="button"><i class="fas fa-chart-column me-1"></i>Vendite</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tOfferte" type="button"><i class="fas fa-tags me-1"></i>Offerte</button></li>
         <li class="nav-item"><button class="nav-link" id="tabCampagnaBtn" data-bs-toggle="pill" data-bs-target="#tCampagna" type="button"><i class="fas fa-paper-plane me-1"></i>Campagna</button></li>
@@ -155,6 +156,35 @@
                 </div>
                 <div id="cmpLista" class="mt-2"></div>
                 <details class="mt-3"><summary class="small text-muted" id="cmpEsclusiTit"></summary><div id="cmpEsclusi" class="small mt-2"></div></details>
+            </div></div>
+        </div>
+
+        <!-- COLLEGA NOMI -->
+        <div class="tab-pane fade" id="tCollega">
+            <div class="card"><div class="card-body">
+                <p class="small text-muted mb-2">Qui colleghi ogni nome come è scritto nel foglio <b>NOTE</b> (vendite) e nel foglio <b>ARCHCONT</b> (schede contabili) alla <b>ragione sociale</b> del cliente. Un cliente può avere più nomi collegati; i nomi uguali nei due file vengono già riuniti in una sola riga.</p>
+                <div class="row g-2 align-items-end mb-2">
+                    <div class="col-md-2"><label class="form-label small fw-bold text-secondary">Mostra</label>
+                        <select id="kStato" class="form-select form-select-sm" onchange="renderCollega()"><option value="DA">Da collegare</option><option value="OK">Già collegati</option><option value="">Tutti</option></select></div>
+                    <div class="col-md-4"><label class="form-label small fw-bold text-secondary">Presenti in</label>
+                        <select id="kFonte" class="form-select form-select-sm" onchange="renderCollega()">
+                            <option value="">Vendite o contabilità</option>
+                            <option value="ENTRAMBI">Vendite e contabilità (probabili clienti ingrosso)</option>
+                            <option value="V">Solo vendite (NOTE)</option>
+                            <option value="C">Solo contabilità (ARCHCONT)</option>
+                        </select></div>
+                    <div class="col-md-4"><label class="form-label small fw-bold text-secondary">Cerca</label>
+                        <input id="kCerca" class="form-control form-control-sm" placeholder="Nome..." oninput="clearTimeout(window._kt); window._kt = setTimeout(renderCollega, 250)"></div>
+                    <div class="col-md-2"><div class="form-check"><input class="form-check-input" type="checkbox" id="kEsclusi" onchange="renderCollega()"><label class="form-check-label small" for="kEsclusi">Mostra esclusi</label></div></div>
+                </div>
+                <div class="alert alert-info small py-2 d-none" id="kBanner"></div>
+                <div class="sticky-actions d-flex flex-wrap gap-2 align-items-center">
+                    <span class="fw-bold me-2" id="kConta"></span>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="kSelTutti(true)">Seleziona tutti</button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="kSelTutti(false)">Nessuno</button>
+                    <button class="btn btn-sm btn-primary" onclick="creaSelezionati()"><i class="fas fa-users me-1"></i>Crea clienti dai selezionati</button>
+                </div>
+                <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0" id="tbCollega"></table></div>
             </div></div>
         </div>
 
@@ -328,6 +358,8 @@
             <div class="col-md-4"><label class="form-label small fw-bold">Inizio rapporto</label><input id="fcInizio" type="date" class="form-control"></div>
             <div class="col-md-4"><label class="form-label small fw-bold">Stato</label><select id="fcAttivo" class="form-select"><option value="SI">Attivo</option><option value="NO">Non attivo</option></select></div>
             <div class="col-12"><label class="form-label small fw-bold">Note</label><textarea id="fcNote" class="form-control" rows="2"></textarea></div>
+            <div class="col-12"><label class="form-label small fw-bold">Nomi collegati <span class="fw-normal text-muted">(uno per riga, come scritti nel foglio NOTE e nel foglio ARCHCONT)</span></label>
+                <textarea id="fcAlias" class="form-control" rows="2" placeholder="es. RUOSPO DOMENICO"></textarea></div>
         </div>
         <div class="small text-muted mt-2">Rischio e potenzialità vengono ricalcolati da vendite e scadenze dopo il salvataggio.</div>
     </div>
@@ -551,6 +583,7 @@ async function carica(force) {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Lettura Fogli...';
     try {
         DATA = await api('getData', { force: !!force });
+        collegatiOra = 0;
         ls.set('oi_cache', JSON.stringify(DATA));
         renderTutto();
         $('statoDati').textContent = `Dati aggiornati alle ${new Date(DATA.aggiornato).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} · ${DATA.clienti.length} clienti`;
@@ -784,17 +817,149 @@ function apriVenditeNome(i) {
     bootstrap.Modal.getOrCreateInstance($('mCliente')).show();
 }
 
-async function escludiNome(i) {
-    const nome = DATA.venditeAgg.nomi[i];
+async function escludiNome(i) { return escludiTesto(DATA.venditeAgg.nomi[i]); }
+
+async function escludiTesto(nome) {
     if (!confirm(`Escludere "${nome}" dall'analisi vendite (es. punto vendita o fornitore)?`)) return;
     const nuovo = esclusi().concat([nome]).join(', ');
     try {
         await api('saveSettings', { settings: { ESCLUDI_NOMI: nuovo } });
         DATA.cfg.ESCLUDI_NOMI = nuovo;
         ls.set('oi_cache', JSON.stringify(DATA));
-        renderVendite();
+        renderVendite(); renderCollega();
         toast(`"${esc(nome)}" escluso. Per riattivarlo modifica il parametro nelle Impostazioni.`);
     } catch (e) { toast(esc(e.message), 'danger'); }
+}
+
+// ---------- Collegamento nomi (NOTE / ARCHCONT) -> ragione sociale ----------
+const normNomeJS = v => String(v == null ? '' : v).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '');
+const PAROLE_VUOTE = new Set(['DI', 'DEL', 'DELLA', 'DEI', 'LA', 'IL', 'LO', 'LE', 'GLI', 'E', 'ED', 'DA', 'DE', 'SNC', 'SRL', 'SRLS', 'SAS', 'SPA', 'DITTA', 'C', 'F', 'LLI', 'FLLI']);
+const parole = n => String(n || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(t => t.length > 1 && !PAROLE_VUOTE.has(t));
+
+// Somiglianza 0–1 tra due nomi (parole in comune, anche abbreviate)
+function somiglianza(pa, pb) {
+    if (!pa.length || !pb.length) return 0;
+    let comuni = 0;
+    pa.forEach(t => {
+        if (pb.indexOf(t) >= 0) comuni++;
+        else if (t.length > 3 && pb.some(u => u.length > 3 && (u.startsWith(t) || t.startsWith(u)))) comuni += 0.7;
+    });
+    const min = Math.min(pa.length, pb.length), max = Math.max(pa.length, pb.length);
+    return Math.min(1, comuni / min) * (0.6 + 0.4 * min / max);
+}
+
+let collegatiOra = 0;
+
+function preparaCollega() {
+    const va = DATA.venditeAgg, ca = DATA.contAgg, m = {};
+    const ora = new Date(), y = ora.getFullYear(), mo = ora.getMonth() + 1;
+    const v12 = {}, vTot = {};
+    if (va) va.righe.forEach(r => { vTot[r[0]] = (vTot[r[0]] || 0) + r[4]; const eta = (y - r[1]) * 12 + (mo - r[2]); if (eta >= 0 && eta < 12) v12[r[0]] = (v12[r[0]] || 0) + r[4]; });
+    const voce = n => { const k = normNomeJS(n); return m[k] || (m[k] = { k: k, nomi: [], vi: [], ci: [], cod: '', v12: 0, vTot: 0, saldo: 0, mov: 0, ultimo: '' }); };
+    if (va) va.nomi.forEach((n, i) => { const e = voce(n); if (e.nomi.indexOf(n) < 0) e.nomi.push(n); e.vi.push(i); e.v12 += v12[i] || 0; e.vTot += vTot[i] || 0; if (va.codici[i]) e.cod = va.codici[i]; });
+    if (ca) ca.nomi.forEach((n, i) => { const e = voce(n); if (e.nomi.indexOf(n) < 0) e.nomi.push(n); e.ci.push(i); e.saldo += ca.addebiti[i] - ca.incassi[i]; e.mov += ca.movimenti[i]; if (ca.ultimo[i] > e.ultimo) e.ultimo = ca.ultimo[i]; if (!e.cod && ca.codici[i]) e.cod = ca.codici[i]; });
+    DATA._nomi = Object.keys(m).map(k => Object.assign(m[k], { nome: m[k].nomi[0], par: parole(m[k].nomi[0]) }));
+    DATA._cliPar = DATA.clienti.map(c => ({ cod: c.codice, nome: c.nome, par: [parole(c.nome)].concat((c.nomiCollegati || []).map(parole)) }));
+    const daFare = DATA._nomi.filter(e => !e.cod && !nomeEscluso(e.nome) && e.vi.length && e.ci.length).length;
+    $('kBadge').textContent = daFare || '';
+}
+
+function nomeEscluso(n) { const u = String(n).toUpperCase(); return esclusi().some(e => u.indexOf(e) >= 0); }
+
+function suggerimenti(e) {
+    return DATA._cliPar.map(c => ({ cod: c.cod, nome: c.nome, s: Math.max.apply(null, c.par.map(p => somiglianza(e.par, p))) }))
+        .filter(x => x.s >= 0.45).sort((a, b) => b.s - a.s).slice(0, 3);
+}
+
+function renderCollega() {
+    if (!DATA || !DATA._nomi) return;
+    const stato = $('kStato').value, fonte = $('kFonte').value, q = normNomeJS($('kCerca').value), mostraEscl = $('kEsclusi').checked;
+    const l = DATA._nomi.filter(e =>
+        (!stato || (stato === 'OK' ? !!e.cod : !e.cod)) &&
+        (!fonte || (fonte === 'ENTRAMBI' ? e.vi.length && e.ci.length : fonte === 'V' ? e.vi.length && !e.ci.length : e.ci.length && !e.vi.length)) &&
+        (!q || e.k.indexOf(q) >= 0) && (mostraEscl || !nomeEscluso(e.nome)))
+        .sort((a, b) => (!!a.cod - !!b.cod) || ((b.vi.length && b.ci.length) - (a.vi.length && a.ci.length)) || ((b.v12 + Math.abs(b.saldo)) - (a.v12 + Math.abs(a.saldo))));
+    $('kConta').textContent = `${l.length} nomi`;
+    const opzioni = DATA.clienti.slice().sort((a, b) => a.nome.localeCompare(b.nome)).map(c => `<option value="${esc(c.codice)}">${esc(c.nome)}</option>`).join('');
+    $('tbCollega').innerHTML = `<thead class="table-light"><tr><th></th><th>Nome nei file</th><th>Dove compare</th><th>Collegato alla ragione sociale</th><th></th></tr></thead><tbody>` +
+        l.slice(0, 250).map(e => {
+            const i = DATA._nomi.indexOf(e);
+            const cli = e.cod ? cliente(e.cod) : null;
+            const alias = cli && (cli.nomiCollegati || []).some(a => normNomeJS(a) === e.k);
+            const fonti = (e.vi.length ? `<span class="badge bg-primary-subtle text-primary border me-1" title="Foglio NOTE">Vendite ${e.v12 ? eur(e.v12) + ' (12 mesi)' : 'solo storico ' + eur(e.vTot)}</span>` : '') +
+                (e.ci.length ? `<span class="badge bg-warning-subtle text-dark border me-1" title="Foglio ARCHCONT">Contabilità: saldo ${eur(e.saldo)} · ultimo ${fmtD(e.ultimo)}</span>` : '');
+            let coll;
+            if (cli) {
+                coll = `<a href="#" onclick="apriCliente('${esc(cli.codice)}');return false;" class="fw-semibold">${esc(cli.nome)}</a>` +
+                    (alias && normNomeJS(cli.nome) !== e.k ? ` <button class="btn btn-sm btn-link text-danger p-0 ms-1" title="Scollega" onclick="scollega(${i})"><i class="fas fa-unlink"></i></button>` : ` <small class="text-muted">${alias ? '' : '(stesso nome)'}</small>`);
+            } else if (e.cod) {
+                coll = `<span class="text-muted">${esc(e.cod)}</span>`;
+            } else {
+                const sug = suggerimenti(e);
+                coll = (sug.length ? `<div class="mb-1">${sug.map(x => `<button class="btn btn-sm btn-outline-success py-0 me-1 mb-1" title="Collega" onclick="collega(${i}, '${esc(x.cod)}')"><i class="fas fa-link me-1"></i>${esc(x.nome)} <small class="opacity-75">${Math.round(x.s * 100)}%</small></button>`).join('')}</div>` : '') +
+                    `<select class="form-select form-select-sm" style="max-width:280px" onchange="if (this.value) collega(${i}, this.value)"><option value="">Collega a un cliente…</option>${opzioni}</select>`;
+            }
+            const az = e.cod ? '' : `<div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" title="Crea un nuovo cliente con questo nome" onclick="apriFormCliente(null, { nome: DATA._nomi[${i}].nome })"><i class="fas fa-user-plus"></i></button>
+                    <button class="btn btn-outline-secondary" title="Escludi (punto vendita, fornitore, conto interno)" onclick="escludiTesto(DATA._nomi[${i}].nome)"><i class="fas fa-eye-slash"></i></button></div>`;
+            return `<tr class="${nomeEscluso(e.nome) ? 'opacity-50' : ''}"><td>${e.cod ? '' : `<input type="checkbox" class="form-check-input k-sel" data-i="${i}">`}</td>
+                <td><div class="fw-semibold">${esc(e.nome)}</div>${e.nomi.length > 1 ? `<small class="text-muted">anche: ${e.nomi.slice(1).map(esc).join(', ')}</small>` : ''}${nomeEscluso(e.nome) ? ' <span class="badge bg-secondary">escluso</span>' : ''}</td>
+                <td>${fonti}</td><td>${coll}</td><td class="text-end">${az}</td></tr>`;
+        }).join('') + (l.length > 250 ? `<tr><td colspan="5" class="text-muted">… altri ${l.length - 250}: usa la ricerca o i filtri</td></tr>` : '') + '</tbody>';
+    const b = $('kBanner');
+    b.classList.toggle('d-none', !collegatiOra);
+    b.innerHTML = `<i class="fas fa-info-circle me-1"></i>Hai collegato ${collegatiOra} nomi. <button class="btn btn-sm btn-primary ms-2" onclick="carica(true)">Aggiorna dai Fogli</button> per ricalcolare vendite, pagamenti e punteggi dei clienti.`;
+}
+
+async function collega(i, cod) {
+    const e = DATA._nomi[i];
+    try {
+        await api('collegaNome', { codice: cod, nome: e.nome });
+        e.cod = cod;
+        e.vi.forEach(x => { DATA.venditeAgg.codici[x] = cod; });
+        e.ci.forEach(x => { DATA.contAgg.codici[x] = cod; });
+        DATA.clienti.forEach(c => { c.nomiCollegati = (c.nomiCollegati || []).filter(a => normNomeJS(a) !== e.k); });
+        const c = cliente(cod); c.nomiCollegati.push(e.nome);
+        collegatiOra++;
+        preparaCollegaCli();
+        renderCollega();
+        toast(`"${esc(e.nome)}" collegato a ${esc(c.nome)}.`);
+    } catch (err) { toast(esc(err.message), 'danger'); }
+}
+
+async function scollega(i) {
+    const e = DATA._nomi[i];
+    if (!confirm(`Scollegare "${e.nome}" dal cliente?`)) return;
+    try {
+        await api('scollegaNome', { codice: e.cod, nome: e.nome });
+        const c = cliente(e.cod);
+        if (c) c.nomiCollegati = (c.nomiCollegati || []).filter(a => normNomeJS(a) !== e.k);
+        e.cod = '';
+        e.vi.forEach(x => { DATA.venditeAgg.codici[x] = ''; });
+        e.ci.forEach(x => { DATA.contAgg.codici[x] = ''; });
+        collegatiOra++;
+        preparaCollegaCli();
+        renderCollega();
+    } catch (err) { toast(esc(err.message), 'danger'); }
+}
+
+function preparaCollegaCli() {
+    DATA._cliPar = DATA.clienti.map(c => ({ cod: c.codice, nome: c.nome, par: [parole(c.nome)].concat((c.nomiCollegati || []).map(parole)) }));
+    $('kBadge').textContent = DATA._nomi.filter(e => !e.cod && !nomeEscluso(e.nome) && e.vi.length && e.ci.length).length || '';
+}
+
+function kSelTutti(v) { document.querySelectorAll('.k-sel').forEach(x => { x.checked = v; }); }
+
+async function creaSelezionati() {
+    const nomi = Array.from(document.querySelectorAll('.k-sel:checked')).map(x => DATA._nomi[+x.getAttribute('data-i')].nome);
+    if (!nomi.length) { toast('Seleziona almeno un nome.', 'warning'); return; }
+    if (!confirm(`Creare ${nomi.length} clienti con ragione sociale uguale al nome nei file?\nPotrai poi modificarli (ragione sociale, telefono, giorni di pagamento...).`)) return;
+    try {
+        const r = await api('creaClienti', { nomi: nomi });
+        toast(`${r.creati.length} clienti creati.`);
+        collegatiOra = 0;
+        await carica(true);
+    } catch (err) { toast(esc(err.message), 'danger'); }
 }
 
 // ---------- Analisi brand ----------
@@ -896,7 +1061,7 @@ function telWa(t) {
 function renderTutto() {
     if (!DATA) return;
     // ogni sezione è indipendente: un errore in una non blocca le altre
-    [preparaBrand, preparaVendite, statoGemini, renderAvvisi, renderPanoramica, preparaFiltri, renderClienti, renderOfferte, () => preparaCampagna(), renderVendite, renderBrand, renderRegistro, renderImpostazioniServer]
+    [preparaBrand, preparaVendite, preparaCollega, statoGemini, renderAvvisi, renderPanoramica, preparaFiltri, renderClienti, renderOfferte, () => preparaCampagna(), renderVendite, renderCollega, renderBrand, renderRegistro, renderImpostazioniServer]
         .forEach(fn => { try { fn(); } catch (e) { console.error('Errore di visualizzazione:', e); } });
 }
 
@@ -1073,6 +1238,7 @@ function apriCliente(cod) {
                 <div><i class="fas fa-id-card fa-fw text-secondary"></i> P.IVA ${esc(c.piva || '-')}</div>
                 <div><i class="fas fa-calendar fa-fw text-secondary"></i> Cliente dal ${fmtD(c.inizio)}</div>
                 ${c.note ? `<div class="mt-1 fst-italic">${esc(c.note)}</div>` : ''}
+                ${(c.nomiCollegati || []).length ? `<div class="mt-1"><i class="fas fa-link fa-fw text-secondary"></i> ${c.nomiCollegati.map(n => `<span class="badge bg-light text-dark border me-1">${esc(n)}</span>`).join('')}</div>` : ''}
             </div>
             <div class="col-md-8">${badgeSeg(c.segmento)}
                 <div class="alert alert-light border mt-2 mb-0 small"><i class="fas fa-lightbulb text-warning me-1"></i><b>Azione consigliata:</b> ${esc(c.azione)}</div>
@@ -1174,6 +1340,7 @@ function apriFormCliente(cod, preset) {
     $('fcInizio').value = c ? (c.inizioRapporto || '') : oggiISO();
     $('fcAttivo').value = c && !c.attivo ? 'NO' : 'SI';
     $('fcNote').value = c ? c.note : '';
+    $('fcAlias').value = c ? (c.nomiCollegati || []).join('\n') : ((preset && preset.nome) || '');
     $('fcGiorni').oninput = aggiornaClasseForm;
     aggiornaClasseForm();
     bootstrap.Modal.getOrCreateInstance($('mFormCliente')).show();
@@ -1185,7 +1352,8 @@ async function salvaCliente() {
         codice: $('fcCodice').value.trim(), nome: $('fcNome').value.trim(), piva: $('fcPiva').value.trim().toUpperCase(),
         referente: $('fcReferente').value.trim(), tel: $('fcTel').value.trim(), email: $('fcEmail').value.trim(),
         citta: $('fcCitta').value.trim(), giorniConc: +$('fcGiorni').value || 0, fido: +$('fcFido').value || 0,
-        inizioRapporto: $('fcInizio').value, attivo: $('fcAttivo').value === 'SI', note: $('fcNote').value.trim()
+        inizioRapporto: $('fcInizio').value, attivo: $('fcAttivo').value === 'SI', note: $('fcNote').value.trim(),
+        nomiCollegati: $('fcAlias').value.split(/[\n;]+/).map(x => x.trim()).filter(Boolean)
     };
     if (!cli.nome) { toast('Inserisci la ragione sociale.', 'warning'); return; }
     if (cli.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cli.email)) { toast('Email non valida.', 'warning'); return; }
