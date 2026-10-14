@@ -31,14 +31,12 @@
         .refresh-option.quick:hover { border-color: #198754; }
         .refresh-option.full:hover { border-color: #0d6efd; }
         .refresh-option .ro-icon { font-size: 1.8rem; }
-        /* Sezione Confronto Anni: comprimi / allarga a schermo intero */
-        #comparisonSection.cmp-collapsed #cmpBody { display: none; }
-        #comparisonSection.cmp-expanded { position: fixed; inset: 0; z-index: 1055; margin: 0; border-radius: 0; overflow-y: auto; border-left: none !important; }
-        #comparisonSection.cmp-expanded .card-body { padding: 24px 32px; }
-        #comparisonSection.cmp-expanded .cmp-chart { height: 58vh !important; }
-        #comparisonSection.cmp-expanded .cmp-table-col { width: 100%; }
-        #comparisonSection.cmp-expanded .cmp-header { position: sticky; top: -24px; background: #fff; z-index: 5; padding: 8px 0; border-bottom: 1px solid #e9ecef; }
-        body.cmp-noscroll { overflow: hidden; }
+        /* Finestra Dati Storici */
+        #storicoModal .nav-tabs .nav-link { font-weight: 600; color: #6c757d; }
+        #storicoModal .nav-tabs .nav-link.active { color: #6f42c1; }
+        #storicoModal .st-table td, #storicoModal .st-table th { white-space: nowrap; }
+        #storicoModal .st-table .badge { font-size: 0.75rem; margin-top: 3px; }
+        .st-kpi-cur { border: 2px solid #0d6efd !important; background: #eef4ff !important; }
     </style>
 </head>
 <body>
@@ -51,6 +49,9 @@
         </button>
         <button id="btnReportAI" class="btn btn-warning fw-bold mt-2 text-dark ms-2" data-bs-toggle="modal" data-bs-target="#reportModal">
             <i class="fas fa-brain me-2"></i>Report & Analisi AI
+        </button>
+        <button id="btnStorico" class="btn btn-light fw-bold mt-2 ms-2" style="color:#6f42c1;" onclick="openStorico()">
+            <i class="fas fa-history me-2"></i>Dati Storici
         </button>
         <div class="mt-2 small opacity-75" id="cacheStatus"></div>
     </div>
@@ -82,6 +83,161 @@
                                 <div class="small mt-2 text-secondary"><i class="fas fa-info-circle me-1"></i>Usalo se hai corretto o cancellato righe vecchie, o una volta al giorno per sicurezza.</div>
                             </button>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE DATI STORICI (si apre solo a richiesta) -->
+    <div class="modal fade" id="storicoModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, #6f42c1, #0d6efd); color: white;">
+                    <h5 class="modal-title fw-bold"><i class="fas fa-history me-2"></i>Dati Storici & Confronto Economico</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+                </div>
+                <div class="modal-body bg-light">
+                    <!-- Controlli comuni -->
+                    <div class="card mb-3">
+                        <div class="card-body py-3">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold text-secondary"><i class="fas fa-calendar-day me-1"></i>Giorno di riferimento</label>
+                                    <select id="stDate" class="form-select" onchange="onStDateChange()"></select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold text-secondary"><i class="fas fa-calendar-week me-1"></i>Settimana di riferimento</label>
+                                    <select id="stWeek" class="form-select" onchange="renderStorico()"></select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-bold text-secondary">Anni a confronto</label>
+                                    <select id="stYears" class="form-select" onchange="saveStPrefs(); renderStorico()">
+                                        <option value="1">Ultimo anno</option>
+                                        <option value="2">Ultimi 2 anni</option>
+                                        <option value="3" selected>Ultimi 3 anni</option>
+                                        <option value="4">Ultimi 4 anni</option>
+                                        <option value="5">Ultimi 5 anni</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-bold text-secondary" title="Entro questa variazione il risultato è considerato stabile">Soglia "stabile"</label>
+                                    <select id="stThr" class="form-select" onchange="saveStPrefs(); renderStorico()">
+                                        <option value="2">± 2%</option>
+                                        <option value="5" selected>± 5%</option>
+                                        <option value="10">± 10%</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-bold text-secondary">Valore</label>
+                                    <select id="stMetric" class="form-select" onchange="renderStorico()">
+                                        <option value="incasso">Incasso €</option>
+                                        <option value="capi">Capi venduti</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <ul class="nav nav-tabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabGiorno" type="button" role="tab"><i class="fas fa-calendar-day me-1"></i>Giorno vs Storico</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSettimana" type="button" role="tab"><i class="fas fa-calendar-week me-1"></i>Settimana vs Storico</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="tabAnniBtn" data-bs-toggle="tab" data-bs-target="#tabAnni" type="button" role="tab"><i class="fas fa-chart-line me-1"></i>Andamento Anni</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content bg-white p-3 border border-top-0 rounded-bottom">
+                        <!-- TAB GIORNO -->
+                        <div class="tab-pane fade show active" id="tabGiorno" role="tabpanel">
+                            <h6 class="fw-bold text-primary mb-2"><i class="fas fa-cash-register me-2"></i>Incasso del giorno rispetto allo stesso giorno della settimana negli anni precedenti</h6>
+                            <div class="row g-2 mb-3" id="stDayKpi"></div>
+                            <div class="table-responsive mb-4">
+                                <table class="table table-sm table-hover text-center align-middle st-table" id="stDayTable"></table>
+                            </div>
+                            <h6 class="fw-bold text-primary mb-2"><i class="fas fa-layer-group me-2"></i>Progressivo del mese (dal giorno 1 al giorno di riferimento)</h6>
+                            <div class="row g-2 mb-3" id="stMtdKpi"></div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover text-center align-middle st-table" id="stMtdTable"></table>
+                            </div>
+                        </div>
+
+                        <!-- TAB SETTIMANA -->
+                        <div class="tab-pane fade" id="tabSettimana" role="tabpanel">
+                            <div id="stWeekInfo" class="alert alert-secondary small py-2 mb-2"></div>
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="stProrate" checked onchange="renderStorico()">
+                                <label class="form-check-label small" for="stProrate">Se la settimana è in corso, confronta lo storico solo sugli stessi giorni trascorsi (es. lun→mer contro lun→mer)</label>
+                            </div>
+                            <div class="row g-2 mb-3" id="stWeekKpi"></div>
+                            <div class="chart-container mb-4" style="height: 320px;"><canvas id="stWeekChart"></canvas></div>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-hover text-center align-middle st-table" id="stWeekTable"></table>
+                            </div>
+                        </div>
+
+                        <!-- TAB ANDAMENTO ANNI -->
+                        <div class="tab-pane fade" id="tabAnni" role="tabpanel">
+                            <div id="comparisonSection">
+                                <div class="d-flex justify-content-end flex-wrap gap-2 mb-2">
+                                    <select id="cmpStore" class="form-select form-select-sm" style="width:auto;" onchange="renderComparison()">
+                                        <option value="ALL">Tutta la rete</option>
+                                    </select>
+                                    <select id="cmpMetric" class="form-select form-select-sm" style="width:auto;" onchange="renderComparison()">
+                                        <option value="incasso">Incasso €</option>
+                                        <option value="capi">Capi venduti</option>
+                                    </select>
+                                    <select id="cmpPeriod" class="form-select form-select-sm" style="width:auto;" onchange="renderComparison()" title="Periodo usato nella tabella per negozio">
+                                        <option value="ytd">Progressivo (Gen → mese corrente)</option>
+                                        <option value="full">Anno intero</option>
+                                    </select>
+                                    <select id="cmpOverlap" class="form-select form-select-sm" style="width:auto;" onchange="renderComparison()" title="Cosa fare se lo stesso negozio/mese è presente sia nello storico sia nel nuovo sistema">
+                                        <option value="sum">Mesi in entrambi: somma</option>
+                                        <option value="new">Mesi in entrambi: usa nuovo sistema</option>
+                                    </select>
+                                </div>
+                                <div class="small text-muted mb-2" id="archiveStatus"></div>
+                                <div class="d-flex flex-wrap align-items-center gap-2 mb-3 p-2 bg-light rounded">
+                                    <span class="small fw-bold text-secondary me-1"><i class="fas fa-calendar-check me-1"></i>Anni da confrontare:</span>
+                                    <div class="btn-group btn-group-sm" role="group" aria-label="Selezione rapida anni">
+                                        <button type="button" class="btn btn-outline-secondary cmp-quick" data-n="2" onclick="setCmpYearsQuick(2)">Ultimi 2</button>
+                                        <button type="button" class="btn btn-outline-secondary cmp-quick" data-n="3" onclick="setCmpYearsQuick(3)">Ultimi 3</button>
+                                        <button type="button" class="btn btn-outline-secondary cmp-quick" data-n="5" onclick="setCmpYearsQuick(5)">Ultimi 5</button>
+                                        <button type="button" class="btn btn-outline-secondary cmp-quick" data-n="0" onclick="setCmpYearsQuick(0)">Tutti</button>
+                                    </div>
+                                    <div id="cmpYears" class="d-flex flex-wrap gap-1"></div>
+                                    <span class="small text-muted ms-1">Clicca sui singoli anni per aggiungerli o toglierli (es. 2019 contro 2026).</span>
+                                </div>
+                                <div class="chart-container mb-4" style="height: 380px;"><canvas id="cmpChart"></canvas></div>
+                                <div class="row">
+                                    <div class="col-lg-6">
+                                        <h6 class="fw-bold text-secondary" id="cmpMonthTitle">Andamento mensile</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-hover text-center align-middle" id="cmpMonthTable"></table>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <h6 class="fw-bold text-secondary" id="cmpStoreTitle">Confronto per negozio</h6>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-hover text-center align-middle" id="cmpStoreTable"></table>
+                                        </div>
+                                        <small class="text-muted">Clicca su un negozio per vederne grafico e andamento mensile.</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="small text-muted mt-3">
+                        <span class="badge bg-success me-1"><i class="fas fa-arrow-up"></i> Crescita</span>
+                        <span class="badge bg-secondary me-1"><i class="fas fa-equals"></i> Stabile</span>
+                        <span class="badge bg-danger me-2"><i class="fas fa-arrow-down"></i> Calo</span>
+                        Variazione del valore attuale rispetto a ciascun anno. Il totale rete è calcolato a parità di negozi (solo i punti vendita attivi oggi).<br>
+                        <strong>≈ = valore stimato:</strong> per gli anni del vecchio gestionale lo storico integrato contiene solo i totali mensili, quindi giorno e settimana sono ricavati dalla media giornaliera di quel mese. Appena viene integrato lo storico settimanale reale, la stima viene sostituita dai dati veri.
                     </div>
                 </div>
             </div>
@@ -288,17 +444,21 @@
                                     </div>
                                 </div>
                                 <div class="row">
-                                    <div class="col-md-4 mb-2">
+                                    <div class="col-md-3 mb-2">
                                         <label class="form-label small fw-bold text-secondary">Descrizione Prodotto:</label>
                                         <select id="colDescrizione" class="form-select form-select-sm" onchange="updateDashboard()"></select>
                                     </div>
-                                    <div class="col-md-4 mb-2">
+                                    <div class="col-md-3 mb-2">
                                         <label class="form-label small fw-bold text-secondary">Codice Interno:</label>
                                         <select id="colCodInt" class="form-select form-select-sm" onchange="updateDashboard()"></select>
                                     </div>
-                                    <div class="col-md-4 mb-2">
+                                    <div class="col-md-3 mb-2">
                                         <label class="form-label small fw-bold text-secondary">EAN / Barcode:</label>
                                         <select id="colEan" class="form-select form-select-sm" onchange="updateDashboard()"></select>
+                                    </div>
+                                    <div class="col-md-3 mb-2">
+                                        <label class="form-label small fw-bold text-secondary">Numero Settimana:</label>
+                                        <select id="colSettimana" class="form-select form-select-sm"></select>
                                     </div>
                                 </div>
                                 <hr>
@@ -458,72 +618,6 @@
             </div>
         </div>
 
-        <!-- CONFRONTO ANNI (STORICO + ATTUALE) -->
-        <div class="card d-none" id="comparisonSection" style="border-left: 5px solid #6f42c1 !important;">
-            <div class="card-body">
-                <div class="cmp-header d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                    <h5 class="card-title fw-bold mb-0"><i class="fas fa-history me-2" style="color:#6f42c1;"></i>Confronto Anni (Storico + Attuale)</h5>
-                    <div class="d-flex gap-2">
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnCmpCollapse" onclick="toggleCmpCollapse()" title="Nascondi o mostra grafici e tabelle storiche">
-                            <i class="fas fa-chevron-up me-1"></i>Nascondi
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="btnCmpExpand" onclick="toggleCmpExpand()" title="Allarga a tutto schermo (Esc per tornare indietro)">
-                            <i class="fas fa-expand me-1"></i>Allarga
-                        </button>
-                    </div>
-                </div>
-                <div id="cmpBody">
-                <div class="d-flex justify-content-end flex-wrap gap-2 mb-2">
-                    <div class="d-flex flex-wrap gap-2">
-                        <select id="cmpStore" class="form-select form-select-sm" style="width:auto;" onchange="renderComparison()">
-                            <option value="ALL">Tutta la rete</option>
-                        </select>
-                        <select id="cmpMetric" class="form-select form-select-sm" style="width:auto;" onchange="renderComparison()">
-                            <option value="incasso">Incasso €</option>
-                            <option value="capi">Capi venduti</option>
-                        </select>
-                        <select id="cmpPeriod" class="form-select form-select-sm" style="width:auto;" onchange="renderComparison()" title="Periodo usato nella tabella per negozio">
-                            <option value="ytd">Progressivo (Gen → mese corrente)</option>
-                            <option value="full">Anno intero</option>
-                        </select>
-                        <select id="cmpOverlap" class="form-select form-select-sm" style="width:auto;" onchange="renderComparison()" title="Cosa fare se lo stesso negozio/mese è presente sia nello storico sia nel nuovo sistema">
-                            <option value="sum">Mesi in entrambi: somma</option>
-                            <option value="new">Mesi in entrambi: usa nuovo sistema</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="small text-muted mb-2" id="archiveStatus"></div>
-                <div class="d-flex flex-wrap align-items-center gap-2 mb-3 p-2 bg-light rounded">
-                    <span class="small fw-bold text-secondary me-1"><i class="fas fa-calendar-check me-1"></i>Anni da confrontare:</span>
-                    <div class="btn-group btn-group-sm" role="group" aria-label="Selezione rapida anni">
-                        <button type="button" class="btn btn-outline-secondary cmp-quick" data-n="2" onclick="setCmpYearsQuick(2)">Ultimi 2</button>
-                        <button type="button" class="btn btn-outline-secondary cmp-quick" data-n="3" onclick="setCmpYearsQuick(3)">Ultimi 3</button>
-                        <button type="button" class="btn btn-outline-secondary cmp-quick" data-n="5" onclick="setCmpYearsQuick(5)">Ultimi 5</button>
-                        <button type="button" class="btn btn-outline-secondary cmp-quick" data-n="0" onclick="setCmpYearsQuick(0)">Tutti</button>
-                    </div>
-                    <div id="cmpYears" class="d-flex flex-wrap gap-1"></div>
-                    <span class="small text-muted ms-1">Clicca sui singoli anni per aggiungerli o toglierli (es. 2019 contro 2026).</span>
-                </div>
-                <div class="chart-container cmp-chart mb-4" style="height: 340px;"><canvas id="cmpChart"></canvas></div>
-                <div class="row">
-                    <div class="col-lg-6 cmp-table-col">
-                        <h6 class="fw-bold text-secondary" id="cmpMonthTitle">Andamento mensile</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover text-center align-middle" id="cmpMonthTable"></table>
-                        </div>
-                    </div>
-                    <div class="col-lg-6 cmp-table-col">
-                        <h6 class="fw-bold text-secondary" id="cmpStoreTitle">Confronto per negozio</h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover text-center align-middle" id="cmpStoreTable"></table>
-                        </div>
-                        <small class="text-muted">Clicca su un negozio per vederne grafico e andamento mensile.</small>
-                    </div>
-                </div>
-                </div><!-- /cmpBody -->
-            </div>
-        </div>
-
         <!-- Data Table -->
         <div class="card">
             <div class="card-body">
@@ -621,6 +715,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
     let COL_CONTANTE = null;
     let COL_POS = null;
     let COL_CREDITO = null;
+    let COL_WEEK = '';   // colonna "numero settimana" ('' = calcolata dalla data)
 
     let charts = {};
     let dataTableInstance = null;
@@ -683,7 +778,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         updateDailySummary();
     }
 
-    window.onload = () => { loadArchive(); loadData(false); };
+    window.onload = () => { loadStPrefs(); loadArchive(); loadData(false); };
 
     function updateUrls() {
         localStorage.setItem('storeAliases', document.getElementById('storeAliasesInput').value);
@@ -851,6 +946,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
             if (dayWasDefault) applyDefaultDate(); // se stavi guardando l'ultimo giorno, passa al nuovo ultimo giorno
             updateDashboard();
             renderComparison();
+            refreshStoricoIfOpen();
 
             await saveCache(salesCsv, clientsCsv || cached.clientsCsv);
             statusEl.innerHTML = `<span class="text-success"><i class="fas fa-bolt me-1"></i>Aggiornamento veloce ${moment().format('HH:mm')}: <strong>+${newRows.length.toLocaleString('it-IT')}</strong> nuove righe (${rawData.length.toLocaleString('it-IT')} totali)</span>`;
@@ -869,6 +965,11 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
     // dati fotografati e di sola lettura -> nessun download, nessuna cache, disponibili all'istante.
     // Formato: "NEGOZIO|ANNO|MESE": [incasso €, capi, valore a listino €]  (resi già sottratti)
     const STORICO_FISSO = {"rows":135242,"agg":{"CARAMELLO POINT - SIDERNO|2015|4":[1068.0,33.0,1126.5],"CARAMELLO POINT - SIDERNO|2015|5":[7378.98,277.33,7699.38],"CARAMELLO POINT - SIDERNO|2015|6":[4493.0,159.0,4690.8],"CARAMELLO POINT - SIDERNO|2015|7":[6447.1,222.0,7200.9],"CARAMELLO POINT - SIDERNO|2015|8":[6113.47,231.49,7526.1],"CARAMELLO POINT - SIDERNO|2015|9":[4191.29,212.0,4874.5],"CARAMELLO POINT - SIDERNO|2015|10":[4913.74,203.33,5151.48],"CARAMELLO POINT - SIDERNO|2015|11":[4172.58,230.33,4453.28],"CARAMELLO POINT - SIDERNO|2015|12":[11241.88,650.0,12722.18],"CARAMELLO POINT - SIDERNO|2016|1":[5940.42,295.0,7148.59],"CARAMELLO POINT - SIDERNO|2016|2":[5463.75,284.16,7421.52],"CARAMELLO POINT - SIDERNO|2016|3":[5617.4,246.16,6569.55],"CARAMELLO POINT - SIDERNO|2016|4":[7542.0,263.0,7874.6],"CARAMELLO POINT - SIDERNO|2016|5":[5831.1,221.0,5960.4],"CARAMELLO POINT - SIDERNO|2016|6":[7770.9,253.0,8244.9],"CARAMELLO POINT - SIDERNO|2016|7":[8188.89,227.0,8990.1],"CARAMELLO POINT - SIDERNO|2016|8":[10971.95,462.0,13793.85],"CARAMELLO POINT - SIDERNO|2016|9":[7359.45,293.0,8368.95],"CARAMELLO POINT - SIDERNO|2016|10":[6562.99,274.0,6996.85],"CARAMELLO POINT - SIDERNO|2016|11":[7160.07,295.0,7953.79],"CARAMELLO POINT - SIDERNO|2016|12":[11621.69,562.0,13060.85],"CARAMELLO POINT - SIDERNO|2017|1":[4397.54,238.0,5284.44],"CARAMELLO POINT - SIDERNO|2017|2":[4926.09,251.0,6139.83],"CARAMELLO POINT - SIDERNO|2017|3":[5866.89,160.0,6483.4],"CARAMELLO POINT - SIDERNO|2017|4":[8359.98,240.0,8542.29],"CARAMELLO POINT - SIDERNO|2017|5":[11177.32,347.0,11531.67],"CARAMELLO POINT - SIDERNO|2017|6":[8336.07,302.0,8793.79],"CARAMELLO POINT - SIDERNO|2017|7":[11271.7,331.0,13478.45],"CARAMELLO POINT - SIDERNO|2017|8":[10723.25,375.0,13533.27],"CARAMELLO POINT - SIDERNO|2017|9":[7740.41,344.0,9641.8],"CARAMELLO POINT - SIDERNO|2017|10":[8491.56,289.0,9257.6],"CARAMELLO POINT - SIDERNO|2017|11":[7638.58,299.0,8243.78],"CARAMELLO POINT - SIDERNO|2017|12":[13006.72,613.0,14729.22],"CARAMELLO POINT - SIDERNO|2018|1":[4593.09,191.0,6058.63],"CARAMELLO POINT - SIDERNO|2018|2":[3514.0,150.0,4511.94],"CARAMELLO POINT - SIDERNO|2018|3":[7056.66,235.0,7956.19],"CARAMELLO POINT - SIDERNO|2018|4":[10555.69,225.0,10488.9],"CARAMELLO POINT - SIDERNO|2018|5":[9254.63,207.0,9283.37],"CARAMELLO POINT - SIDERNO|2018|6":[6666.5,227.0,7062.25],"CARAMELLO POINT - SIDERNO|2018|7":[13073.94,362.0,14481.45],"CARAMELLO POINT - SIDERNO|2018|8":[13381.12,406.0,15875.67],"CARAMELLO POINT - SIDERNO|2018|9":[7235.4,309.0,8751.95],"CARAMELLO POINT - SIDERNO|2018|10":[8164.11,289.33,8716.43],"CARAMELLO POINT - SIDERNO|2018|11":[8650.36,334.0,10155.47],"CARAMELLO POINT - SIDERNO|2018|12":[12235.15,567.0,13167.13],"CARAMELLO POINT - SIDERNO|2019|1":[7046.93,382.0,10085.79],"CARAMELLO POINT - SIDERNO|2019|2":[5634.73,286.0,7289.89],"CARAMELLO POINT - SIDERNO|2019|3":[8160.25,208.0,8027.0],"CARAMELLO POINT - SIDERNO|2019|4":[11976.19,302.0,11858.2],"CARAMELLO POINT - SIDERNO|2019|5":[13970.6,329.0,14096.09],"CARAMELLO POINT - SIDERNO|2019|6":[9173.05,234.0,9300.7],"CARAMELLO POINT - SIDERNO|2019|7":[10851.8,255.0,11904.6],"CARAMELLO POINT - SIDERNO|2019|8":[15323.61,416.0,17605.27],"CARAMELLO POINT - SIDERNO|2019|9":[9594.33,282.0,10397.79],"CARAMELLO POINT - SIDERNO|2019|10":[6710.88,216.0,6731.44],"CARAMELLO POINT - SIDERNO|2019|11":[7810.29,262.0,8101.75],"CARAMELLO POINT - SIDERNO|2019|12":[12655.56,564.0,14835.77],"CARAMELLO POINT - SIDERNO|2020|1":[5782.22,229.0,7192.49],"CARAMELLO POINT - SIDERNO|2020|2":[6101.5,227.0,7400.48],"CARAMELLO POINT - SIDERNO|2020|3":[1304.13,46.0,1577.32],"CARAMELLO POINT - SIDERNO|2020|4":[1152.72,96.0,1250.57],"CARAMELLO POINT - SIDERNO|2020|5":[3527.18,266.0,3748.85],"CARAMELLO POINT - SIDERNO|2020|6":[6832.6,206.0,6932.68],"CARAMELLO POINT - SIDERNO|2020|7":[9737.8,260.0,10315.63],"CARAMELLO POINT - SIDERNO|2020|8":[12461.29,424.16,14315.1],"CARAMELLO POINT - SIDERNO|2020|9":[12684.3,412.32,13248.98],"CARAMELLO POINT - SIDERNO|2020|10":[7708.84,298.34,7866.05],"CARAMELLO POINT - SIDERNO|2020|11":[4169.07,156.0,5122.14],"CARAMELLO POINT - SIDERNO|2020|12":[10844.19,524.0,11582.31],"CARAMELLO POINT - SIDERNO|2021|1":[5286.32,252.0,6840.86],"CARAMELLO POINT - SIDERNO|2021|2":[4464.71,222.0,5873.19],"CARAMELLO POINT - SIDERNO|2021|3":[5308.05,219.0,5602.09],"CARAMELLO POINT - SIDERNO|2021|4":[7047.62,270.0,6900.04],"CARAMELLO POINT - SIDERNO|2021|5":[11281.52,431.33,11023.17],"CARAMELLO POINT - SIDERNO|2021|6":[13773.21,383.0,13366.99],"CARAMELLO POINT - SIDERNO|2021|7":[20690.49,529.0,19175.01],"CARAMELLO POINT - SIDERNO|2021|8":[16901.85,483.0,16726.48],"CARAMELLO POINT - SIDERNO|2021|9":[11791.8,436.0,12344.02],"CARAMELLO POINT - SIDERNO|2021|10":[8728.0,325.0,8788.12],"CARAMELLO POINT - SIDERNO|2021|11":[10989.45,448.0,12493.06],"CARAMELLO POINT - SIDERNO|2021|12":[16438.66,613.0,18140.72],"CARAMELLO POINT - SIDERNO|2022|1":[4067.96,159.0,5014.29],"CARAMELLO POINT - SIDERNO|2022|2":[7196.15,194.0,6733.4],"CARAMELLO POINT - SIDERNO|2022|3":[5965.56,160.0,6427.02],"CARAMELLO POINT - SIDERNO|2022|4":[8494.25,186.0,8751.3],"CARAMELLO POINT - SIDERNO|2022|5":[10684.83,254.0,11201.75],"CARAMELLO POINT - SIDERNO|2022|6":[8511.19,185.0,8050.09],"CARAMELLO POINT - SIDERNO|2022|7":[12164.6,315.0,12193.27],"CARAMELLO POINT - SIDERNO|2022|8":[16674.54,588.0,22008.86],"CARAMELLO POINT - SIDERNO|2022|9":[7659.35,225.0,8569.35],"CARAMELLO POINT - SIDERNO|2022|10":[6054.77,178.0,6145.44],"CARAMELLO POINT - SIDERNO|2022|11":[6099.29,200.0,6519.99],"CARAMELLO POINT - SIDERNO|2022|12":[11090.4,431.0,11519.36],"CARAMELLO POINT - SIDERNO|2023|1":[4344.45,196.0,4824.25],"CARAMELLO POINT - SIDERNO|2023|2":[2398.85,134.0,2740.66],"CARAMELLO POINT - SIDERNO|2023|3":[8329.1,226.0,8933.32],"CARAMELLO POINT - SIDERNO|2023|4":[11085.37,253.0,12462.51],"CARAMELLO POINT - SIDERNO|2023|5":[9036.35,245.0,9398.72],"CARAMELLO POINT - SIDERNO|2023|6":[7169.8,218.0,7723.51],"CARAMELLO POINT - SIDERNO|2023|7":[6125.15,143.0,6328.94],"CARAMELLO POINT - SIDERNO|2023|8":[11037.07,350.0,12221.66],"CARAMELLO POINT - SIDERNO|2023|9":[6172.41,167.0,6601.45],"CARAMELLO POINT - SIDERNO|2023|10":[5484.19,178.0,6006.03],"CARAMELLO POINT - SIDERNO|2023|11":[8680.4,245.0,8360.48],"CARAMELLO POINT - SIDERNO|2023|12":[11661.25,334.0,11925.09],"CARAMELLO POINT - SIDERNO|2024|1":[3322.63,109.0,3827.81],"CARAMELLO POINT - SIDERNO|2024|2":[3412.59,114.0,4105.73],"CARAMELLO POINT - SIDERNO|2024|3":[5242.09,163.0,3884.28],"CARAMELLO POINT - SIDERNO|2024|4":[9910.12,168.0,0.0],"CARAMELLO POINT - SIDERNO|2024|5":[7492.5,170.0,0.0],"CARAMELLO POINT - SIDERNO|2024|6":[6411.9,100.0,0.0],"CARAMELLO POINT - SIDERNO|2024|7":[8932.65,174.0,0.0],"CARAMELLO POINT - SIDERNO|2024|8":[5874.0,154.0,0.0],"CARAMELLO POINT - SIDERNO|2024|9":[6418.25,149.0,0.0],"CARAMELLO POINT - SIDERNO|2024|10":[4338.98,100.0,0.0],"CARAMELLO POINT - SIDERNO|2024|11":[5362.8,6362982.0,1810.3],"CARAMELLO POINT - SIDERNO|2024|12":[10372.71,328.0,18521.48],"CARAMELLO POINT - SIDERNO|2025|1":[5696.29,335.0,14933.78],"CARAMELLO POINT - SIDERNO|2025|2":[3954.5,124.0,6161.16],"CARAMELLO POINT - SIDERNO|2025|3":[4410.3,116.0,7058.12],"CARAMELLO POINT - SIDERNO|2025|4":[8110.17,282.0,12720.5],"CARAMELLO POINT - SIDERNO|2025|5":[8742.04,225.0,10473.86],"CARAMELLO POINT - SIDERNO|2025|6":[8112.91,180.0,12603.04],"CARAMELLO POINT - SIDERNO|2025|7":[9690.91,237.0,14067.24],"CARAMELLO POINT - SIDERNO|2025|8":[11161.56,266.0,17457.36],"CARAMELLO POINT - SIDERNO|2025|9":[6525.6,160.0,9806.97],"CARAMELLO POINT - SIDERNO|2025|10":[4868.72,162.0,8203.87],"CARAMELLO POINT - SIDERNO|2025|11":[6300.72,196.0,11179.51],"CARAMELLO POINT - SIDERNO|2025|12":[9994.06,329.0,14932.05],"PARROTTA POINT - CHIARAVALLE CLE|2023|10":[2411.9,288.0,2628.54],"PARROTTA POINT - CHIARAVALLE CLE|2023|11":[5035.0,732.0,5161.07],"PARROTTA POINT - CHIARAVALLE CLE|2023|12":[10502.73,1327.0,10724.78],"PARROTTA POINT - CHIARAVALLE CLE|2024|1":[6692.92,818.0,7612.91],"PARROTTA POINT - CHIARAVALLE CLE|2024|2":[4349.75,593.0,4825.25],"PARROTTA POINT - CHIARAVALLE CLE|2024|3":[3859.93,494.0,4199.12],"PARROTTA POINT - CHIARAVALLE CLE|2024|4":[6001.66,752.0,6150.83],"PARROTTA POINT - CHIARAVALLE CLE|2024|5":[6855.83,756.0,7211.77],"PARROTTA POINT - CHIARAVALLE CLE|2024|6":[6068.42,583.0,6492.2],"PARROTTA POINT - CHIARAVALLE CLE|2024|7":[9609.3,767.0,11042.6],"PARROTTA POINT - CHIARAVALLE CLE|2024|8":[8456.69,694.0,9672.64],"PARROTTA POINT - CHIARAVALLE CLE|2024|9":[5302.53,614.0,5759.08],"PARROTTA POINT - CHIARAVALLE CLE|2024|10":[5435.61,685.0,5570.4],"PARROTTA POINT - CHIARAVALLE CLE|2024|11":[6283.87,905.0,7579.32],"PARROTTA POINT - CHIARAVALLE CLE|2024|12":[9609.5,1295.0,19175.72],"PARROTTA POINT - CHIARAVALLE CLE|2025|1":[6460.07,809.0,12955.64],"PARROTTA POINT - CHIARAVALLE CLE|2025|2":[3823.1,550.0,8365.9],"PARROTTA POINT - CHIARAVALLE CLE|2025|3":[4967.35,705.0,9034.14],"PARROTTA POINT - CHIARAVALLE CLE|2025|4":[5171.12,795.0,8737.53],"PARROTTA POINT - CHIARAVALLE CLE|2025|5":[5295.39,649.0,9465.39],"PARROTTA POINT - CHIARAVALLE CLE|2025|6":[7817.97,760.0,12628.85],"PARROTTA POINT - CHIARAVALLE CLE|2025|7":[8192.79,759.0,14587.35],"PARROTTA POINT - CHIARAVALLE CLE|2025|8":[8105.2,712.0,14660.04],"PARROTTA POINT - CHIARAVALLE CLE|2025|9":[5789.5,657.0,10712.41],"PARROTTA POINT - CHIARAVALLE CLE|2025|10":[6759.86,868.0,13070.42],"PARROTTA POINT - CHIARAVALLE CLE|2025|11":[4667.81,605.0,8102.49],"PARROTTA POINT - CHIARAVALLE CLE|2025|12":[8424.75,1091.0,13042.18],"PARROTTA POINT - LOCRI|2015|1":[2144.6,178.0,2832.4],"PARROTTA POINT - LOCRI|2015|2":[2173.78,240.0,3565.5],"PARROTTA POINT - LOCRI|2015|3":[4268.1,619.0,10383.65],"PARROTTA POINT - LOCRI|2015|4":[2553.46,315.0,5829.25],"PARROTTA POINT - LOCRI|2016|1":[6258.1,433.0,7255.96],"PARROTTA POINT - LOCRI|2016|2":[5865.76,426.0,6710.57],"PARROTTA POINT - LOCRI|2016|3":[6320.06,466.0,6743.17],"PARROTTA POINT - LOCRI|2016|4":[6304.47,583.0,6765.79],"PARROTTA POINT - LOCRI|2016|5":[7949.87,669.0,8826.49],"PARROTTA POINT - LOCRI|2016|6":[8062.05,539.0,8940.78],"PARROTTA POINT - LOCRI|2016|7":[9723.89,667.0,11707.52],"PARROTTA POINT - LOCRI|2016|8":[8503.76,650.0,10144.25],"PARROTTA POINT - LOCRI|2016|9":[5558.94,493.0,5913.89],"PARROTTA POINT - LOCRI|2016|10":[5192.02,483.5,5683.01],"PARROTTA POINT - LOCRI|2016|11":[7998.89,595.0,8530.11],"PARROTTA POINT - LOCRI|2016|12":[13207.55,1225.7,14437.71],"PARROTTA POINT - LOCRI|2017|1":[10833.59,1003.0,12833.42],"PARROTTA POINT - LOCRI|2017|2":[5936.81,451.0,6923.3],"PARROTTA POINT - LOCRI|2017|3":[4346.27,394.0,5154.5],"PARROTTA POINT - LOCRI|2017|4":[4779.86,440.0,5260.21],"PARROTTA POINT - LOCRI|2017|5":[6708.68,529.0,7222.75],"PARROTTA POINT - LOCRI|2017|6":[7216.5,415.0,7839.71],"PARROTTA POINT - LOCRI|2017|7":[9483.29,593.3,11359.76],"PARROTTA POINT - LOCRI|2017|8":[10513.77,725.0,12512.07],"PARROTTA POINT - LOCRI|2017|9":[5274.34,415.0,6002.22],"PARROTTA POINT - LOCRI|2017|10":[6753.07,547.0,7453.16],"PARROTTA POINT - LOCRI|2017|11":[5357.17,510.0,5858.55],"PARROTTA POINT - LOCRI|2017|12":[11667.67,1052.0,12751.13],"PARROTTA POINT - LOCRI|2018|1":[6751.33,582.0,7846.21],"PARROTTA POINT - LOCRI|2018|2":[5839.44,464.6,6901.69],"PARROTTA POINT - LOCRI|2018|3":[5502.97,397.0,6666.05],"PARROTTA POINT - LOCRI|2018|4":[5474.26,476.0,5948.06],"PARROTTA POINT - LOCRI|2018|5":[8531.11,648.0,8924.54],"PARROTTA POINT - LOCRI|2018|6":[7122.56,518.0,7493.98],"PARROTTA POINT - LOCRI|2018|7":[10477.29,705.0,12475.23],"PARROTTA POINT - LOCRI|2018|8":[9755.25,672.0,12526.67],"PARROTTA POINT - LOCRI|2018|9":[6160.72,453.0,6924.76],"PARROTTA POINT - LOCRI|2018|10":[7624.4,810.0,8868.23],"PARROTTA POINT - LOCRI|2018|11":[6304.43,695.0,7139.0],"PARROTTA POINT - LOCRI|2018|12":[13044.21,1372.3,14230.88],"PARROTTA POINT - LOCRI|2019|1":[7116.73,713.55,8322.51],"PARROTTA POINT - LOCRI|2019|2":[4973.97,540.0,5712.8],"PARROTTA POINT - LOCRI|2019|3":[5575.54,566.0,6603.84],"PARROTTA POINT - LOCRI|2019|4":[6750.14,542.0,7307.17],"PARROTTA POINT - LOCRI|2019|5":[6113.25,521.0,6490.38],"PARROTTA POINT - LOCRI|2019|6":[10260.94,747.0,10579.26],"PARROTTA POINT - LOCRI|2019|7":[11203.64,663.0,12448.38],"PARROTTA POINT - LOCRI|2019|8":[11606.23,777.0,14286.03],"PARROTTA POINT - LOCRI|2019|9":[6302.23,532.0,7150.14],"PARROTTA POINT - LOCRI|2019|10":[6969.13,558.0,7635.84],"PARROTTA POINT - LOCRI|2019|11":[7471.29,686.0,8292.76],"PARROTTA POINT - LOCRI|2019|12":[15593.62,1187.0,17066.94],"PARROTTA POINT - LOCRI|2020|1":[8085.07,819.0,9620.69],"PARROTTA POINT - LOCRI|2020|2":[6512.97,545.0,8107.9],"PARROTTA POINT - LOCRI|2020|3":[1105.9,122.0,1318.55],"PARROTTA POINT - LOCRI|2020|4":[3066.77,333.0,3218.36],"PARROTTA POINT - LOCRI|2020|5":[8809.92,687.0,9815.07],"PARROTTA POINT - LOCRI|2020|6":[10153.58,702.0,11678.25],"PARROTTA POINT - LOCRI|2020|7":[14323.88,843.0,16927.94],"PARROTTA POINT - LOCRI|2020|8":[13536.39,789.5,16476.18],"PARROTTA POINT - LOCRI|2020|9":[9567.1,714.0,11085.1],"PARROTTA POINT - LOCRI|2020|10":[9328.84,704.0,10521.04],"PARROTTA POINT - LOCRI|2020|11":[7912.49,746.0,9259.17],"PARROTTA POINT - LOCRI|2020|12":[14643.27,1269.0,15991.87],"PARROTTA POINT - LOCRI|2021|1":[8133.91,723.0,9402.9],"PARROTTA POINT - LOCRI|2021|2":[5225.34,442.0,6175.35],"PARROTTA POINT - LOCRI|2021|3":[6115.59,487.0,7057.07],"PARROTTA POINT - LOCRI|2021|4":[6443.23,548.0,7308.0],"PARROTTA POINT - LOCRI|2021|5":[9282.03,690.0,9901.09],"PARROTTA POINT - LOCRI|2021|6":[18006.23,936.0,19327.14],"PARROTTA POINT - LOCRI|2021|7":[15735.18,796.0,17819.14],"PARROTTA POINT - LOCRI|2021|8":[14319.61,858.0,17053.34],"PARROTTA POINT - LOCRI|2021|9":[8810.32,757.0,9905.09],"PARROTTA POINT - LOCRI|2021|10":[9377.3,707.0,10243.03],"PARROTTA POINT - LOCRI|2021|11":[7825.24,715.0,8694.29],"PARROTTA POINT - LOCRI|2021|12":[15733.88,1478.5,17145.19],"PARROTTA POINT - LOCRI|2022|1":[6038.75,503.0,7375.26],"PARROTTA POINT - LOCRI|2022|2":[5311.32,537.0,6297.2],"PARROTTA POINT - LOCRI|2022|3":[6298.11,553.0,7748.78],"PARROTTA POINT - LOCRI|2022|4":[6734.59,567.0,7903.96],"PARROTTA POINT - LOCRI|2022|5":[10208.89,659.0,11536.03],"PARROTTA POINT - LOCRI|2022|6":[11767.84,621.0,12764.47],"PARROTTA POINT - LOCRI|2022|7":[14658.34,735.0,17903.08],"PARROTTA POINT - LOCRI|2022|8":[14508.52,851.0,18440.15],"PARROTTA POINT - LOCRI|2022|9":[9289.18,577.0,11813.41],"PARROTTA POINT - LOCRI|2022|10":[8274.56,518.0,9196.25],"PARROTTA POINT - LOCRI|2022|11":[7923.16,555.0,8568.08],"PARROTTA POINT - LOCRI|2022|12":[14237.65,1044.0,16045.14],"PARROTTA POINT - LOCRI|2023|1":[9051.73,715.0,10907.76],"PARROTTA POINT - LOCRI|2023|2":[6487.8,513.0,10045.2],"PARROTTA POINT - LOCRI|2023|3":[5913.89,403.0,7418.05],"PARROTTA POINT - LOCRI|2023|4":[5428.16,379.0,6252.26],"PARROTTA POINT - LOCRI|2023|5":[9565.52,623.0,9917.84],"PARROTTA POINT - LOCRI|2023|6":[11397.06,567.0,13320.8],"PARROTTA POINT - LOCRI|2023|7":[13276.4,658.0,17232.0],"PARROTTA POINT - LOCRI|2023|8":[13474.51,659.0,16019.65],"PARROTTA POINT - LOCRI|2023|9":[8552.68,518.0,11308.99],"PARROTTA POINT - LOCRI|2023|10":[6339.26,413.0,8128.68],"PARROTTA POINT - LOCRI|2023|11":[10638.62,595.0,13049.27],"PARROTTA POINT - LOCRI|2023|12":[18306.81,6364846.0,21707.93],"PARROTTA POINT - LOCRI|2024|1":[8712.58,611.0,11956.0],"PARROTTA POINT - LOCRI|2024|2":[7658.51,538.0,11117.5],"PARROTTA POINT - LOCRI|2024|3":[6580.47,447.0,7218.49],"PARROTTA POINT - LOCRI|2024|4":[8025.03,374.0,0.0],"PARROTTA POINT - LOCRI|2024|5":[9705.58,529.0,0.0],"PARROTTA POINT - LOCRI|2024|6":[13655.9,629.0,0.0],"PARROTTA POINT - LOCRI|2024|7":[15924.32,784.0,0.0],"PARROTTA POINT - LOCRI|2024|8":[12144.03,636.0,0.0],"PARROTTA POINT - LOCRI|2024|9":[10855.23,645.0,0.0],"PARROTTA POINT - LOCRI|2024|10":[6575.9,421.0,0.0],"PARROTTA POINT - LOCRI|2024|11":[10524.73,644.0,0.0],"PARROTTA POINT - LOCRI|2024|12":[14837.02,1091.0,0.0],"PARROTTA POINT - LOCRI|2025|1":[7070.55,472.1,0.0],"PARROTTA POINT - LOCRI|2025|2":[6432.81,529.0,12265.16],"PARROTTA POINT - LOCRI|2025|3":[4256.83,419.0,6097.29],"PARROTTA POINT - LOCRI|2025|4":[6266.72,567.0,10862.19],"PARROTTA POINT - LOCRI|2025|5":[7711.33,575.0,11922.96],"PARROTTA POINT - LOCRI|2025|6":[10276.29,679.0,15885.41],"PARROTTA POINT - LOCRI|2025|7":[12645.7,847.0,20620.22],"PARROTTA POINT - LOCRI|2025|8":[9272.64,708.0,15630.37],"PARROTTA POINT - LOCRI|2025|9":[7876.29,646.0,14300.63],"PARROTTA POINT - LOCRI|2025|10":[6163.87,651.0,9802.65],"PARROTTA POINT - LOCRI|2025|11":[5459.75,511.0,9834.45],"PARROTTA POINT - LOCRI|2025|12":[11627.48,1199.0,18929.87],"PEPLO.SHOP - LOCRI|2021|10":[3010.1,81.0,3098.4],"PEPLO.SHOP - LOCRI|2021|11":[2944.84,107.0,3166.8],"PEPLO.SHOP - LOCRI|2021|12":[8193.35,281.0,9365.0],"PEPLO.SHOP - LOCRI|2022|1":[5603.6,193.0,7830.58],"PEPLO.SHOP - LOCRI|2022|2":[3572.0,175.5,5025.5],"PEPLO.SHOP - LOCRI|2022|3":[3856.2,206.0,5384.7],"PEPLO.SHOP - LOCRI|2022|4":[5102.3,180.0,5820.2],"PEPLO.SHOP - LOCRI|2022|5":[5166.21,177.0,5500.61],"PEPLO.SHOP - LOCRI|2022|6":[8556.6,259.0,9279.5],"PEPLO.SHOP - LOCRI|2022|7":[10153.02,305.0,13667.5],"PEPLO.SHOP - LOCRI|2022|8":[13364.22,393.0,18497.74],"PEPLO.SHOP - LOCRI|2022|9":[5861.72,204.0,7066.32],"PEPLO.SHOP - LOCRI|2022|10":[9052.11,335.5,10786.51],"PEPLO.SHOP - LOCRI|2022|11":[6954.7,196.0,8261.99],"PEPLO.SHOP - LOCRI|2022|12":[13504.41,320.0,15722.63],"PEPLO.SHOP - LOCRI|2023|1":[5829.5,171.0,7566.5],"PEPLO.SHOP - LOCRI|2023|2":[4985.6,141.0,7496.05],"PEPLO.SHOP - LOCRI|2023|3":[7629.0,208.0,10089.0],"PEPLO.SHOP - LOCRI|2023|4":[6653.4,172.0,7594.1],"PEPLO.SHOP - LOCRI|2023|5":[7028.9,151.0,8019.4],"PEPLO.SHOP - LOCRI|2023|6":[11539.28,229.0,13406.4],"PEPLO.SHOP - LOCRI|2023|7":[16721.09,376.0,21578.2],"PEPLO.SHOP - LOCRI|2023|8":[18390.0,453.0,24254.4],"PEPLO.SHOP - LOCRI|2023|9":[7538.8,186.0,9942.6],"PEPLO.SHOP - LOCRI|2023|10":[6651.56,169.0,8945.01],"PEPLO.SHOP - LOCRI|2023|11":[6021.29,138.0,7525.6],"PEPLO.SHOP - LOCRI|2023|12":[13828.03,278.0,16484.57],"PEPLO.SHOP - LOCRI|2024|1":[6416.9,142.0,9929.0],"PEPLO.SHOP - LOCRI|2024|2":[6294.95,170.0,11061.0],"PEPLO.SHOP - LOCRI|2024|3":[5600.1,146.0,6375.0],"PEPLO.SHOP - LOCRI|2024|4":[5444.89,150.0,0.0],"PEPLO.SHOP - LOCRI|2024|5":[8561.6,204.0,0.0],"PEPLO.SHOP - LOCRI|2024|6":[10775.19,210.0,0.0],"PEPLO.SHOP - LOCRI|2024|7":[22741.13,620.0,0.0],"PEPLO.SHOP - LOCRI|2024|8":[25933.14,629.0,0.0],"PEPLO.SHOP - LOCRI|2024|9":[5674.4,157.0,0.0],"PEPLO.SHOP - LOCRI|2024|10":[6341.01,152.0,0.0],"PEPLO.SHOP - LOCRI|2024|11":[6464.03,176.0,4823.72],"PEPLO.SHOP - LOCRI|2024|12":[12511.29,381.0,20263.79],"PEPLO.SHOP - LOCRI|2025|1":[7694.08,337.0,20833.02],"PEPLO.SHOP - LOCRI|2025|2":[4809.82,211.0,11105.52],"PEPLO.SHOP - LOCRI|2025|3":[2432.2,128.0,5817.49],"PEPLO.SHOP - LOCRI|2025|4":[4122.82,183.0,7454.41],"PEPLO.SHOP - LOCRI|2025|5":[6237.15,269.0,11154.63],"PEPLO.SHOP - LOCRI|2025|6":[12353.68,378.0,17267.12],"PEPLO.SHOP - LOCRI|2025|7":[21400.55,584.0,33674.5],"PEPLO.SHOP - LOCRI|2025|8":[28803.12,1160.0,69615.52],"PEPLO.SHOP - LOCRI|2025|9":[5343.3,191.0,9547.93],"PEPLO.SHOP - LOCRI|2025|10":[4976.72,194.0,8243.81],"PEPLO.SHOP - LOCRI|2025|11":[6095.92,227.0,9842.06],"PEPLO.SHOP - LOCRI|2025|12":[11501.95,416.0,19887.42]}};
+
+    // Storico SETTIMANALE reale del vecchio gestionale (opzionale).
+    // Formato: "NEGOZIO|ANNO|SETTIMANA": [incasso €, capi, valore a listino €]
+    // Finché è vuoto, giorno e settimana dello storico vengono stimati dai totali mensili (segnati con ≈).
+    const STORICO_SETTIMANE = {};
 
     const DATE_FORMATS = ["DD/MM/YYYY", "DD/MM/YYYY HH:mm", "DD/MM/YYYY HH:mm:ss", "YYYY-MM-DD", "YYYY-MM-DD HH:mm:ss"];
     let archiveAgg = {};     // "NEGOZIO|ANNO|MESE" -> { incasso, capi, listino }
@@ -980,47 +1081,9 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         });
     }
 
-    // ---- Nascondi / Allarga sezione Confronto Anni ----
-    function applyCmpCollapse(collapsed) {
-        const sec = document.getElementById('comparisonSection');
-        sec.classList.toggle('cmp-collapsed', collapsed);
-        document.getElementById('btnCmpCollapse').innerHTML = collapsed
-            ? '<i class="fas fa-chevron-down me-1"></i>Mostra'
-            : '<i class="fas fa-chevron-up me-1"></i>Nascondi';
-        try { localStorage.setItem('cmpCollapsed', collapsed ? '1' : '0'); } catch (e) {}
-    }
-
-    function toggleCmpCollapse() {
-        const sec = document.getElementById('comparisonSection');
-        const collapse = !sec.classList.contains('cmp-collapsed');
-        if (collapse && sec.classList.contains('cmp-expanded')) toggleCmpExpand(); // chiudendo esce anche dallo schermo intero
-        applyCmpCollapse(collapse);
-        if (!collapse && charts.cmpChart) setTimeout(() => charts.cmpChart.resize(), 50);
-    }
-
-    function toggleCmpExpand() {
-        const sec = document.getElementById('comparisonSection');
-        const expand = !sec.classList.contains('cmp-expanded');
-        if (expand && sec.classList.contains('cmp-collapsed')) applyCmpCollapse(false);
-        sec.classList.toggle('cmp-expanded', expand);
-        document.body.classList.toggle('cmp-noscroll', expand);
-        document.getElementById('btnCmpExpand').innerHTML = expand
-            ? '<i class="fas fa-compress me-1"></i>Riduci'
-            : '<i class="fas fa-expand me-1"></i>Allarga';
-        if (!expand) sec.scrollIntoView({ block: 'start' });
-        else sec.scrollTop = 0;
-        if (charts.cmpChart) setTimeout(() => charts.cmpChart.resize(), 50);
-    }
-
-    document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && document.getElementById('comparisonSection').classList.contains('cmp-expanded')) toggleCmpExpand();
-    });
-
-    try { if (localStorage.getItem('cmpCollapsed') === '1') applyCmpCollapse(true); } catch (e) {}
-
     function renderComparison() {
         const section = document.getElementById('comparisonSection');
-        if (!section) return;
+        if (!section || !storicoOpen) return;   // calcolato solo quando la finestra Dati Storici è aperta
 
         const aliases = getStoreAliases();
         const current = buildCurrentAgg();
@@ -1043,8 +1106,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         });
 
         const keys = Object.keys(combined);
-        if (!keys.length) { section.classList.add('d-none'); return; }
-        section.classList.remove('d-none');
+        if (!keys.length) return;
 
         const stores = new Set(), years = new Set();
         keys.forEach(k => { const [s, y] = k.split('|'); stores.add(s); years.add(parseInt(y, 10)); });
@@ -1155,6 +1217,378 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         });
     }
 
+    // ---------------------------------------------------------------
+    // FINESTRA DATI STORICI: GIORNO e SETTIMANA vs ANNI PRECEDENTI
+    // ---------------------------------------------------------------
+    let storicoOpen = false;
+    let stCache = null;
+
+    function detectWeekCol(cols) {
+        return (cols || []).find(c => /settim|week|\bsett\b|n\.?\s*sett|num\.?\s*sett/i.test(c)) || '';
+    }
+
+    function loadStPrefs() {
+        try {
+            const p = JSON.parse(localStorage.getItem('stPrefs') || 'null');
+            if (p) {
+                if (p.years) document.getElementById('stYears').value = p.years;
+                if (p.thr) document.getElementById('stThr').value = p.thr;
+            }
+        } catch (e) {}
+    }
+
+    function saveStPrefs() {
+        try {
+            localStorage.setItem('stPrefs', JSON.stringify({
+                years: document.getElementById('stYears').value,
+                thr: document.getElementById('stThr').value
+            }));
+        } catch (e) {}
+    }
+
+    function isoWeekStart(year, week) {
+        const m = moment(`${year}-W${String(week).padStart(2, '0')}-1`, 'GGGG-[W]WW-E', true);
+        if (!m.isValid() || m.isoWeek() !== week || m.isoWeekYear() !== year) return null; // es. settimana 53 inesistente
+        return m;
+    }
+
+    // Prepara (una sola volta per caricamento dati) incassi giornalieri e settimanali del sistema attuale
+    function buildStCache() {
+        const aliasesStr = localStorage.getItem('storeAliases') || '';
+        const key = [rawData.length, COL_DATA, COL_STORE, COL_NETTO, COL_QTA, COL_WEEK, aliasesStr].join('§');
+        if (stCache && stCache.key === key) return stCache;
+
+        const daily = {}, storeMin = {}, weekCur = {}, dateWeek = {}, weekSet = new Set();
+        const stores = new Set(), dates = new Set();
+        let maxDate = '';
+
+        rawData.forEach(row => {
+            const store = (row[COL_STORE] || '').trim().toUpperCase();
+            if (!store) return;
+            const d = moment((row[COL_DATA] || '').trim(), DATE_FORMATS);
+            if (!d.isValid()) return;
+            const ds = d.format('YYYY-MM-DD');
+            let qta = parseEuro(row[COL_QTA]); if (qta === 0) qta = 1;
+            const inc = parseEuro(row[COL_NETTO]) * qta;
+
+            const k = store + '|' + ds;
+            if (!daily[k]) daily[k] = { incasso: 0, capi: 0 };
+            daily[k].incasso += inc; daily[k].capi += qta;
+            if (!storeMin[store] || ds < storeMin[store]) storeMin[store] = ds;
+            if (ds > maxDate) maxDate = ds;
+            stores.add(store); dates.add(ds);
+
+            // Numero settimana: dalla colonna del database se presente, altrimenti calcolato (ISO)
+            let wk = d.isoWeek(), wy = d.isoWeekYear();
+            if (COL_WEEK) {
+                const w = parseInt(String(row[COL_WEEK] || '').replace(/\D/g, ''), 10);
+                if (w >= 1 && w <= 53) {
+                    wk = w; wy = d.year();
+                    if (w >= 52 && d.month() === 0) wy--;
+                    if (w === 1 && d.month() === 11) wy++;
+                }
+            }
+            const wKey = wy + '|' + wk;
+            weekSet.add(wKey);
+            if (!dateWeek[ds]) dateWeek[ds] = wKey;
+            const sw = store + '|' + wKey;
+            if (!weekCur[sw]) weekCur[sw] = { incasso: 0, capi: 0 };
+            weekCur[sw].incasso += inc; weekCur[sw].capi += qta;
+        });
+
+        // Storico mensile e settimanale con abbinamento nomi negozio
+        const aliases = getStoreAliases();
+        const archive = {}, archiveWeek = {};
+        Object.keys(archiveAgg).forEach(k => {
+            const [s, y, m] = k.split('|');
+            const nk = `${aliases[s] || s}|${y}|${m}`;
+            if (!archive[nk]) archive[nk] = { incasso: 0, capi: 0 };
+            archive[nk].incasso += archiveAgg[k].incasso; archive[nk].capi += archiveAgg[k].capi;
+        });
+        Object.keys(STORICO_SETTIMANE).forEach(k => {
+            const [s, y, w] = k.split('|');
+            const nk = `${(aliases[s.toUpperCase()] || s.toUpperCase())}|${+y}|${+w}`;
+            const v = STORICO_SETTIMANE[k];
+            if (!archiveWeek[nk]) archiveWeek[nk] = { incasso: 0, capi: 0 };
+            archiveWeek[nk].incasso += v[0]; archiveWeek[nk].capi += v[1];
+        });
+
+        const weekKeys = Array.from(weekSet).sort((a, b) => {
+            const [ay, aw] = a.split('|').map(Number), [by, bw] = b.split('|').map(Number);
+            return (by * 100 + bw) - (ay * 100 + aw);
+        });
+
+        stCache = { key, daily, storeMin, weekCur, dateWeek, weekKeys, archive, archiveWeek,
+                    stores: Array.from(stores), dates: Array.from(dates).sort().reverse(), maxDate };
+        return stCache;
+    }
+
+    // Valore di un singolo giorno: reale se coperto dal sistema attuale, altrimenti stima dal mese storico
+    function dayValue(c, store, ds, metric) {
+        const min = c.storeMin[store];
+        if (min && ds >= min) {
+            const v = c.daily[store + '|' + ds];
+            return { v: v ? v[metric] : 0, est: false, has: true };
+        }
+        const m = moment(ds, 'YYYY-MM-DD');
+        const a = c.archive[`${store}|${m.year()}|${m.month() + 1}`];
+        if (!a) return { v: 0, est: false, has: false };
+        return { v: a[metric] / m.daysInMonth(), est: true, has: true };
+    }
+
+    function rangeValue(c, store, dates, metric) {
+        const r = { v: 0, est: false, has: false };
+        dates.forEach(ds => {
+            const x = dayValue(c, store, ds, metric);
+            if (x.has) { r.v += x.v; r.has = true; r.est = r.est || x.est; }
+        });
+        return r;
+    }
+
+    function datesFrom(start, n) {
+        const out = [];
+        for (let i = 0; i < n; i++) out.push(start.clone().add(i, 'days').format('YYYY-MM-DD'));
+        return out;
+    }
+
+    // Stesso giorno della settimana più vicino alla stessa data, k anni prima (es. mercoledì contro mercoledì)
+    function alignedDate(d, k) {
+        const r = d.clone().subtract(k, 'years');
+        let shift = d.isoWeekday() - r.isoWeekday();
+        if (shift > 3) shift -= 7;
+        if (shift < -3) shift += 7;
+        return r.add(shift, 'days');
+    }
+
+    function trendBadge(curr, prev, thr) {
+        if (!prev || prev <= 0) return '<span class="badge bg-light text-muted border">n.d.</span>';
+        const p = (curr - prev) / prev * 100;
+        const txt = `${p >= 0 ? '+' : ''}${p.toFixed(1)}%`;
+        if (p > thr)  return `<span class="badge bg-success"><i class="fas fa-arrow-up me-1"></i>Crescita ${txt}</span>`;
+        if (p < -thr) return `<span class="badge bg-danger"><i class="fas fa-arrow-down me-1"></i>Calo ${txt}</span>`;
+        return `<span class="badge bg-secondary"><i class="fas fa-equals me-1"></i>Stabile ${txt}</span>`;
+    }
+
+    function stFmt(v, metric, est) {
+        const s = metric === 'capi' ? Math.round(v).toLocaleString('it-IT') : formatEur(v);
+        return (est ? '<span class="text-muted" title="Stima ricavata dal totale mensile del vecchio gestionale">≈ </span>' : '') + s;
+    }
+
+    function getStParams() {
+        return {
+            ds: document.getElementById('stDate').value,
+            wkKey: document.getElementById('stWeek').value,
+            nYears: +document.getElementById('stYears').value || 3,
+            thr: +document.getElementById('stThr').value || 5,
+            metric: document.getElementById('stMetric').value,
+            prorate: document.getElementById('stProrate').checked
+        };
+    }
+
+    // Tabella negozi x anni con indicatore; restituisce i totali rete
+    function buildCmpTable(el, curLabel, yearLabels, stores, cur, hist, p) {
+        const tot = { cur: 0, hist: yearLabels.map(() => ({ v: 0, est: false, has: false })) };
+        let h = '<thead class="table-light"><tr><th class="text-start">Punto vendita</th>' +
+            `<th class="table-primary">${curLabel}</th>` +
+            yearLabels.map(l => `<th>${l}</th>`).join('') + '</tr></thead><tbody>';
+        stores.forEach(s => {
+            tot.cur += cur[s];
+            h += `<tr><td class="text-start fw-semibold">${s}</td><td class="fw-bold text-primary">${stFmt(cur[s], p.metric, false)}</td>`;
+            hist[s].forEach((hv, i) => {
+                const t = tot.hist[i];
+                if (hv.has) { t.v += hv.v; t.has = true; t.est = t.est || hv.est; }
+                h += hv.has
+                    ? `<td>${stFmt(hv.v, p.metric, hv.est)}<br>${trendBadge(cur[s], hv.v, p.thr)}</td>`
+                    : '<td class="text-muted">-</td>';
+            });
+            h += '</tr>';
+        });
+        h += `<tr class="table-info fw-bold"><td class="text-start">TOTALE RETE</td><td class="text-primary">${stFmt(tot.cur, p.metric, false)}</td>` +
+            tot.hist.map(t => t.has ? `<td>${stFmt(t.v, p.metric, t.est)}<br>${trendBadge(tot.cur, t.v, p.thr)}</td>` : '<td class="text-muted">-</td>').join('') +
+            '</tr></tbody>';
+        el.innerHTML = h;
+        return tot;
+    }
+
+    function buildKpi(el, title, tot, kpiLabels, p) {
+        let h = `<div class="col-xl-2 col-md-4 col-6"><div class="crm-stat-box st-kpi-cur"><div class="crm-stat-lbl">${title}</div><div class="crm-stat-val">${stFmt(tot.cur, p.metric, false)}</div></div></div>`;
+        tot.hist.forEach((t, i) => {
+            h += `<div class="col-xl-2 col-md-4 col-6"><div class="crm-stat-box"><div class="crm-stat-lbl">${kpiLabels[i]}</div>` +
+                 `<div class="crm-stat-val text-secondary" style="font-size:1.15rem;">${t.has ? stFmt(t.v, p.metric, t.est) : '-'}</div>` +
+                 `<div class="mt-1">${t.has ? trendBadge(tot.cur, t.v, p.thr) : ''}</div></div></div>`;
+        });
+        el.innerHTML = h;
+    }
+
+    function renderStDay(c, p) {
+        const kpi = document.getElementById('stDayKpi'), tDay = document.getElementById('stDayTable');
+        const kpiM = document.getElementById('stMtdKpi'), tMtd = document.getElementById('stMtdTable');
+        if (!p.ds) { kpi.innerHTML = '<div class="text-muted">Nessuna data disponibile.</div>'; tDay.innerHTML = ''; kpiM.innerHTML = ''; tMtd.innerHTML = ''; return; }
+
+        const d = moment(p.ds, 'YYYY-MM-DD');
+        const ks = []; for (let k = 1; k <= p.nYears; k++) ks.push(k);
+        const stores = c.stores.slice();
+
+        // --- Giorno ---
+        const refDates = ks.map(k => alignedDate(d, k));
+        const cur = {}, hist = {};
+        stores.forEach(s => {
+            const v = c.daily[s + '|' + p.ds]; cur[s] = v ? v[p.metric] : 0;
+            hist[s] = refDates.map(r => dayValue(c, s, r.format('YYYY-MM-DD'), p.metric));
+        });
+        stores.sort((a, b) => (cur[b] - cur[a]) || a.localeCompare(b));
+        const dayLabels = refDates.map(r => `${r.year()}<br><small class="text-muted fw-normal">${r.format('ddd DD/MM')}</small>`);
+        const totDay = buildCmpTable(tDay, `${d.year()}<br><small class="fw-normal">${d.format('ddd DD/MM')}</small>`, dayLabels, stores, cur, hist, p);
+        buildKpi(kpi, `Giorno ${d.format('ddd DD/MM/YYYY')}`, totDay, refDates.map(r => `${r.format('ddd DD/MM/YYYY')}`), p);
+
+        // --- Progressivo mese ---
+        const curDates = datesFrom(d.clone().startOf('month'), d.date());
+        const curM = {}, histM = {};
+        const mLabels = [], mKpi = [];
+        const ranges = ks.map(k => {
+            const st = d.clone().subtract(k, 'years').startOf('month');
+            const n = Math.min(d.date(), st.daysInMonth());
+            mLabels.push(`${st.year()}<br><small class="text-muted fw-normal">01–${String(n).padStart(2, '0')}/${st.format('MM')}</small>`);
+            mKpi.push(`${st.format('MMMM YYYY')} (1–${n})`);
+            return datesFrom(st, n);
+        });
+        stores.forEach(s => {
+            curM[s] = curDates.reduce((a, ds) => { const v = c.daily[s + '|' + ds]; return a + (v ? v[p.metric] : 0); }, 0);
+            histM[s] = ranges.map(r => rangeValue(c, s, r, p.metric));
+        });
+        const totM = buildCmpTable(tMtd, `${d.year()}<br><small class="fw-normal">01–${d.format('DD/MM')}</small>`, mLabels, stores, curM, histM, p);
+        buildKpi(kpiM, `${d.format('MMMM YYYY')} (1–${d.date()})`, totM, mKpi, p);
+    }
+
+    function renderStWeek(c, p) {
+        const info = document.getElementById('stWeekInfo'), kpi = document.getElementById('stWeekKpi'), tbl = document.getElementById('stWeekTable');
+        if (!p.wkKey) { info.textContent = 'Nessuna settimana disponibile.'; kpi.innerHTML = ''; tbl.innerHTML = ''; return; }
+
+        const [wy, wk] = p.wkKey.split('|').map(Number);
+        const start = isoWeekStart(wy, wk);
+        if (!start) { info.textContent = 'Settimana non valida.'; return; }
+        const end = start.clone().add(6, 'days');
+        const maxD = moment(c.maxDate, 'YYYY-MM-DD');
+        let elapsed = 7;
+        if (end.isAfter(maxD, 'day')) elapsed = Math.max(1, Math.min(7, maxD.diff(start, 'days') + 1));
+        const partial = elapsed < 7;
+        const nDays = (partial && p.prorate) ? elapsed : 7;
+        document.getElementById('stProrate').disabled = !partial;
+
+        const src = COL_WEEK ? `letto dalla colonna <strong>"${COL_WEEK}"</strong> del database` : 'calcolato dalla data (settimana ISO, lunedì→domenica)';
+        info.innerHTML = `<i class="fas fa-calendar-week me-1"></i><strong>Settimana ${wk} / ${wy}</strong>: dal ${start.format('ddd DD/MM')} al ${end.format('ddd DD/MM/YYYY')}. ` +
+            (partial ? `<span class="text-warning fw-bold">Settimana in corso</span>: dati disponibili fino al ${maxD.format('ddd DD/MM')} (${elapsed} giorni su 7). ` : 'Settimana completa. ') +
+            `Numero settimana ${src}.`;
+
+        const ks = []; for (let k = 1; k <= p.nYears; k++) ks.push(k);
+        const stores = c.stores.slice();
+        const cur = {}, hist = {};
+        const refs = ks.map(k => {
+            const ys = isoWeekStart(wy - k, wk);
+            return ys ? { y: wy - k, start: ys, dates: datesFrom(ys, nDays) } : { y: wy - k, start: null, dates: [] };
+        });
+
+        stores.forEach(s => {
+            const v = c.weekCur[`${s}|${wy}|${wk}`]; cur[s] = v ? v[p.metric] : 0;
+            hist[s] = refs.map(r => {
+                if (!r.start) return { v: 0, est: false, has: false };
+                const weekEnd = r.start.clone().add(6, 'days').format('YYYY-MM-DD');
+                const min = c.storeMin[s];
+                const realW = c.archiveWeek[`${s}|${r.y}|${wk}`];
+                if (realW && (!min || weekEnd < min)) return { v: realW[p.metric] * nDays / 7, est: nDays < 7, has: true };
+                return rangeValue(c, s, r.dates, p.metric);
+            });
+        });
+        stores.sort((a, b) => (cur[b] - cur[a]) || a.localeCompare(b));
+
+        const labels = refs.map(r => r.start
+            ? `${r.y}<br><small class="text-muted fw-normal">sett. ${wk} · ${r.start.format('DD/MM')}–${r.start.clone().add(nDays - 1, 'days').format('DD/MM')}</small>`
+            : `${r.y}<br><small class="text-muted fw-normal">sett. ${wk} n.d.</small>`);
+        const curLabel = `${wy}<br><small class="fw-normal">sett. ${wk} · ${start.format('DD/MM')}–${start.clone().add((partial ? elapsed : 7) - 1, 'days').format('DD/MM')}</small>`;
+        const tot = buildCmpTable(tbl, curLabel, labels, stores, cur, hist, p);
+        buildKpi(kpi, `Settimana ${wk} / ${wy}${partial ? ' (in corso)' : ''}`, tot, refs.map(r => `Sett. ${wk} / ${r.y}`), p);
+
+        // Grafico a barre: negozi x anni
+        const palette = ['#6f42c1', '#adb5bd', '#20c997', '#fd7e14', '#0dcaf0'];
+        const datasets = [{ label: String(wy), data: stores.map(s => cur[s]), backgroundColor: '#0d6efd', borderRadius: 4 }]
+            .concat(refs.map((r, i) => ({ label: String(r.y), data: stores.map(s => hist[s][i].has ? hist[s][i].v : null), backgroundColor: palette[i % palette.length], borderRadius: 4 })));
+        if (charts.stWeekChart) charts.stWeekChart.destroy();
+        charts.stWeekChart = new Chart(document.getElementById('stWeekChart').getContext('2d'), {
+            type: 'bar',
+            data: { labels: stores, datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { position: 'top' },
+                    tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${p.metric === 'capi' ? Math.round(ctx.parsed.y).toLocaleString('it-IT') : formatEur(ctx.parsed.y)}` } } },
+                scales: { y: { beginAtZero: true, ticks: { callback: v => p.metric === 'capi' ? v : '€ ' + v.toLocaleString('it-IT') } } }
+            }
+        });
+    }
+
+    function renderStorico() {
+        if (!storicoOpen) return;
+        if (!rawData.length) {
+            document.getElementById('stDayKpi').innerHTML = '<div class="text-muted">Carica prima i dati con "Aggiorna Dati".</div>';
+            document.getElementById('stWeekInfo').textContent = 'Carica prima i dati con "Aggiorna Dati".';
+            return;
+        }
+        const c = buildStCache();
+        const p = getStParams();
+        renderStDay(c, p);
+        renderStWeek(c, p);
+    }
+
+    function initStoricoControls(forceDate) {
+        if (!rawData.length) return;
+        const c = buildStCache();
+        const dSel = document.getElementById('stDate');
+        const prevD = dSel.value;
+        dSel.innerHTML = c.dates.map(d => `<option value="${d}">${moment(d, 'YYYY-MM-DD').format('ddd DD/MM/YYYY')}</option>`).join('');
+        const summaryD = document.getElementById('dailySummaryDate').value;
+        let wanted = (!forceDate && prevD && c.dates.includes(prevD)) ? prevD : (summaryD || getDefaultDay());
+        if (!wanted || !c.dates.includes(wanted)) wanted = c.dates[0];
+        if (wanted) dSel.value = wanted;
+
+        const wSel = document.getElementById('stWeek');
+        const prevW = wSel.value;
+        wSel.innerHTML = c.weekKeys.map(k => {
+            const [y, w] = k.split('|').map(Number);
+            const s = isoWeekStart(y, w);
+            const range = s ? ` (${s.format('DD/MM')}–${s.clone().add(6, 'days').format('DD/MM')})` : '';
+            return `<option value="${k}">Sett. ${w} / ${y}${range}</option>`;
+        }).join('');
+        const wantedW = (!forceDate && prevW && c.weekKeys.includes(prevW)) ? prevW : c.dateWeek[dSel.value];
+        if (wantedW) wSel.value = wantedW;
+    }
+
+    function onStDateChange() {
+        const c = buildStCache();
+        const wk = c.dateWeek[document.getElementById('stDate').value];
+        if (wk) document.getElementById('stWeek').value = wk;   // la settimana segue il giorno scelto
+        renderStorico();
+    }
+
+    function openStorico() {
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('storicoModal')).show();
+    }
+
+    function refreshStoricoIfOpen() {
+        if (!storicoOpen) return;
+        initStoricoControls(false);
+        renderStorico();
+        renderComparison();
+    }
+
+    document.getElementById('storicoModal').addEventListener('shown.bs.modal', () => {
+        storicoOpen = true;
+        initStoricoControls(true);
+        renderStorico();
+        renderComparison();
+    });
+    document.getElementById('storicoModal').addEventListener('hidden.bs.modal', () => { storicoOpen = false; });
+    document.getElementById('tabAnniBtn').addEventListener('shown.bs.tab', () => { if (charts.cmpChart) charts.cmpChart.resize(); });
+    document.querySelector('[data-bs-target="#tabSettimana"]').addEventListener('shown.bs.tab', () => { if (charts.stWeekChart) charts.stWeekChart.resize(); });
+
     function processCsvData(salesCsv, clientsCsv, btn, fromCache) {
         if (!salesCsv) {
             alert("Errore nel download del file Vendite. Controlla il link CSV.");
@@ -1196,6 +1630,9 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
                 COL_CREDITO = columns[14] || columns[0];
                 COL_CARD    = columns[15] || columns[0];
                 COL_STORE   = columns[16] || columns[0];
+                const savedWeek = localStorage.getItem('colSettimana');
+                COL_WEEK    = (savedWeek !== null && (savedWeek === '' || columns.includes(savedWeek))) ? savedWeek : detectWeekCol(columns);
+                stCache     = null;
 
                 buildGlobalCRMStats();
                 setupFilters();
@@ -1203,6 +1640,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
                 applyDefaultDate();   // Imposta automaticamente oggi o l'ultimo giorno disponibile
                 updateDashboard();
                 renderComparison();
+                refreshStoricoIfOpen();
 
                 setRefreshButton(false);
             }
@@ -1389,6 +1827,18 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         document.getElementById('colContante').value = COL_CONTANTE;
         document.getElementById('colPos').value = COL_POS;
         document.getElementById('colCredito').value = COL_CREDITO;
+
+        // Colonna numero settimana (facoltativa)
+        const wSel = document.getElementById('colSettimana');
+        wSel.innerHTML = '<option value="">(calcola dalla data – settimana ISO)</option>';
+        columns.forEach(col => wSel.appendChild(new Option(col, col)));
+        wSel.value = COL_WEEK || '';
+        wSel.onchange = function() {
+            COL_WEEK = this.value;
+            try { localStorage.setItem('colSettimana', COL_WEEK); } catch (e) {}
+            stCache = null;
+            refreshStoricoIfOpen();
+        };
 
         extractMonthsAndStores();
         document.getElementById('filterSection').classList.remove('d-none');
