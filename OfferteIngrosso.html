@@ -293,6 +293,9 @@
                     <div class="card"><div class="card-body">
                         <h6 class="fw-bold"><i class="fas fa-database me-2"></i>Origine dati</h6>
                         <div class="small" id="infoVendite">-</div>
+                        <hr class="my-2">
+                        <div class="small text-muted mb-2">Le vendite vengono lette in modo incrementale: a ogni aggiornamento solo le righe aggiunte in fondo al foglio. Se hai corretto o cancellato righe vecchie, usa la rilettura completa.</div>
+                        <button class="btn btn-sm btn-outline-danger" onclick="if (confirm('Rileggere da capo tutto il foglio vendite? Con molte righe può richiedere qualche minuto.')) carica(true, true)"><i class="fas fa-database me-1"></i>Rilettura completa vendite</button>
                     </div></div>
                 </div>
                 <div class="col-lg-6">
@@ -448,6 +451,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
 <script>
 // ============================================================
 //  COSTANTI
@@ -577,16 +581,33 @@ async function api(action, payload) {
     return j.data;
 }
 
-async function carica(force) {
+// Memoria locale del browser (IndexedDB): regge anche i riepiloghi di centinaia di migliaia di righe
+async function salvaCacheLocale() {
+    try { if (window.localforage) await localforage.setItem('oi_cache', DATA); else ls.set('oi_cache', JSON.stringify(DATA)); }
+    catch (e) { console.warn('Memoria locale non disponibile', e); }
+}
+
+async function leggiCacheLocale() {
+    try {
+        if (window.localforage) { const d = await localforage.getItem('oi_cache'); if (d) return d; }
+        const c = ls.get('oi_cache');
+        return c ? JSON.parse(c) : null;
+    } catch (e) { return null; }
+}
+
+async function carica(force, completo) {
     const btn = $('btnRicarica');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Lettura Fogli...';
     try {
-        DATA = await api('getData', { force: !!force });
+        if (completo) btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Rilettura completa vendite...';
+        DATA = await api('getData', { force: !!force, completo: !!completo });
         collegatiOra = 0;
-        ls.set('oi_cache', JSON.stringify(DATA));
         renderTutto();
-        $('statoDati').textContent = `Dati aggiornati alle ${new Date(DATA.aggiornato).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} · ${DATA.clienti.length} clienti`;
+        salvaCacheLocale();
+        const v = DATA.vendite || {};
+        const vend = v.completo ? ` · vendite rilette per intero (${esc(v.motivo)})` : (v.nuove ? ` · <b>+${v.nuove.toLocaleString('it-IT')}</b> nuove righe vendite` : ' · nessuna nuova riga vendite');
+        $('statoDati').innerHTML = `Dati aggiornati alle ${new Date(DATA.aggiornato).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} · ${DATA.clienti.length} clienti${force ? vend : ''}`;
     } catch (e) {
         $('statoDati').innerHTML = `<span class="text-warning"><i class="fas fa-exclamation-triangle me-1"></i>${esc(e.message)}</span>`;
         if (!DATA) bootstrap.Tab.getOrCreateInstance($('tabImpBtn')).show();
@@ -825,7 +846,7 @@ async function escludiTesto(nome) {
     try {
         await api('saveSettings', { settings: { ESCLUDI_NOMI: nuovo } });
         DATA.cfg.ESCLUDI_NOMI = nuovo;
-        ls.set('oi_cache', JSON.stringify(DATA));
+        salvaCacheLocale();
         renderVendite(); renderCollega();
         toast(`"${esc(nome)}" escluso. Per riattivarlo modifica il parametro nelle Impostazioni.`);
     } catch (e) { toast(esc(e.message), 'danger'); }
@@ -1669,7 +1690,7 @@ function renderImpostazioniServer() {
         <input class="form-control form-control-sm s-par" data-k="${p[0]}" value="${esc(cfg[p[0]] == null ? '' : cfg[p[0]])}"></div>`).join('');
     const v = DATA.vendite || {};
     const col = v.colonne || {};
-    $('infoVendite').innerHTML = `File: <b>${esc(v.fonte || '-')}</b> · foglio <b>${esc(v.foglio || '-')}</b> · righe lette: <b>${(v.righe || 0).toLocaleString('it-IT')}</b><br>
+    $('infoVendite').innerHTML = `File: <b>${esc(v.fonte || '-')}</b> · foglio <b>${esc(v.foglio || '-')}</b> · righe elaborate: <b>${(v.righe || 0).toLocaleString('it-IT')}</b>${v.completo ? ` <span class="badge bg-info text-dark">riletto per intero: ${esc(v.motivo)}</span>` : (v.nuove ? ` <span class="badge bg-success">+${v.nuove} all'ultimo aggiornamento</span>` : '')}<br>
         Colonne riconosciute: ${Object.keys(col).map(k => `<span class="badge ${col[k] === '(nessuna)' && (k === 'data' || k === 'cliente' || k === 'imp') ? 'bg-danger' : 'bg-light text-dark border'} me-1">${k}: ${esc(col[k])}</span>`).join('')}` +
         (DATA.contabilita ? `<hr class="my-2"><b>Schede contabili</b>: ${esc(DATA.contabilita.fonte)} · foglio <b>${esc(DATA.contabilita.foglio)}</b> · movimenti letti: <b>${(DATA.contabilita.righe || 0).toLocaleString('it-IT')}</b><br>
             ${Object.keys(DATA.contabilita.colonne || {}).map(k => `<span class="badge bg-light text-dark border me-1">${k}: ${esc(DATA.contabilita.colonne[k])}</span>`).join('')}` : '<hr class="my-2"><span class="text-muted">Pagamenti letti dal foglio SCADENZE.</span>');
@@ -1750,10 +1771,10 @@ function leggiLinkCollega() {
     try { localStorage.removeItem('oi_gemini'); } catch (e) {}   // la chiave Gemini ora sta sul server
     $('sUrl').value = ls.get('oi_url') || '';
     $('sToken').value = ls.get('oi_token') || '';
-    try {
-        const c = ls.get('oi_cache');
-        if (c) { DATA = JSON.parse(c); renderTutto(); $('statoDati').textContent = 'Dati dalla memoria locale, aggiornamento in corso...'; }
-    } catch (e) {}
+    try { localStorage.removeItem('oi_cache'); } catch (e) {}   // la memoria locale ora usa IndexedDB
+    leggiCacheLocale().then(d => {
+        if (d && !DATA) { DATA = d; renderTutto(); $('statoDati').textContent = 'Dati dalla memoria locale, aggiornamento in corso...'; }
+    });
     if (ls.get('oi_url') && ls.get('oi_token')) carica(false);
     else {
         $('statoDati').textContent = 'Non collegato';
