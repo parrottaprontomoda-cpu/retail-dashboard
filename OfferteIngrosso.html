@@ -208,10 +208,20 @@
                         <input id="sUrl" class="form-control mb-2" placeholder="https://script.google.com/macros/s/.../exec">
                         <label class="form-label small fw-bold">Token di accesso</label>
                         <input id="sToken" type="password" class="form-control mb-2" placeholder="Token generato da setup()">
-                        <label class="form-label small fw-bold">API Key Google Gemini (facoltativa, per personalizzare i messaggi)</label>
-                        <input id="sGemini" type="password" class="form-control mb-3" placeholder="Chiave da aistudio.google.com">
                         <button class="btn btn-primary" onclick="salvaCollegamento()"><i class="fas fa-save me-1"></i>Salva e prova</button>
                         <span class="small ms-2" id="sEsito"></span>
+                        <hr>
+                        <h6 class="fw-bold"><i class="fas fa-mobile-screen me-2"></i>Usa da cellulare o da un altro computer</h6>
+                        <p class="small text-muted mb-2">Genera un link con QR code: inquadralo con il cellulare e il collegamento viene salvato lì, senza riscrivere URL e token.</p>
+                        <button class="btn btn-outline-primary" onclick="mostraLinkDispositivo()"><i class="fas fa-qrcode me-1"></i>Collega un altro dispositivo</button>
+                        <hr>
+                        <h6 class="fw-bold"><i class="fas fa-wand-magic-sparkles me-2"></i>Google Gemini</h6>
+                        <p class="small text-muted mb-2">La chiave viene salvata sul server (Apps Script), non nei browser: vale per tutti i dispositivi.</p>
+                        <div id="sGeminiStato" class="small mb-2"></div>
+                        <div class="input-group">
+                            <input id="sGemini" type="password" class="form-control" placeholder="Chiave da aistudio.google.com">
+                            <button class="btn btn-outline-secondary" onclick="salvaGemini()">Salva chiave</button>
+                        </div>
                     </div></div>
                     <div class="card"><div class="card-body">
                         <h6 class="fw-bold"><i class="fas fa-database me-2"></i>Origine dati</h6>
@@ -237,6 +247,23 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
     </div>
     <div class="modal-body" id="mcBody"></div>
+</div></div></div>
+
+<!-- MODALE COLLEGA DISPOSITIVO -->
+<div class="modal fade" id="mLink" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header" style="background:#1f2a44;color:#fff;">
+        <h5 class="modal-title fw-bold"><i class="fas fa-qrcode me-2"></i>Collega un altro dispositivo</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body text-center">
+        <p class="small">Inquadra il codice con la fotocamera del cellulare, oppure invia il link a te stesso.</p>
+        <div id="qrBox" class="d-inline-block p-2 bg-white border rounded mb-3"></div>
+        <div class="input-group input-group-sm mb-2">
+            <input id="linkDisp" class="form-control" readonly>
+            <button class="btn btn-outline-secondary" onclick="copiaLink()"><i class="fas fa-copy"></i></button>
+        </div>
+        <div class="alert alert-warning small text-start mb-0"><i class="fas fa-lock me-1"></i>Questo link contiene il token di accesso: chi lo apre vede i dati dei clienti. Non condividerlo e non pubblicarlo. Se finisce in mani sbagliate esegui <b>rigeneraToken()</b> in Apps Script.</div>
+    </div>
 </div></div></div>
 
 <!-- MODALE NUOVO / MODIFICA CLIENTE -->
@@ -351,6 +378,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 // ============================================================
 //  COSTANTI
@@ -648,7 +676,7 @@ function telWa(t) {
 function renderTutto() {
     if (!DATA) return;
     // ogni sezione è indipendente: un errore in una non blocca le altre
-    [preparaBrand, renderAvvisi, renderPanoramica, preparaFiltri, renderClienti, renderOfferte, () => preparaCampagna(), renderBrand, renderRegistro, renderImpostazioniServer]
+    [preparaBrand, statoGemini, renderAvvisi, renderPanoramica, preparaFiltri, renderClienti, renderOfferte, () => preparaCampagna(), renderBrand, renderRegistro, renderImpostazioniServer]
         .forEach(fn => { try { fn(); } catch (e) { console.error('Errore di visualizzazione:', e); } });
 }
 
@@ -1186,8 +1214,7 @@ function esportaCampagna() {
 }
 
 async function personalizza(cod, btn) {
-    const key = ls.get('oi_gemini');
-    if (!key) { toast('Inserisci la API Key di Gemini nelle Impostazioni.', 'warning'); return; }
+    if (DATA && !DATA.geminiAttivo) { toast('Imposta la chiave Gemini nelle Impostazioni.', 'warning'); return; }
     const c = cliente(cod), r = rigaCampagna(cod), ta = r.querySelector('.cmp-msg');
     const o = DATA.offerte.find(x => x.id === $('cmpOfferta').value);
     const prompt = `Sei il commerciale di un'azienda di abbigliamento all'ingrosso in Italia. Riscrivi questo messaggio WhatsApp per il cliente, mantenendo TUTTI i dati dell'offerta (sconto, scadenza, condizioni di pagamento) senza inventarne di nuovi. Tono cordiale e professionale, massimo 6 righe, niente markdown, niente emoji eccessive. Rispondi solo con il testo del messaggio.
@@ -1200,20 +1227,7 @@ ${ta.value}`;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     try {
-        let testo = null, ultimoErr = null;
-        for (const modello of ['gemini-flash-latest', 'gemini-flash-lite-latest']) {
-            try {
-                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modello}:generateContent?key=${encodeURIComponent(key)}`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                });
-                const j = await res.json();
-                if (!res.ok) throw new Error((j.error && j.error.message) || ('Errore ' + res.status));
-                testo = j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts[0].text;
-                if (testo) break;
-            } catch (e) { ultimoErr = e; }
-        }
-        if (!testo) throw ultimoErr || new Error('Risposta vuota');
+        const testo = (await api('gemini', { prompt: prompt })).testo;
         ta.value = testo.replace(/```/g, '').trim();
         r.querySelector('details').open = true;
     } catch (e) { toast('Gemini: ' + esc(e.message), 'danger'); }
@@ -1282,7 +1296,6 @@ async function salvaParametri() {
 async function salvaCollegamento() {
     ls.set('oi_url', $('sUrl').value.trim());
     ls.set('oi_token', $('sToken').value.trim());
-    ls.set('oi_gemini', $('sGemini').value.trim());
     $('sEsito').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Prova in corso...';
     try {
         const r = await api('ping');
@@ -1291,13 +1304,63 @@ async function salvaCollegamento() {
     } catch (e) { $('sEsito').innerHTML = `<span class="text-danger">${esc(e.message)}</span>`; }
 }
 
+async function salvaGemini() {
+    const k = $('sGemini').value.trim();
+    if (!k) { toast('Incolla la chiave Gemini (oppure "-" per rimuoverla).', 'warning'); return; }
+    try {
+        const r = await api('setGeminiKey', { key: k });
+        $('sGemini').value = '';
+        if (DATA) DATA.geminiAttivo = r.attivo;
+        statoGemini();
+        toast(r.attivo ? 'Chiave Gemini salvata sul server.' : 'Chiave Gemini rimossa.');
+    } catch (e) { toast(esc(e.message), 'danger'); }
+}
+
+function statoGemini() {
+    $('sGeminiStato').innerHTML = DATA && DATA.geminiAttivo
+        ? '<span class="text-success"><i class="fas fa-check-circle me-1"></i>Chiave attiva sul server</span> <span class="text-muted">(per rimuoverla scrivi - e salva)</span>'
+        : '<span class="text-muted">Nessuna chiave impostata</span>';
+}
+
+function mostraLinkDispositivo() {
+    const url = ls.get('oi_url'), token = ls.get('oi_token');
+    if (!url || !token) { toast('Collega prima questo dispositivo (URL e token).', 'warning'); return; }
+    const pacchetto = btoa(unescape(encodeURIComponent(JSON.stringify({ u: url, t: token }))));
+    const link = location.origin + location.pathname + '#collega=' + encodeURIComponent(pacchetto);
+    $('linkDisp').value = link;
+    $('qrBox').innerHTML = '';
+    try { new QRCode($('qrBox'), { text: link, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.L }); }
+    catch (e) { $('qrBox').textContent = 'QR non disponibile: usa il link.'; }
+    bootstrap.Modal.getOrCreateInstance($('mLink')).show();
+}
+
+function copiaLink() {
+    const i = $('linkDisp');
+    i.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(i.value) : Promise.reject()).then(() => toast('Link copiato.'), () => { document.execCommand('copy'); toast('Link copiato.'); });
+}
+
+// Apertura dal link "collega": salva URL e token in questo browser e pulisce l'indirizzo
+function leggiLinkCollega() {
+    const m = location.hash.match(/^#collega=(.+)$/);
+    if (!m) return false;
+    try {
+        const d = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
+        if (d.u && d.t) { ls.set('oi_url', d.u); ls.set('oi_token', d.t); }
+        history.replaceState(null, '', location.pathname + location.search);
+        setTimeout(() => toast('Dispositivo collegato.'), 300);
+        return true;
+    } catch (e) { history.replaceState(null, '', location.pathname + location.search); return false; }
+}
+
 // ============================================================
 //  AVVIO
 // ============================================================
 (function avvio() {
+    leggiLinkCollega();
+    try { localStorage.removeItem('oi_gemini'); } catch (e) {}   // la chiave Gemini ora sta sul server
     $('sUrl').value = ls.get('oi_url') || '';
     $('sToken').value = ls.get('oi_token') || '';
-    $('sGemini').value = ls.get('oi_gemini') || '';
     try {
         const c = ls.get('oi_cache');
         if (c) { DATA = JSON.parse(c); renderTutto(); $('statoDati').textContent = 'Dati dalla memoria locale, aggiornamento in corso...'; }
