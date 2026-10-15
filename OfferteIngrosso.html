@@ -199,6 +199,7 @@
                     <div class="col-md-2"><div class="form-check mb-2"><input class="form-check-input" type="checkbox" id="vSoloAnag" onchange="renderVendite()"><label class="form-check-label small" for="vSoloAnag">Solo clienti in anagrafica</label></div></div>
                 </div>
                 <div class="small text-muted mt-2" id="vInfo"></div>
+                <div class="mt-2 d-none" id="vEsclusiBox"></div>
             </div></div>
             <div class="row g-3 mb-1" id="vKpi"></div>
             <div class="row g-3">
@@ -740,7 +741,8 @@ function renderVendite() {
     const nBr = new Set(perRighe.map(r => r[3])).size;
     const dP = (a, b) => b > 0 ? trendTxt(Math.round((a - b) / b * 100)) : '';
     const etPer = anno ? (mese ? `${MESI[mese - 1]} ${anno}` : (mesi.length < 12 ? `Gen–${MESI[mesi.length - 1]} ${anno}` : `${anno}`)) : 'tutto il periodo';
-    $('vInfo').innerHTML = `Periodo: <b>${etPer}</b>${anno ? ` · confronto con lo stesso periodo del ${anno - 1}` : ''} · fonte: foglio ${esc((DATA.vendite || {}).foglio || '')}, ${va.nomi.length.toLocaleString('it-IT')} nominativi${esclusi().length ? ` · esclusi: ${esc(esclusi().join(', '))}` : ''}`;
+    $('vInfo').innerHTML = `Periodo: <b>${etPer}</b>${anno ? ` · confronto con lo stesso periodo del ${anno - 1}` : ''} · fonte: foglio ${esc((DATA.vendite || {}).foglio || '')}, ${va.nomi.length.toLocaleString('it-IT')} nominativi${esclusi().length ? ` · <button type="button" class="btn btn-sm btn-outline-secondary py-0 ms-1" onclick="toggleEsclusi()"><i class="fas fa-eye-slash me-1"></i>Esclusi (${esclusi().length}) <i class="fas ${esclusiAperti() ? 'fa-chevron-up' : 'fa-chevron-down'} ms-1"></i></button>` : ''}`;
+    renderEsclusi();
     const k = [
         ['Venduto', eur(inc), dP(inc, incP)],
         ['Capi', Math.round(somma(perRighe, 5)).toLocaleString('it-IT'), dP(somma(perRighe, 5), somma(prevRighe, 5))],
@@ -845,6 +847,42 @@ function apriVenditeNome(i) {
 
 async function escludiNome(i) { return escludiTesto(DATA.venditeAgg.nomi[i]); }
 
+// ---------- Elenco esclusi (apri/chiudi, riammetti) ----------
+function esclusiAperti() { return ls.get('oi_esclusi_aperti') === '1'; }
+
+function toggleEsclusi() {
+    ls.set('oi_esclusi_aperti', esclusiAperti() ? '0' : '1');
+    renderVendite();
+}
+
+function renderEsclusi() {
+    const box = $('vEsclusiBox'), l = esclusi();
+    const aperto = esclusiAperti() && l.length > 0;
+    box.classList.toggle('d-none', !aperto);
+    if (!aperto) { box.innerHTML = ''; return; }
+    box.innerHTML = `<div class="p-2 bg-light border rounded small">
+        <div class="text-muted mb-1">Nominativi esclusi dall'analisi vendite (punti vendita, fornitori, conti interni). Clicca <i class="fas fa-times"></i> per riammetterne uno.</div>
+        ${l.map((n, i) => `<span class="badge bg-white text-dark border me-1 mb-1 fw-normal" style="font-size:.8rem">${esc(n)}
+            <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-danger" style="font-size:.75rem;line-height:1" title="Riammetti" onclick="riammettiEscluso(${i})"><i class="fas fa-times"></i></button></span>`).join('')}
+    </div>`;
+}
+
+async function riammettiEscluso(i) {
+    const l = esclusi(), nome = l[i];
+    if (!confirm(`Riammettere "${nome}" nell'analisi vendite?`)) return;
+    l.splice(i, 1);
+    const nuovo = l.join(', ');
+    try {
+        await api('saveSettings', { settings: { ESCLUDI_NOMI: nuovo } });
+        DATA.cfg.ESCLUDI_NOMI = nuovo;
+        salvaCacheLocale();
+        renderVendite(); renderCollega();
+        const par = document.querySelector('.s-par[data-k="ESCLUDI_NOMI"]');
+        if (par) par.value = nuovo;
+        toast(`"${esc(nome)}" riammesso.`);
+    } catch (e) { toast(esc(e.message), 'danger'); }
+}
+
 async function escludiTesto(nome) {
     if (!confirm(`Escludere "${nome}" dall'analisi vendite (es. punto vendita o fornitore)?`)) return;
     const nuovo = esclusi().concat([nome]).join(', ');
@@ -853,7 +891,9 @@ async function escludiTesto(nome) {
         DATA.cfg.ESCLUDI_NOMI = nuovo;
         salvaCacheLocale();
         renderVendite(); renderCollega();
-        toast(`"${esc(nome)}" escluso. Per riattivarlo modifica il parametro nelle Impostazioni.`);
+        const par = document.querySelector('.s-par[data-k="ESCLUDI_NOMI"]');
+        if (par) par.value = nuovo;
+        toast(`"${esc(nome)}" escluso. Lo ritrovi nell'elenco "Esclusi" della scheda Vendite.`);
     } catch (e) { toast(esc(e.message), 'danger'); }
 }
 
