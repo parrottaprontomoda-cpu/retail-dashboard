@@ -112,10 +112,24 @@
                     <div class="col-md-1"><select id="fFascia" class="form-select" onchange="renderClienti()" title="Rischio"><option value="">Rischio</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
                     <div class="col-md-1"><button class="btn btn-outline-secondary w-100" title="Esporta CSV" onclick="esportaClienti()"><i class="fas fa-download"></i></button></div>
                 </div>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-3 p-2 bg-light rounded small">
+                    <span class="fw-bold text-secondary"><i class="fas fa-sort-amount-down me-1"></i>Ordina per</span>
+                    <select id="oCrit1" class="form-select form-select-sm" style="width:auto" onchange="cambiaOrdine(1)"></select>
+                    <button type="button" id="oDir1" class="btn btn-sm btn-outline-secondary" onclick="invertiOrdine(1)"></button>
+                    <span class="fw-bold text-secondary ms-md-2">poi per</span>
+                    <select id="oCrit2" class="form-select form-select-sm" style="width:auto" onchange="cambiaOrdine(2)"></select>
+                    <button type="button" id="oDir2" class="btn btn-sm btn-outline-secondary" onclick="invertiOrdine(2)"></button>
+                    <div class="btn-group btn-group-sm ms-md-auto" role="group" aria-label="Ordinamenti rapidi">
+                        <button type="button" class="btn btn-outline-primary" onclick="presetOrdine('acq12','pagamento')" title="Volume vendite, poi miglior pagamento">Vendite + pagamento</button>
+                        <button type="button" class="btn btn-outline-primary" onclick="presetOrdine('pagamento','acq12')" title="Miglior pagamento, poi volume vendite">Pagamento + vendite</button>
+                        <button type="button" class="btn btn-outline-primary" onclick="presetOrdine('potenziale','rischio')">Potenzialità</button>
+                        <button type="button" class="btn btn-outline-danger" onclick="presetOrdine('scaduto','aperto')">Scaduto</button>
+                    </div>
+                </div>
                 <div class="table-responsive">
                     <table class="table table-hover tbl-clienti mb-0">
                         <thead class="table-light"><tr>
-                            <th data-k="nome">Cliente</th><th data-k="segmento">Segmento</th><th data-k="giorniEff">Pagamento</th>
+                            <th class="text-muted" style="width:36px">#</th><th data-k="nome">Cliente</th><th data-k="segmento">Segmento</th><th data-k="pagamento">Pagamento</th>
                             <th data-k="rischio">Rischio</th><th data-k="potenziale">Potenzialità</th><th data-k="acq12" class="text-end">Acquisti 12m</th>
                             <th data-k="trend" class="text-end">Trend</th><th data-k="aperto" class="text-end">Esposizione</th><th data-k="giorniDaUltimo">Ultimo acquisto</th><th data-k="ultimoInvioGg">Ultima offerta</th>
                         </tr></thead>
@@ -559,7 +573,75 @@ const PARAMETRI = [
 ];
 
 let DATA = null;
-let ordinamento = { k: 'potenziale', dir: -1 };
+// ---------- Ordinamento elenco clienti (due livelli) ----------
+const ORD_SEG = { SVILUPPARE: 1, RIATTIVARE: 2, GARANTIRE: 3, MONITORARE: 4 };
+const CRIT = {
+    acq12:          { lbl: 'Volume vendite 12 mesi', val: c => c.acq12, dir: -1, su: 'dal più basso', giu: 'dal più alto' },
+    pagamento:      { lbl: 'Miglior pagamento', dir: 1, su: 'dal migliore', giu: 'dal peggiore',
+                      // meno giorni effettivi d'incasso, poi meno scaduto, poi meno insoluti, poi rischio più basso
+                      cmp: (a, b) => (a.giorniEff - b.giorniEff) || (a.scaduto - b.scaduto) || (a.insoluti - b.insoluti) || (a.rischio - b.rischio) },
+    rischio:        { lbl: 'Rischio', val: c => c.rischio, dir: 1, su: 'dal più basso', giu: 'dal più alto' },
+    potenziale:     { lbl: 'Potenzialità', val: c => c.potenziale, dir: -1, su: 'dalla più bassa', giu: 'dalla più alta' },
+    trend:          { lbl: 'Trend vendite', val: c => c.trend, dir: -1, su: 'dal peggiore', giu: 'dal migliore' },
+    acqPrev12:      { lbl: 'Vendite anno precedente', val: c => c.acqPrev12, dir: -1, su: 'dal più basso', giu: 'dal più alto' },
+    ordini12:       { lbl: 'Frequenza d\'acquisto', val: c => c.ordini12, dir: -1, su: 'dalla più bassa', giu: 'dalla più alta' },
+    aperto:         { lbl: 'Esposizione', val: c => c.aperto + (c.portafoglio || 0), dir: -1, su: 'dalla più bassa', giu: 'dalla più alta' },
+    scaduto:        { lbl: 'Scaduto', val: c => c.scaduto, dir: -1, su: 'dal più basso', giu: 'dal più alto' },
+    giorniDaUltimo: { lbl: 'Ultimo acquisto', val: c => c.giorniDaUltimo, dir: 1, su: 'dal più recente', giu: 'dal più vecchio' },
+    ultimoInvioGg:  { lbl: 'Ultima offerta', val: c => c.ultimoInvioGg, dir: -1, su: 'dalla più recente', giu: 'dalla più vecchia' },
+    segmento:       { lbl: 'Segmento', val: c => ORD_SEG[c.segmento] || 9, dir: 1, su: 'dai partner', giu: 'dai da monitorare' },
+    nome:           { lbl: 'Nome', val: c => c.nome, dir: 1, su: 'A → Z', giu: 'Z → A' }
+};
+const ORD_DEFAULT = [{ k: 'acq12', dir: -1 }, { k: 'pagamento', dir: 1 }];
+let ordinamento = (() => {
+    try { const o = JSON.parse(localStorage.getItem('oi_ord_clienti') || 'null'); if (o && o[0] && CRIT[o[0].k] && o[1] && CRIT[o[1].k]) return o; } catch (e) {}
+    return JSON.parse(JSON.stringify(ORD_DEFAULT));
+})();
+
+function salvaOrdine() { try { localStorage.setItem('oi_ord_clienti', JSON.stringify(ordinamento)); } catch (e) {} }
+const dirLbl = o => o.dir > 0 ? CRIT[o.k].su : CRIT[o.k].giu;
+
+function confronta(a, b, o) {
+    const cr = CRIT[o.k];
+    if (cr.cmp) return cr.cmp(a, b) * o.dir;
+    let va = cr.val(a), vb = cr.val(b);
+    const na = va === null || va === undefined, nb = vb === null || vb === undefined;
+    if (na || nb) return na === nb ? 0 : na ? 1 : -1;   // i valori mancanti vanno sempre in fondo
+    return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * o.dir;
+}
+
+function ordinaClienti(l) {
+    return l.sort((a, b) => confronta(a, b, ordinamento[0]) || confronta(a, b, ordinamento[1]) || a.nome.localeCompare(b.nome));
+}
+
+function aggiornaControlliOrdine() {
+    const opz = Object.keys(CRIT).map(k => `<option value="${k}">${CRIT[k].lbl}</option>`).join('');
+    [1, 2].forEach(n => {
+        const s = $('oCrit' + n);
+        if (!s.options.length) s.innerHTML = opz;
+        s.value = ordinamento[n - 1].k;
+        $('oDir' + n).innerHTML = `<i class="fas ${ordinamento[n - 1].dir > 0 ? 'fa-arrow-up-short-wide' : 'fa-arrow-down-wide-short'} me-1"></i>${dirLbl(ordinamento[n - 1])}`;
+    });
+    document.querySelectorAll('.tbl-clienti th[data-k]').forEach(th => {
+        const k = th.getAttribute('data-k'), i = ordinamento.findIndex(o => o.k === k);
+        const old = th.querySelector('.ord-ind'); if (old) old.remove();
+        if (i >= 0) th.insertAdjacentHTML('beforeend', ` <span class="ord-ind text-primary">${ordinamento[i].dir > 0 ? '▲' : '▼'}<sup>${i + 1}</sup></span>`);
+    });
+}
+
+function cambiaOrdine(n) {
+    const k = $('oCrit' + n).value;
+    ordinamento[n - 1] = { k: k, dir: CRIT[k].dir };
+    if (ordinamento[0].k === ordinamento[1].k) ordinamento[n === 1 ? 1 : 0] = n === 1 ? { k: k === 'pagamento' ? 'acq12' : 'pagamento', dir: CRIT[k === 'pagamento' ? 'acq12' : 'pagamento'].dir } : { k: 'acq12', dir: -1 };
+    salvaOrdine(); renderClienti();
+}
+
+function invertiOrdine(n) { ordinamento[n - 1].dir *= -1; salvaOrdine(); renderClienti(); }
+
+function presetOrdine(k1, k2) {
+    ordinamento = [{ k: k1, dir: CRIT[k1].dir }, { k: k2, dir: CRIT[k2].dir }];
+    salvaOrdine(); renderClienti();
+}
 let charts = {};
 
 // ============================================================
@@ -1438,20 +1520,14 @@ function clientiFiltrati() {
     let l = DATA.clienti.filter(c =>
         (!q || [c.nome, c.citta, c.piva, c.codice].join(' ').toLowerCase().indexOf(q) >= 0) &&
         (!seg || c.segmento === seg) && (!cls || c.classe === cls) && (!fa || c.fascia === fa) && (!br || c._attivi.indexOf(br) >= 0));
-    const k = ordinamento.k, d = ordinamento.dir;
-    l.sort((a, b) => {
-        let va = a[k], vb = b[k];
-        if (va === null || va === undefined) va = d > 0 ? Infinity : -Infinity;
-        if (vb === null || vb === undefined) vb = d > 0 ? Infinity : -Infinity;
-        return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * d;
-    });
-    return l;
+    return ordinaClienti(l);
 }
 
 function renderClienti() {
     if (!DATA) return;
     const l = clientiFiltrati();
-    $('tbClienti').innerHTML = l.map(c => `<tr data-cod="${esc(c.codice)}" class="${c.attivo ? '' : 'text-muted'}">
+    $('tbClienti').innerHTML = l.map((c, i) => `<tr data-cod="${esc(c.codice)}" class="${c.attivo ? '' : 'text-muted'}">
+        <td class="text-muted small">${i + 1}</td>
         <td><div class="fw-semibold">${esc(c.nome)}</div><small class="text-muted">${esc(c.citta)}${c.attivo ? '' : ' · non attivo'}</small></td>
         <td>${badgeSeg(c.segmento)}</td>
         <td>${badgeCls(c)}</td>
@@ -1462,8 +1538,9 @@ function renderClienti() {
         <td class="text-end">${eur(c.aperto)}${c.scaduto > 0 ? `<br><small class="text-danger">scad. ${eur(c.scaduto)}</small>` : ''}${c.portafoglio > 0 ? `<br><small class="text-warning">ass. ${eur(c.portafoglio)}</small>` : ''}</td>
         <td>${c.giorniDaUltimo === null ? '-' : c.giorniDaUltimo + ' gg fa'}</td>
         <td>${c.ultimoInvioGg === null ? '<span class="text-muted">mai</span>' : c.ultimoInvioGg + ' gg fa'}</td>
-    </tr>`).join('') || '<tr><td colspan="10" class="text-center text-muted py-4">Nessun cliente</td></tr>';
-    $('contaClienti').innerHTML = `${l.length} clienti · * giorni di pagamento calcolati sui pagamenti reali (più lunghi di quelli concordati)`;
+    </tr>`).join('') || '<tr><td colspan="11" class="text-center text-muted py-4">Nessun cliente</td></tr>';
+    aggiornaControlliOrdine();
+    $('contaClienti').innerHTML = `${l.length} clienti · ordinati per ${CRIT[ordinamento[0].k].lbl.toLowerCase()} (${dirLbl(ordinamento[0])}), poi per ${CRIT[ordinamento[1].k].lbl.toLowerCase()} (${dirLbl(ordinamento[1])}) · * giorni di pagamento calcolati sui pagamenti reali (più lunghi di quelli concordati)`;
 }
 
 document.addEventListener('click', e => {
@@ -1471,9 +1548,12 @@ document.addEventListener('click', e => {
     if (tr) apriCliente(tr.getAttribute('data-cod'));
     const th = e.target.closest('.tbl-clienti th[data-k]');
     if (th) {
+        // clic sull'intestazione: diventa il criterio principale (secondo clic = inverte); il precedente passa al secondo livello
         const k = th.getAttribute('data-k');
-        ordinamento = { k: k, dir: ordinamento.k === k ? -ordinamento.dir : -1 };
-        renderClienti();
+        if (!CRIT[k]) return;
+        if (ordinamento[0].k === k) ordinamento[0].dir *= -1;
+        else { ordinamento = [{ k: k, dir: CRIT[k].dir }, ordinamento[0]]; }
+        salvaOrdine(); renderClienti();
     }
 });
 
