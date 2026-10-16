@@ -321,6 +321,36 @@
     <div class="modal-body" id="mcBody"></div>
 </div></div></div>
 
+<!-- MODALE ESTRATTO CONTO -->
+<div class="modal fade" id="mEstratto" tabindex="-1"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header" style="background:#1f2a44;color:#fff;">
+        <h5 class="modal-title fw-bold"><i class="fas fa-file-invoice-dollar me-2"></i>Estratto conto · <span id="ecNome"></span></h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+        <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-3"><label class="form-label small fw-bold text-secondary">Periodo</label>
+                <select id="ecPeriodo" class="form-select form-select-sm" onchange="ecPreset()">
+                    <option value="anno">Anno in corso</option><option value="12">Ultimi 12 mesi</option><option value="annoPrec">Anno precedente</option>
+                    <option value="aperte">Dall'ultimo saldo a zero</option><option value="tutto">Tutti i movimenti</option><option value="custom">Personalizzato</option>
+                </select></div>
+            <div class="col-md-2"><label class="form-label small fw-bold text-secondary">Dal</label><input id="ecDal" type="date" class="form-control form-control-sm" onchange="$('ecPeriodo').value='custom'; renderEstratto()"></div>
+            <div class="col-md-2"><label class="form-label small fw-bold text-secondary">Al</label><input id="ecAl" type="date" class="form-control form-control-sm" onchange="$('ecPeriodo').value='custom'; renderEstratto()"></div>
+            <div class="col-md-5 text-md-end">
+                <div class="btn-group btn-group-sm flex-wrap">
+                    <button class="btn btn-primary" onclick="stampaEstratto()"><i class="fas fa-print me-1"></i>Stampa / PDF</button>
+                    <button class="btn btn-success" onclick="inviaEstratto('WhatsApp')"><i class="fab fa-whatsapp me-1"></i>WhatsApp</button>
+                    <button class="btn btn-outline-primary" onclick="inviaEstratto('Email')"><i class="fas fa-envelope me-1"></i>Email</button>
+                    <button class="btn btn-outline-secondary" onclick="csvEstratto()"><i class="fas fa-download me-1"></i>CSV</button>
+                </div>
+            </div>
+        </div>
+        <div class="row g-2 mb-3" id="ecKpi"></div>
+        <div class="table-responsive"><table class="table table-sm table-hover align-middle small mb-1" id="ecTabella"></table></div>
+        <div class="small text-muted" id="ecFonte"></div>
+    </div>
+</div></div></div>
+
 <!-- MODALE COLLEGA DISPOSITIVO -->
 <div class="modal fade" id="mLink" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content">
     <div class="modal-header" style="background:#1f2a44;color:#fff;">
@@ -840,12 +870,177 @@ function apriVenditeNome(i) {
     $('mcBody').innerHTML = `<div class="mb-3">
             <button class="btn btn-sm btn-primary" onclick="apriFormCliente(null, { nome: DATA.venditeAgg.nomi[${i}] })"><i class="fas fa-user-plus me-1"></i>Aggiungi ai clienti ingrosso</button>
             <button class="btn btn-sm btn-outline-secondary ms-1" onclick="escludiNome(${i}); bootstrap.Modal.getInstance($('mCliente')).hide();"><i class="fas fa-eye-slash me-1"></i>Escludi dall'analisi</button>
+            <button class="btn btn-sm btn-warning ms-1" onclick="apriEstratto(null, DATA.venditeAgg.nomi[${i}])"><i class="fas fa-file-invoice-dollar me-1"></i>Estratto conto</button>
             <div class="small text-muted mt-2">Aggiungendolo in anagrafica il sistema calcola anche pagamenti, rischio e potenzialità e lo include nelle offerte.</div>
         </div>${dettaglioVendite([i])}`;
     bootstrap.Modal.getOrCreateInstance($('mCliente')).show();
 }
 
 async function escludiNome(i) { return escludiTesto(DATA.venditeAgg.nomi[i]); }
+
+// ---------- Estratto conto (foglio ARCHCONT) ----------
+let EC = null;   // { titolo, cliente, mov: [...], vista: {...} }
+const TP_NOMI = { CO: 'Contanti', AS: 'Assegno', BO: 'Bonifico', MYPA: 'MyPOS' };
+const isoD = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+async function apriEstratto(cod, nome) {
+    const c = cod ? cliente(cod) : null;
+    const m = bootstrap.Modal.getInstance($('mCliente'));
+    if (m) m.hide();
+    EC = { titolo: c ? c.nome : nome, cliente: c, mov: [] };
+    $('ecNome').textContent = EC.titolo;
+    $('ecTabella').innerHTML = '<tbody><tr><td class="text-center text-muted py-4"><i class="fas fa-spinner fa-spin me-2"></i>Lettura schede contabili...</td></tr></tbody>';
+    $('ecKpi').innerHTML = ''; $('ecFonte').textContent = '';
+    bootstrap.Modal.getOrCreateInstance($('mEstratto')).show();
+    try {
+        const r = await api('estrattoConto', { codice: cod || '', nome: nome || '' });
+        EC.mov = r.movimenti; EC.fonte = r.fonte; EC.nomi = r.nomi; EC.azienda = r.azienda;
+        $('ecPeriodo').value = 'anno';
+        ecPreset();
+    } catch (e) {
+        $('ecTabella').innerHTML = `<tbody><tr><td class="text-danger py-3">${esc(e.message)}</td></tr></tbody>`;
+    }
+}
+
+function ecPreset() {
+    const p = $('ecPeriodo').value, oggi = new Date(), y = oggi.getFullYear();
+    let dal = '', al = isoD(oggi);
+    if (p === 'anno') dal = y + '-01-01';
+    else if (p === '12') { const d = new Date(oggi); d.setFullYear(y - 1); d.setDate(d.getDate() + 1); dal = isoD(d); }
+    else if (p === 'annoPrec') { dal = (y - 1) + '-01-01'; al = (y - 1) + '-12-31'; }
+    else if (p === 'aperte') {
+        // ultimo giorno in cui il saldo progressivo era a zero (o in credito): da lì parte l'esposizione attuale
+        let saldo = 0, ultimoZero = '';
+        EC.mov.forEach((x, i) => { saldo += x.addebito - x.pagamento; const fine = i === EC.mov.length - 1 || EC.mov[i + 1].data !== x.data; if (fine && saldo <= 0.005) ultimoZero = x.data; });
+        if (ultimoZero) { const d = new Date(ultimoZero); d.setDate(d.getDate() + 1); dal = isoD(d); }
+    }
+    else if (p === 'custom') return renderEstratto();
+    if (p === 'tutto') { dal = ''; al = ''; }
+    $('ecDal').value = dal; $('ecAl').value = al;
+    renderEstratto();
+}
+
+function calcolaEstratto() {
+    const dal = $('ecDal').value, al = $('ecAl').value;
+    let iniziale = 0;
+    const righe = [];
+    EC.mov.forEach(x => {
+        if (dal && x.data < dal) { iniziale += x.addebito - x.pagamento; return; }
+        if (al && x.data > al) return;
+        righe.push(x);
+    });
+    let saldo = iniziale, dare = 0, avere = 0, portaf = 0;
+    const oggi = isoD(new Date());
+    righe.forEach(x => {
+        saldo += x.addebito - x.pagamento; x._saldo = saldo;
+        if (x.addebito > 0) dare += x.addebito; else avere += -x.addebito;
+        if (x.pagamento > 0) avere += x.pagamento; else dare += -x.pagamento;
+        if (x.tipo === 'AS' && x.pagamento > 0 && x.scad && x.scad > oggi) portaf += x.pagamento;
+    });
+    return { dal: dal, al: al, iniziale: iniziale, righe: righe, dare: dare, avere: avere, finale: saldo, portaf: portaf };
+}
+
+function descrMov(x) {
+    const p = [];
+    if (/riporto|saldo al/i.test(x.annot)) p.push('Riporto saldo');
+    else if (x.annot) p.push(x.annot);
+    if (!/riporto|saldo al/i.test(x.annot)) {
+        if (x.merce > 0) p.push('Consegna merce'); else if (x.merce < 0) p.push('Reso merce');
+        if (x.pagamento > 0) p.push('Incasso ' + (TP_NOMI[x.tipo] || x.tipo || '')); else if (x.pagamento < 0) p.push('Storno incasso' + (x.tipo === 'AS' ? ' (assegno insoluto)' : ''));
+    }
+    if (x.doc) p.push('doc. ' + x.doc);
+    return p.filter(Boolean).join(' · ');
+}
+
+function renderEstratto() {
+    if (!EC) return;
+    const e = calcolaEstratto(), c = EC.cliente;
+    const segno = v => v > 0.005 ? `<span class="text-danger">${eur(v)}</span>` : v < -0.005 ? `<span class="text-success">${eur(v)}</span>` : eur(0);
+    $('ecKpi').innerHTML = [
+        ['Saldo iniziale', segno(e.iniziale), e.dal ? 'al ' + fmtD(e.dal) : 'inizio movimenti'],
+        ['Addebiti (dare)', eur(e.dare), 'merce e storni'],
+        ['Accrediti (avere)', eur(e.avere), 'incassi, resi, sconti'],
+        ['Saldo finale', `<b>${segno(e.finale)}</b>`, e.finale > 0.005 ? 'a debito del cliente' : e.finale < -0.005 ? 'a credito del cliente' : 'in pari'],
+        ['Assegni in portafoglio', eur(e.portaf), 'scadenza futura'],
+        ...(c ? [['Fido', eur(c.fido), c.fido ? (e.finale + e.portaf > c.fido ? '<span class="text-danger">superato</span>' : 'disponibile ' + eur(c.fido - e.finale - e.portaf)) : 'non impostato']] : [])
+    ].map(k => `<div class="col-xl-2 col-md-4 col-6"><div class="crm-stat-box"><div class="crm-stat-lbl">${k[0]}</div><div class="fw-bold fs-6">${k[1]}</div><div class="small text-muted">${k[2]}</div></div></div>`).join('');
+    const n = v => v ? Math.abs(v).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+    let t = `<thead class="table-light"><tr><th>Data</th><th>Descrizione</th><th class="text-end">Dare</th><th class="text-end">Avere</th><th>Pagamento</th><th class="text-end">Saldo</th></tr></thead><tbody>
+        <tr class="table-secondary"><td>${e.dal ? fmtD(e.dal) : ''}</td><td class="fw-semibold">Saldo iniziale</td><td></td><td></td><td></td><td class="text-end fw-bold">${n(e.iniziale) || '0,00'}${e.iniziale < -0.005 ? ' Cr' : ''}</td></tr>`;
+    e.righe.forEach(x => {
+        const dare = (x.addebito > 0 ? x.addebito : 0) + (x.pagamento < 0 ? -x.pagamento : 0);
+        const avere = (x.addebito < 0 ? -x.addebito : 0) + (x.pagamento > 0 ? x.pagamento : 0);
+        const pag = x.pagamento ? `${TP_NOMI[x.tipo] || esc(x.tipo) || '-'}${x.tipo === 'AS' && x.scad ? ` <small class="text-muted">scad. ${fmtD(x.scad)}</small>` : ''}` : '';
+        t += `<tr class="${x.pagamento < 0 ? 'table-danger' : ''}"><td class="text-nowrap">${fmtD(x.data)}</td><td>${esc(descrMov(x))}${EC.nomi && EC.nomi.length > 1 ? ` <small class="text-muted">(${esc(x.nome)})</small>` : ''}</td>
+            <td class="text-end">${n(dare)}</td><td class="text-end">${n(avere)}</td><td class="small">${pag}</td>
+            <td class="text-end fw-semibold ${x._saldo > 0.005 ? 'text-danger' : x._saldo < -0.005 ? 'text-success' : ''}">${n(x._saldo) || '0,00'}${x._saldo < -0.005 ? ' Cr' : ''}</td></tr>`;
+    });
+    t += `</tbody><tfoot class="table-light fw-bold"><tr><td></td><td>Totali periodo · ${e.righe.length} movimenti</td><td class="text-end">${n(e.dare)}</td><td class="text-end">${n(e.avere)}</td><td></td><td class="text-end">${n(e.finale) || '0,00'}${e.finale < -0.005 ? ' Cr' : ''}</td></tr></tfoot>`;
+    $('ecTabella').innerHTML = e.righe.length || e.iniziale ? t : '<tbody><tr><td class="text-muted py-3">Nessun movimento nel periodo scelto.</td></tr></tbody>';
+    $('ecFonte').textContent = `Fonte: ${EC.fonte || ''}${EC.nomi && EC.nomi.length ? ' · nominativi: ' + EC.nomi.join(', ') : ''}`;
+}
+
+function testoEstratto() {
+    const e = calcolaEstratto(), c = EC.cliente || {};
+    const per = e.dal || e.al ? `dal ${e.dal ? fmtD(e.dal) : 'inizio'} al ${e.al ? fmtD(e.al) : 'oggi'}` : 'di tutti i movimenti';
+    let t = `Buongiorno ${c.referente || EC.titolo},\nle riepiloghiamo l'estratto conto ${per}:\n`;
+    t += `• Saldo iniziale: ${eur(e.iniziale)}\n• Merce e addebiti: ${eur(e.dare)}\n• Pagamenti e accrediti: ${eur(e.avere)}\n`;
+    t += `• Saldo ${e.finale > 0.005 ? 'da saldare' : e.finale < -0.005 ? 'a suo credito' : ''}: ${eur(Math.abs(e.finale))}\n`;
+    if (e.portaf > 0) t += `• Assegni in portafoglio non ancora scaduti: ${eur(e.portaf)}\n`;
+    t += `Per qualsiasi chiarimento siamo a disposizione.\n${EC.azienda || (DATA.cfg && DATA.cfg.NOME_AZIENDA) || ''}`;
+    return t.trim();
+}
+
+function inviaEstratto(canale) {
+    const c = EC.cliente, testo = testoEstratto();
+    if (canale === 'WhatsApp') {
+        if (c && c.tel) window.open('https://wa.me/' + telWa(c.tel) + '?text=' + encodeURIComponent(testo), '_blank');
+        else window.open('https://wa.me/?text=' + encodeURIComponent(testo), '_blank');
+    } else {
+        window.location.href = 'mailto:' + encodeURIComponent((c && c.email) || '') + '?subject=' + encodeURIComponent('Estratto conto ' + EC.titolo) + '&body=' + encodeURIComponent(testo);
+    }
+}
+
+function csvEstratto() {
+    const e = calcolaEstratto();
+    const f = v => (Math.round(v * 100) / 100).toFixed(2).replace('.', ',');
+    const r = [['Data', 'Nominativo', 'Descrizione', 'Dare', 'Avere', 'Forma pagamento', 'Scadenza assegno', 'Saldo'], [e.dal ? fmtD(e.dal) : '', EC.titolo, 'Saldo iniziale', '', '', '', '', f(e.iniziale)]];
+    e.righe.forEach(x => {
+        const dare = (x.addebito > 0 ? x.addebito : 0) + (x.pagamento < 0 ? -x.pagamento : 0);
+        const avere = (x.addebito < 0 ? -x.addebito : 0) + (x.pagamento > 0 ? x.pagamento : 0);
+        r.push([fmtD(x.data), x.nome, descrMov(x), dare ? f(dare) : '', avere ? f(avere) : '', x.pagamento ? (TP_NOMI[x.tipo] || x.tipo) : '', x.scad ? fmtD(x.scad) : '', f(x._saldo)]);
+    });
+    scaricaCsv(`estratto_conto_${EC.titolo.replace(/\W+/g, '_')}.csv`, r);
+}
+
+function stampaEstratto() {
+    const e = calcolaEstratto(), c = EC.cliente || {};
+    const n = v => v ? Math.abs(v).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+    const s = v => (n(v) || '0,00') + (v < -0.005 ? ' Cr' : '');
+    const per = e.dal || e.al ? `dal ${e.dal ? fmtD(e.dal) : 'inizio'} al ${e.al ? fmtD(e.al) : fmtD(isoD(new Date()))}` : 'tutti i movimenti';
+    const righe = e.righe.map(x => {
+        const dare = (x.addebito > 0 ? x.addebito : 0) + (x.pagamento < 0 ? -x.pagamento : 0);
+        const avere = (x.addebito < 0 ? -x.addebito : 0) + (x.pagamento > 0 ? x.pagamento : 0);
+        return `<tr><td>${fmtD(x.data)}</td><td>${esc(descrMov(x))}${x.tipo === 'AS' && x.scad && x.pagamento ? ' · scad. ' + fmtD(x.scad) : ''}</td><td class="r">${n(dare)}</td><td class="r">${n(avere)}</td><td class="r">${s(x._saldo)}</td></tr>`;
+    }).join('');
+    const html = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Estratto conto ${esc(EC.titolo)}</title>
+    <style>body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px;font-size:12px}h1{font-size:18px;margin:0}h2{font-size:14px;margin:4px 0 16px;font-weight:normal;color:#444}
+    .box{display:flex;justify-content:space-between;gap:16px;margin-bottom:14px}.box div{border:1px solid #ccc;border-radius:6px;padding:8px 12px;flex:1}
+    table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ddd;padding:5px 6px;text-align:left}th{background:#f1f3f6}.r{text-align:right;white-space:nowrap}
+    tfoot td{font-weight:bold;border-top:2px solid #333}.fin{font-size:14px;font-weight:bold}@media print{body{margin:10mm}}</style></head><body>
+    <h1>${esc(EC.azienda || (DATA.cfg && DATA.cfg.NOME_AZIENDA) || 'Estratto conto')}</h1>
+    <h2>Estratto conto cliente · ${per} · stampato il ${fmtD(isoD(new Date()))}</h2>
+    <div class="box"><div><b>${esc(EC.titolo)}</b><br>${esc(c.citta || '')}${c.piva ? '<br>P.IVA ' + esc(c.piva) : ''}</div>
+      <div>Saldo iniziale: <b>${s(e.iniziale)}</b><br>Dare: ${n(e.dare) || '0,00'} · Avere: ${n(e.avere) || '0,00'}<br><span class="fin">Saldo finale: ${s(e.finale)}</span>${e.portaf > 0 ? '<br>Assegni in portafoglio: ' + n(e.portaf) : ''}</div></div>
+    <table><thead><tr><th>Data</th><th>Descrizione</th><th class="r">Dare</th><th class="r">Avere</th><th class="r">Saldo</th></tr></thead>
+    <tbody><tr><td>${e.dal ? fmtD(e.dal) : ''}</td><td><b>Saldo iniziale</b></td><td></td><td></td><td class="r"><b>${s(e.iniziale)}</b></td></tr>${righe}</tbody>
+    <tfoot><tr><td></td><td>Totali (${e.righe.length} movimenti)</td><td class="r">${n(e.dare)}</td><td class="r">${n(e.avere)}</td><td class="r">${s(e.finale)}</td></tr></tfoot></table>
+    <p style="margin-top:14px;color:#555">Importi in euro. "Cr" indica un saldo a credito del cliente.</p>
+    <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { toast('Il browser ha bloccato la finestra di stampa: consenti i popup per questa pagina.', 'warning'); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+}
 
 // ---------- Elenco esclusi (apri/chiudi, riammetti) ----------
 function esclusiAperti() { return ls.get('oi_esclusi_aperti') === '1'; }
@@ -966,6 +1161,7 @@ function renderCollega() {
                     `<select class="form-select form-select-sm" style="max-width:280px" onchange="if (this.value) collega(${i}, this.value)"><option value="">Collega a un cliente…</option>${opzioni}</select>`;
             }
             const az = e.cod ? '' : `<div class="btn-group btn-group-sm">
+                    ${e.ci.length ? `<button class="btn btn-outline-warning" title="Estratto conto" onclick="apriEstratto(null, DATA._nomi[${i}].nome)"><i class="fas fa-file-invoice-dollar"></i></button>` : ''}
                     <button class="btn btn-outline-primary" title="Crea un nuovo cliente con questo nome" onclick="apriFormCliente(null, { nome: DATA._nomi[${i}].nome })"><i class="fas fa-user-plus"></i></button>
                     <button class="btn btn-outline-secondary" title="Escludi (punto vendita, fornitore, conto interno)" onclick="escludiTesto(DATA._nomi[${i}].nome)"><i class="fas fa-eye-slash"></i></button></div>`;
             return `<tr class="${nomeEscluso(e.nome) ? 'opacity-50' : ''}"><td>${e.cod ? '' : `<input type="checkbox" class="form-check-input k-sel" data-i="${i}">`}</td>
@@ -1292,7 +1488,8 @@ function apriCliente(cod) {
     const c = cliente(cod);
     if (!c) return;
     $('mcTitolo').innerHTML = `${esc(c.nome)} <small class="opacity-75 ms-2">${esc(c.codice)}</small>
-        <button class="btn btn-sm btn-light ms-3" onclick="apriFormCliente('${esc(c.codice)}')"><i class="fas fa-pen me-1"></i>Modifica</button>`;
+        <button class="btn btn-sm btn-light ms-3" onclick="apriFormCliente('${esc(c.codice)}')"><i class="fas fa-pen me-1"></i>Modifica</button>
+        <button class="btn btn-sm btn-warning ms-1" onclick="apriEstratto('${esc(c.codice)}')"><i class="fas fa-file-invoice-dollar me-1"></i>Estratto conto</button>`;
     const idonee = DATA.offerte.filter(o => o.attiva && !offertaScaduta(o) && valuta(o, c).idoneo);
     $('mcBody').innerHTML = `
         <div class="row g-3 mb-3">
