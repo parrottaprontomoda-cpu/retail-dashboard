@@ -1,0 +1,703 @@
+<title>Dashboard Presenze</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: cartellino digitale — header con KPI, schede (settimana / andamento / assenze / cartellino), griglia dipendenti × giorni */
+:root{
+  --bg:#f3f4f7; --panel:#ffffff; --ink:#18202e; --muted:#5d6678; --line:#dde1e9; --soft:#eceff5;
+  --accent:#2b4c8c; --accent-soft:#e3e9f6;
+  --ok:#1f7a4d; --ok-bg:#e2f3ea; --warn:#9a5b00; --warn-bg:#fdf0d8; --bad:#b3261e; --bad-bg:#fbe5e3; --off-bg:#f0f1f4;
+  --f-display:"Archivo",system-ui,sans-serif; --f-body:"IBM Plex Sans",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#11151d; --panel:#1a202b; --ink:#e7eaf1; --muted:#9aa3b5; --line:#2c3445; --soft:#222a37;
+  --accent:#8fb0ee; --accent-soft:#24314b;
+  --ok:#6fd3a0; --ok-bg:#173527; --warn:#f2c06b; --warn-bg:#3a2e14; --bad:#ff8a80; --bad-bg:#3d1c1a; --off-bg:#161b24; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11151d; --panel:#1a202b; --ink:#e7eaf1; --muted:#9aa3b5; --line:#2c3445; --soft:#222a37;
+  --accent:#8fb0ee; --accent-soft:#24314b;
+  --ok:#6fd3a0; --ok-bg:#173527; --warn:#f2c06b; --warn-bg:#3a2e14; --bad:#ff8a80; --bad-bg:#3d1c1a; --off-bg:#161b24; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45}
+.wrap{max-width:1180px;margin-inline:auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:18px}
+h1{font-family:var(--f-display);font-weight:800;font-size:clamp(22px,4vw,30px);letter-spacing:-.01em;margin:0;text-wrap:balance}
+h2{font-family:var(--f-display);font-weight:700;font-size:17px;margin:0}
+.top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between}
+.takeaway{color:var(--muted);margin:4px 0 0;max-width:70ch}
+.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,.btn{font:500 13px var(--f-body);border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer}
+button:hover,.btn:hover{border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--panel);border-color:var(--accent)}
+.btn input{display:none}
+select,input[type=number],input[type=time],input[type=search]{font:13px var(--f-body);border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 8px}
+.banner{font-size:12.5px;border-radius:8px;padding:8px 12px;background:var(--accent-soft);color:var(--ink);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.banner .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none}
+.banner.snap .dot{background:var(--warn)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:grid;gap:2px}
+.kpi .l{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.kpi .v{font-family:var(--f-display);font-weight:700;font-size:26px;font-variant-numeric:tabular-nums}
+.kpi .s{font-size:12px;color:var(--muted)}
+.kpi.bad .v{color:var(--bad)} .kpi.warn .v{color:var(--warn)}
+.up{color:var(--ok)} .down{color:var(--bad)}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{border:none;background:none;border-bottom:2px solid transparent;border-radius:0;padding:9px 12px;color:var(--muted);white-space:nowrap}
+.tab[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:12px;min-width:0}
+.card .note{color:var(--muted);font-size:12.5px;margin:0}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.weeknav{display:flex;align-items:center;gap:8px}
+.weeknav .lbl{font-family:var(--f-mono);font-size:13px;min-width:15ch;text-align:center}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:500;text-align:left;padding:8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px;border-bottom:1px solid var(--soft);vertical-align:top}
+.grid td.name{font-weight:600;white-space:nowrap}
+.grid th.day{text-align:center;min-width:92px}
+.grid th.day.today{color:var(--accent)}
+.cell{border-radius:8px;padding:6px 7px;min-height:52px;display:grid;gap:2px;align-content:start;text-align:center}
+.cell .h{font-family:var(--f-mono);font-weight:500;font-size:13.5px}
+.cell .t{font-family:var(--f-mono);font-size:10.5px;color:var(--muted);line-height:1.3}
+.cell.ok{background:var(--ok-bg)}
+.cell.warn{background:var(--warn-bg)} .cell.warn .h{color:var(--warn)}
+.cell.abs{background:var(--bad-bg);color:var(--bad);font-size:12px;font-weight:600;align-content:center}
+.cell.off{background:var(--off-bg);color:var(--muted);font-size:11px;align-content:center}
+.pill{display:inline-block;font-size:10.5px;border-radius:99px;padding:1px 7px;font-weight:600;justify-self:center}
+.pill.late{background:var(--warn);color:var(--panel)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)} .pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.ok{background:var(--ok-bg);color:var(--ok)} .pill.mut{background:var(--soft);color:var(--muted)}
+.tot{white-space:nowrap;font-family:var(--f-mono);font-size:13px}
+.bar{height:6px;border-radius:3px;background:var(--soft);overflow:hidden;margin-top:5px;min-width:90px}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.bar i.over{background:var(--ok)}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+.chartbox{position:relative;min-height:280px}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);padding:6px 9px;font-size:12px;white-space:nowrap}
+.tip .d{color:var(--muted)}
+.mono{font-family:var(--f-mono);font-size:12.5px}
+.muted{color:var(--muted)}
+.list{max-height:520px;overflow:auto}
+.list th{position:sticky;top:0;background:var(--panel)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:18px}
+details.settings{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 16px}
+details.settings summary{cursor:pointer;font-weight:600}
+.sgrid{display:grid;gap:14px;margin-top:12px}
+.days label{display:inline-flex;gap:4px;align-items:center;margin-right:10px}
+.empgrid td{vertical-align:middle}
+.empty{color:var(--muted);font-size:13px;padding:10px 0}
+[hidden]{display:none!important}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Presenze del personale</h1>
+      <p class="takeaway" id="takeaway">Caricamento delle timbrature…</p>
+    </div>
+    <div class="actions">
+      <button id="reload" class="primary">Aggiorna dati</button>
+      <label class="btn">Carica CSV<input type="file" id="file" accept=".csv,text/csv"></label>
+    </div>
+  </header>
+  <div class="banner" id="banner"><span class="dot"></span><span id="bannerText">—</span></div>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="settimana" aria-selected="true">Settimana</button>
+    <button class="tab" role="tab" data-tab="andamento" aria-selected="false">Andamento ore</button>
+    <button class="tab" role="tab" data-tab="assenze" aria-selected="false">Assenze e anomalie</button>
+    <button class="tab" role="tab" data-tab="cartellino" aria-selected="false">Cartellino</button>
+  </nav>
+
+  <!-- SETTIMANA -->
+  <section id="settimana" class="panel" style="display:grid;gap:18px">
+    <div class="kpis" id="weekKpis"></div>
+    <div class="card">
+      <div class="row">
+        <h2>Griglia settimanale</h2>
+        <div class="weeknav">
+          <button id="prevW" aria-label="Settimana precedente">‹</button>
+          <span class="lbl" id="weekLbl">—</span>
+          <button id="nextW" aria-label="Settimana successiva">›</button>
+          <button id="thisW">Oggi</button>
+        </div>
+      </div>
+      <div class="scroll"><table class="grid" id="weekGrid"></table></div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--ok-bg)"></i>Presente</span>
+        <span><i class="sw" style="background:var(--warn-bg)"></i>Timbratura da verificare</span>
+        <span><i class="sw" style="background:var(--bad-bg)"></i>Assente</span>
+        <span><i class="sw" style="background:var(--off-bg)"></i>Riposo / festivo / futuro</span>
+        <span><span class="pill late">R</span> Ritardo</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ANDAMENTO -->
+  <section id="andamento" class="panel" hidden style="display:grid;gap:18px">
+    <div class="row"><h2>Periodo</h2><select id="period" aria-label="Periodo">
+      <option value="4w">Ultime 4 settimane</option><option value="month">Mese corrente</option>
+      <option value="prevmonth">Mese scorso</option><option value="all">Tutto lo storico</option></select></div>
+    <div class="card">
+      <h2>Ore lavorate per settimana</h2>
+      <p class="note">Somma degli intervalli ingresso → uscita completi. Le giornate senza uscita non contano ore.</p>
+      <div class="legend" id="chartLegend"></div>
+      <div class="chartbox" id="chart"></div>
+    </div>
+    <div class="card">
+      <div class="row"><h2>Riepilogo per dipendente</h2><button id="copySum">Copia per Excel</button></div>
+      <div class="scroll"><table id="sumTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ASSENZE -->
+  <section id="assenze" class="panel" hidden style="display:grid;gap:18px">
+    <div class="row"><h2>Periodo</h2><select id="period2" aria-label="Periodo">
+      <option value="4w">Ultime 4 settimane</option><option value="month">Mese corrente</option>
+      <option value="prevmonth">Mese scorso</option><option value="all">Tutto lo storico</option></select></div>
+    <div class="two">
+      <div class="card"><h2>Assenze</h2><p class="note" id="absNote"></p><div class="list"><table id="absTable"></table></div></div>
+      <div class="card"><h2>Timbrature da verificare</h2><p class="note">Uscite mancanti, uscite senza ingresso e correzioni automatiche.</p><div class="list"><table id="anTable"></table></div></div>
+    </div>
+  </section>
+
+  <!-- CARTELLINO -->
+  <section id="cartellino" class="panel" hidden style="display:grid;gap:18px">
+    <div class="card">
+      <div class="row"><h2>Tutte le timbrature</h2><input type="search" id="q" placeholder="Cerca nome, data, nota…" aria-label="Cerca"></div>
+      <div class="list scroll"><table id="logTable"></table></div>
+    </div>
+  </section>
+
+  <details class="settings" id="settingsBox">
+    <summary>Impostazioni orario e dipendenti</summary>
+    <div class="sgrid">
+      <div class="days" id="daysBox"><strong>Giorni lavorativi: </strong></div>
+      <div class="row" style="justify-content:flex-start;gap:18px">
+        <label>Ritardo se il primo ingresso è dopo le <input type="time" id="lateAfter"></label>
+        <label><input type="checkbox" id="fixDouble"> Due ingressi di fila: il secondo vale come uscita</label>
+        <label><input type="checkbox" id="openOnly"> Conta assenze solo nei giorni in cui almeno un collega ha timbrato</label>
+      </div>
+      <div class="scroll"><table class="empgrid" id="empTable"></table></div>
+      <p class="note">Le impostazioni restano salvate in questo browser.</p>
+    </div>
+  </details>
+</div>
+
+<script>
+(function(){
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR69B1yonwsIoSJ41srSO8jn1x6veyisqBnjgxzrdDVQRUROzJXEjlFzqach3O5YGy5iGFHeGDu2-A6/pub?gid=0&single=true&output=csv';
+const SNAPSHOT_AT = '18/10/2026 alle 07:36';
+const SNAPSHOT = `30/09/2026 20.57.41,parrottaprontomoda@gmail.com,Ingresso,GPS Rilevato,30/09/2026,20:57,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ciao,09 - September,2026,temp,mm prec
+01/10/2026 9.20.48,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,01/10/2026,09:20,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,,
+01/10/2026 9.23.12,annacosimo1973@gmail.com,Ingresso,GPS Rilevato,01/10/2026,09:23,"📍 Via Delle Colline, 47, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,,
+05/10/2026 9.10.47,parrottaprontomoda@gmail.com,Ingresso,GPS Rilevato,05/10/2026,09:10,"📍 Via Delle Colline, 47, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+05/10/2026 9.12.35,veronicamartelli.vm@gmail.com,Ingresso,GPS Rilevato,05/10/2026,09:12,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,,
+05/10/2026 13.05.28,annacosimo1973@gmail.com,Ingresso,GPS Rilevato,05/10/2026,13:05,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+06/10/2026 8.29.04,veronicamartelli.vm@gmail.com,Ingresso,GPS Rilevato,06/10/2026,08:29,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+06/10/2026 9.08.00,annacosimo1973@gmail.com,Ingresso,GPS Rilevato,06/10/2026,09:08,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+06/10/2026 9.55.37,parrottaprontomoda@gmail.com,Ingresso,GPS Rilevato,06/10/2026,09:55,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Lavoro,10 - October,2026,,
+06/10/2026 9.59.37,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,06/10/2026,09:59,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Orario normale,10 - October,2026,,
+06/10/2026 12.53.01,veronicamartelli.vm@gmail.com,Uscita,GPS Rilevato,06/10/2026,12:53,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+06/10/2026 13.09.58,annacosimo1973@gmail.com,Uscita,GPS Rilevato,06/10/2026,13:09,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+06/10/2026 13.17.34,dimitri.audino@gmail.com,Uscita,GPS Rilevato,06/10/2026,13:17,"📍 Via Delle Colline, 47, 89044 Locri RC, Italy",Google Account (fuori fascia),Uscita,10 - October,2026,,
+07/10/2026 8.28.50,veronicamartelli.vm@gmail.com,Ingresso,GPS Rilevato,07/10/2026,08:28,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+07/10/2026 8.59.16,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,07/10/2026,08:59,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+07/10/2026 9.06.17,annacosimo1973@gmail.com,Ingresso,GPS Rilevato,07/10/2026,09:06,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+07/10/2026 12.50.41,veronicamartelli.vm@gmail.com,Uscita,GPS Rilevato,07/10/2026,12:50,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+07/10/2026 13.08.06,annacosimo1973@gmail.com,Uscita,GPS Rilevato,07/10/2026,13:08,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+07/10/2026 15.09.25,veronicamartelli.vm@gmail.com,Ingresso,GPS Rilevato,07/10/2026,15:09,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,,
+07/10/2026 15.47.43,dimitri.audino@gmail.com,Uscita,GPS Rilevato,07/10/2026,15:47,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Dimenticanza,10 - October,2026,,
+07/10/2026 19.00.58,veronicamartelli.vm@gmail.com,Uscita,GPS Rilevato,07/10/2026,19:00,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,,
+07/10/2026 19.23.23,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,07/10/2026,19:23,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,,
+08/10/2026 8.29.07,veronicamartelli.vm@gmail.com,Ingresso,GPS Rilevato,08/10/2026,08:29,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+08/10/2026 9.07.19,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,08/10/2026,09:07,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+08/10/2026 9.07.27,annacosimo1973@gmail.com,Ingresso,GPS Rilevato,08/10/2026,09:07,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+08/10/2026 13.04.25,annacosimo1973@gmail.com,Uscita,GPS Rilevato,08/10/2026,13:04,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+08/10/2026 13.07.48,veronicamartelli.vm@gmail.com,Uscita,GPS Rilevato,08/10/2026,13:07,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+08/10/2026 13.10.51,dimitri.audino@gmail.com,Uscita,GPS Rilevato,08/10/2026,13:10,"📍 Via Delle Colline, 47, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+09/10/2026 8.23.58,veronicamartelli.vm@gmail.com,Ingresso,GPS Rilevato,09/10/2026,08:23,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+09/10/2026 12.49.08,veronicamartelli.vm@gmail.com,Uscita,GPS Rilevato,09/10/2026,12:49,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,,
+09/10/2026 14.35.09,parrottaprontomoda@gmail.com,Ingresso,GPS Rilevato,09/10/2026,14:35,"📍 V. Talete, 28, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,"26,9",0
+09/10/2026 15.07.02,annacosimo1973@gmail.com,Ingresso,GPS Rilevato,09/10/2026,15:27,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,n/d,n/d
+09/10/2026 19.00.02,annacosimo1973@gmail.com,Uscita,GPS Rilevato,09/10/2026,15:27,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,n/d,n/d
+10/10/2026 9.00.39,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,10/10/2026,09:00,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,"21,2","0,1"
+10/10/2026 9.00.39,annacosimo1973@gmail.com,Ingresso,GPS Rilevato,10/10/2026,09:12,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,"21,2","0,1"
+10/10/2026 13.13.21,annacosimo1973@gmail.com,Uscita,GPS Rilevato,10/10/2026,13:13,"📍 Via Delle Colline, 47, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d
+10/10/2026 13.22.27,dimitri.audino@gmail.com,Uscita,GPS Rilevato,10/10/2026,13:22,"📍 Via Delle Colline, 47, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,"21,3","0,8"
+10/10/2026 13.26.58,parrottaprontomoda@gmail.com,Ingresso,GPS Rilevato,10/10/2026,13:26,"📍 Via Delle Colline, 47, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,"21,2","0,8"
+11/10/2026 10.50.35,parrottaprontomoda@gmail.com,Ingresso,GPS Rilevato,11/10/2026,10:50,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,"20,7",0
+12/10/2026 8.37.11,parrottaprontomoda@gmail.com,Ingresso,GPS Rilevato,12/10/2026,08:00,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,"20,7",0
+12/10/2026 8.38.19,veronicamartelli.vm@gmail.com,Ingresso,GPS Rilevato,12/10/2026,08:33,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d
+12/10/2026 8.46.11,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,12/10/2026,08:46,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,21,0
+12/10/2026 8.46.11,annacosimo1973@gmail.com,Ingresso,GPS Rilevato,12/10/2026,09:13,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,21,0
+12/10/2026 12.50.59,veronicamartelli.vm@gmail.com,Uscita,GPS Rilevato,12/10/2026,12:50,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d
+12/10/2026 13.05.46,dimitri.audino@gmail.com,Uscita,GPS Rilevato,12/10/2026,13:05,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,"23,4",0
+12/10/2026 13.16.35,annacosimo1973@gmail.com,Uscita,GPS Rilevato,12/10/2026,13:16,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,n/d,n/d
+12/10/2026 15.57.36,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,12/10/2026,15:57,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,23,0
+12/10/2026 19.06.05,dimitri.audino@gmail.com,Uscita,GPS Rilevato,12/10/2026,19:06,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,"20,6","0,1"
+13/10/2026 8.37.03,veronicamartelli.vm@gmail.com,Ingresso,GPS Rilevato,13/10/2026,08:37,GPS non disponibile,Google Account (automatico),,10 - October,2026,n/d,n/d
+13/10/2026 9.05.25,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,13/10/2026,09:05,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,"19,2",0
+12/10/2026 13.16.35,annacosimo1973@gmail.com,Ingresso,GPS Rilevato,13/10/2026,09:15,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,"19,2",0
+13/10/2026 12.52.15,veronicamartelli.vm@gmail.com,Uscita,GPS Rilevato,13/10/2026,12:52,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d
+13/10/2026 13.13.44,annacosimo1973@gmail.com,Uscita,GPS Rilevato,13/10/2026,13:13,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d
+14/10/2026 8.25.52,veronicamartelli.vm@gmail.com,Ingresso,GPS Rilevato,14/10/2026,08:25,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d
+14/10/2026 9.04.56,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,14/10/2026,09:04,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,"18,7",0
+14/10/2026 8.25.52,annacosimo1973@gmail.com,Ingresso,GPS Rilevato,14/10/2026,09:13,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d
+14/10/2026 12.47.05,veronicamartelli.vm@gmail.com,Uscita,GPS Rilevato,14/10/2026,12:47,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d
+14/10/2026 9.04.56,dimitri.audino@gmail.com,Uscita,GPS Rilevato,14/10/2026,13:08,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,"18,7",0
+14/10/2026 13.15.50,annacosimo1973@gmail.com,Uscita,GPS Rilevato,14/10/2026,13:15,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d
+14/10/2026 15.17.47,veronicamartelli.vm@gmail.com,Ingresso,GPS Rilevato,14/10/2026,15:17,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),,10 - October,2026,n/d,n/d
+14/10/2026 15.58.48,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,14/10/2026,15:58,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),,10 - October,2026,"21,3",0
+14/10/2026 19.00.00,veronicamartelli.vm@gmail.com,Ingresso,GPS Rilevato,14/10/2026,19:00,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),,10 - October,2026,n/d,n/d
+14/10/2026 19.11.00,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,14/10/2026,19:11,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),,10 - October,2026,"21,3",0
+15/10/2026 8.28.13,veronicamartelli.vm@gmail.com,Ingresso,GPS Rilevato,15/10/2026,08:28,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d
+15/10/2026 9.01.34,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,15/10/2026,09:01,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,"19,6",0
+15/10/2026 9.04.03,annacosimo1973@gmail.com,Ingresso,GPS Rilevato,15/10/2026,09:04,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d
+15/10/2026 12.49.16,veronicamartelli.vm@gmail.com,Uscita,GPS Rilevato,15/10/2026,12:49,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d
+15/10/2026 13.01.58,dimitri.audino@gmail.com,Uscita,GPS Rilevato,15/10/2026,13:01,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,"23,7",0
+15/10/2026 13.03.35,annacosimo1973@gmail.com,Uscita,GPS Rilevato,15/10/2026,13:03,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d
+16/10/2026 8.24.12,veronicamartelli.vm@gmail.com,Ingresso,GPS Rilevato,16/10/2026,08:24,GPS non disponibile,Google Account (automatico),,10 - October,2026,n/d,n/d
+16/10/2026 8.24.12,veronicamartelli.vm@gmail.com,Uscita,GPS Rilevato,16/10/2026,12:45,GPS non disponibile,Google Account (automatico),,10 - October,2026,n/d,n/d
+16/10/2026 15.13.02,annacosimo1973@gmail.com,Ingresso,GPS Rilevato,16/10/2026,15:13,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,n/d,n/d
+16/10/2026 19.09.05,annacosimo1973@gmail.com,Uscita,GPS Rilevato,16/10/2026,19:09,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,n/d,n/d
+17/10/2026 8.50.20,dimitri.audino@gmail.com,Ingresso,GPS Rilevato,17/10/2026,08:50,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,"18,1",0
+17/10/2026 9.14.39,annacosimo1973@gmail.com,Ingresso,GPS Rilevato,17/10/2026,09:14,"📍 Via Delle Colline, 47, 89044 Locri RC, Italy",Google Account (fuori fascia),Ok,10 - October,2026,n/d,n/d
+17/10/2026 13.06.06,dimitri.audino@gmail.com,Uscita,GPS Rilevato,17/10/2026,13:06,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,"20,2",0
+17/10/2026 13.09.31,annacosimo1973@gmail.com,Uscita,GPS Rilevato,17/10/2026,13:09,"📍 Via Delle Colline, 59, 89044 Locri RC, Italy",Google Account (automatico),,10 - October,2026,n/d,n/d`;
+
+const OWNER = 'parrottaprontomoda@gmail.com';
+const KNOWN = {
+  'dimitri.audino@gmail.com':'Dimitri Audino',
+  'annacosimo1973@gmail.com':'Anna Cosimo',
+  'veronicamartelli.vm@gmail.com':'Veronica Martelli',
+  'parrottaprontomoda@gmail.com':'Titolare (Parrotta)'
+};
+const DOW = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+const MONTHS = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+const COLORS = ['var(--accent)','#c2761b','#2f8f6a','#8a4fb5','#c2415b','#3b8fb8'];
+
+/* ---------- storage ---------- */
+const store = {
+  get(k,d){ try{ const v = localStorage.getItem('presenze_'+k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem('presenze_'+k, JSON.stringify(v)); }catch(e){} }
+};
+const S = Object.assign({days:[1,2,3,4,5,6], lateAfter:'09:15', fixDouble:true, openOnly:true, excluded:[OWNER], hours:{}, defHours:8}, store.get('settings',{}));
+const saveS = () => store.set('settings', S);
+
+/* ---------- date helpers (day number = days since epoch, UTC) ---------- */
+const DAY = 864e5;
+const dnum = (y,m,d) => Math.round(Date.UTC(y,m-1,d)/DAY);
+const ddate = n => new Date(n*DAY);
+const dow = n => ddate(n).getUTCDay();
+const fmtDay = n => { const d = ddate(n); return String(d.getUTCDate()).padStart(2,'0')+'/'+String(d.getUTCMonth()+1).padStart(2,'0')+'/'+d.getUTCFullYear(); };
+const fmtShort = n => { const d = ddate(n); return d.getUTCDate()+' '+MONTHS[d.getUTCMonth()]; };
+const mondayOf = n => n - ((dow(n)+6)%7);
+const isoWeek = n => { const d = ddate(n); const t = new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())); const dn = (t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-dn+3); const fy = new Date(Date.UTC(t.getUTCFullYear(),0,4)); return 1+Math.round(((t-fy)/DAY-3+((fy.getUTCDay()+6)%7))/7); };
+const now = new Date();
+const TODAY = dnum(now.getFullYear(), now.getMonth()+1, now.getDate());
+const hm = m => m==null ? '—' : String(Math.floor(m/60)).padStart(2,'0')+':'+String(Math.round(m%60)).padStart(2,'0');
+const dur = m => { m = Math.round(m||0); const h = Math.floor(m/60), r = m%60; return h+'h '+String(r).padStart(2,'0')+'m'; };
+const hdec = m => (m/60).toLocaleString('it-IT',{maximumFractionDigits:1});
+const toMin = s => { const m = /^(\d{1,2}):(\d{2})/.exec(s||''); return m ? (+m[1])*60 + (+m[2]) : null; };
+
+function easter(y){ const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1; return dnum(y,mo,da); }
+const holCache = {};
+function holidays(y){
+  if (holCache[y]) return holCache[y];
+  const s = new Map([[dnum(y,1,1),'Capodanno'],[dnum(y,1,6),'Epifania'],[dnum(y,4,25),'Liberazione'],[dnum(y,5,1),'Festa del lavoro'],[dnum(y,6,2),'Festa della Repubblica'],[dnum(y,8,15),'Ferragosto'],[dnum(y,11,1),'Ognissanti'],[dnum(y,12,8),'Immacolata'],[dnum(y,12,25),'Natale'],[dnum(y,12,26),'S. Stefano']]);
+  const e = easter(y); s.set(e,'Pasqua'); s.set(e+1,'Pasquetta');
+  return holCache[y] = s;
+}
+const holidayName = n => holidays(ddate(n).getUTCFullYear()).get(n);
+const isWorkday = n => S.days.includes(dow(n)) && !holidayName(n);
+
+/* ---------- CSV ---------- */
+function parseCSV(text){
+  const rows = []; let row = [], f = '', q = false;
+  for (let i=0;i<text.length;i++){
+    const c = text[i];
+    if (q){ if (c==='"'){ if (text[i+1]==='"'){ f+='"'; i++; } else q=false; } else f+=c; }
+    else if (c==='"') q = true;
+    else if (c===','){ row.push(f); f=''; }
+    else if (c==='\n' || c==='\r'){ if (c==='\r' && text[i+1]==='\n') i++; row.push(f); rows.push(row); row=[]; f=''; }
+    else f+=c;
+  }
+  if (f!=='' || row.length){ row.push(f); rows.push(row); }
+  return rows;
+}
+function parseD(s){ const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec((s||'').trim()); return m ? dnum(+m[3],+m[2],+m[1]) : null; }
+function parseTs(s){ const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2})[.:](\d{2})/.exec((s||'').trim()); return m ? {day:dnum(+m[3],+m[2],+m[1]), min:(+m[4])*60+(+m[5])} : null; }
+function parseT(s){ const m = /^(\d{1,2})[:.](\d{2})/.exec((s||'').trim()); return m ? (+m[1])*60+(+m[2]) : null; }
+
+let EVENTS = [], MODEL = null, SOURCE = {kind:'', when:''};
+
+function toEvents(rows){
+  const out = [];
+  rows.forEach((r,idx) => {
+    if (r.length < 6) return;
+    const ts = parseTs(r[0]);
+    const email = (r[1]||'').trim().toLowerCase();
+    const tipoRaw = (r[2]||'').toLowerCase();
+    const tipo = /usc/.test(tipoRaw) ? 'U' : /ingr|entr/.test(tipoRaw) ? 'I' : null;
+    if (!email || !tipo) return;
+    const day = parseD(r[4]) ?? (ts && ts.day);
+    const min = parseT(r[5]) ?? (ts && ts.min);
+    if (day==null || min==null) return;
+    const met = (r[7]||'');
+    const metodo = /automatic/i.test(met) ? 'Automatico' : /fuori/i.test(met) ? 'Fuori fascia' : /manual|admin/i.test(met) ? 'Manuale' : (met.replace(/^Google Account\s*/i,'').replace(/[()]/g,'').trim() || '—');
+    out.push({idx, email, tipo, day, min, ts, metodo, note:(r[8]||'').trim(), luogo:(r[6]||'').replace(/^📍\s*/,'').trim(), fixed:false});
+  });
+  return out;
+}
+
+/* ---------- model: sessions, hours, anomalies ---------- */
+function build(){
+  const evs = EVENTS.map(e => Object.assign({}, e, {fixed:false, origMin:e.min}));
+  const groups = new Map();
+  evs.forEach(e => { const k = e.email+'|'+e.day; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(e); });
+  const pdays = new Map(); const anomalies = [];
+  groups.forEach((list, key) => {
+    // stessa ora registrata su ingresso e uscita: per il record più recente usa l'ora del timestamp
+    for (let i=0;i<list.length;i++) for (let j=0;j<list.length;j++){
+      const a = list[i], b = list[j];
+      if (i!==j && a.tipo!==b.tipo && a.min===b.min && b.ts && a.ts && b.ts.day===b.day && (b.ts.min > a.ts.min) && b.ts.min > b.min){
+        b.min = b.ts.min; b.fixed = true;
+        anomalies.push({day:b.day, email:b.email, type:'Orario corretto', sev:'mut', detail:'Ora registrata '+hm(b.origMin)+' uguale all\'ingresso: usata l\'ora del timbro '+hm(b.min)});
+      }
+    }
+    list.sort((a,b) => a.min-b.min || (a.tipo==='I' ? -1 : 1));
+    const sessions = [], open = [], orphans = []; let cur = null;
+    list.forEach(e => {
+      if (e.tipo==='I'){
+        if (!cur) cur = e;
+        else if (S.fixDouble){
+          sessions.push({in:cur.min, out:e.min, corrected:true});
+          anomalies.push({day:e.day, email:e.email, type:'Doppio ingresso', sev:'warn', detail:'Ingresso delle '+hm(e.min)+' conteggiato come uscita (precedente ingresso '+hm(cur.min)+')'});
+          cur = null;
+        } else { open.push(cur); anomalies.push({day:cur.day, email:cur.email, type:'Uscita mancante', sev:'bad', detail:'Ingresso '+hm(cur.min)+' seguito da un altro ingresso alle '+hm(e.min)}); cur = e; }
+      } else {
+        if (cur){ sessions.push({in:cur.min, out:e.min, corrected:false}); cur = null; }
+        else { orphans.push(e); anomalies.push({day:e.day, email:e.email, type:'Uscita senza ingresso', sev:'warn', detail:'Uscita alle '+hm(e.min)+' senza ingresso precedente'}); }
+      }
+    });
+    if (cur){ open.push(cur); anomalies.push({day:cur.day, email:cur.email, type:'Uscita mancante', sev:'bad', detail:'Ingresso alle '+hm(cur.min)+' senza uscita'}); }
+    const worked = sessions.reduce((s,x) => s + Math.max(0, x.out-x.in), 0);
+    const firstIn = list.find(e => e.tipo==='I');
+    const late = !!(firstIn && firstIn.min < 12*60 && firstIn.min > toMin(S.lateAfter));
+    const issues = open.length + orphans.length + sessions.filter(s => s.corrected).length;
+    pdays.set(key, {email:list[0].email, day:list[0].day, list, sessions, open, orphans, worked, late, firstIn:firstIn?firstIn.min:null, issues});
+  });
+  const emails = [...new Set(evs.map(e => e.email))].sort((a,b) => nameOf(a).localeCompare(nameOf(b)));
+  const staff = emails.filter(e => !S.excluded.includes(e));
+  const firstDay = {}; evs.forEach(e => { if (!(e.email in firstDay) || e.day < firstDay[e.email]) firstDay[e.email] = e.day; });
+  const openDays = new Set(); evs.forEach(e => { if (staff.includes(e.email)) openDays.add(e.day); });
+  const minDay = evs.length ? Math.min(...evs.map(e => e.day)) : TODAY;
+  const maxDay = evs.length ? Math.max(...evs.map(e => e.day)) : TODAY;
+  MODEL = {evs, pdays, anomalies, emails, staff, firstDay, openDays, minDay, maxDay};
+}
+function nameOf(email){
+  if (KNOWN[email]) return KNOWN[email];
+  const local = email.split('@')[0].replace(/[0-9]+/g,'').replace(/[._-]+/g,' ').trim();
+  return local.replace(/\b\w/g, c => c.toUpperCase()) || email;
+}
+const pd = (email, day) => MODEL.pdays.get(email+'|'+day);
+const hoursOf = email => (S.hours[email] ?? S.defHours);
+
+// stato di una giornata per un dipendente
+function dayState(email, day){
+  const p = pd(email, day);
+  if (p) return {kind: p.issues ? 'warn' : 'ok', p};
+  if (day > TODAY || (day===TODAY)) return {kind:'off', label: day===TODAY ? 'Oggi' : ''};
+  const hol = holidayName(day);
+  if (hol) return {kind:'off', label:hol};
+  if (!S.days.includes(dow(day))) return {kind:'off', label:'Riposo'};
+  if (day < (MODEL.firstDay[email] ?? Infinity)) return {kind:'off', label:'—'};
+  if (S.openOnly && !MODEL.openDays.has(day)) return {kind:'off', label:'Nessuna timbratura'};
+  return {kind:'abs'};
+}
+function expectedMin(email, from, to){
+  let n = 0; for (let d=from; d<=Math.min(to, TODAY-1); d++){ if (isWorkday(d) && d >= (MODEL.firstDay[email] ?? Infinity) && (!S.openOnly || MODEL.openDays.has(d))) n++; }
+  return n * hoursOf(email) * 60;
+}
+function stats(email, from, to){
+  let worked=0, present=0, abs=0, late=0, issues=0, inSum=0, inN=0; const absDays=[];
+  for (let d=from; d<=to; d++){
+    const st = dayState(email, d);
+    if (st.p){ worked += st.p.worked; present++; if (st.p.late) late++; issues += st.p.issues; if (st.p.firstIn!=null && st.p.firstIn<12*60){ inSum+=st.p.firstIn; inN++; } }
+    else if (st.kind==='abs'){ abs++; absDays.push(d); }
+  }
+  return {worked, present, abs, absDays, late, issues, avgIn: inN ? inSum/inN : null, expected: expectedMin(email, from, to)};
+}
+
+/* ---------- periods ---------- */
+function periodRange(v){
+  const t = TODAY;
+  if (v==='month'){ const d = ddate(t); return [dnum(d.getUTCFullYear(), d.getUTCMonth()+1, 1), t]; }
+  if (v==='prevmonth'){ const d = ddate(t); const y = d.getUTCMonth()===0 ? d.getUTCFullYear()-1 : d.getUTCFullYear(); const m = d.getUTCMonth()===0 ? 12 : d.getUTCMonth(); return [dnum(y,m,1), dnum(d.getUTCFullYear(), d.getUTCMonth()+1, 1)-1]; }
+  if (v==='all') return [MODEL.minDay, t];
+  return [mondayOf(t)-21, t];
+}
+let PERIOD = store.get('period','4w');
+
+/* ---------- DOM helpers ---------- */
+const $ = s => document.querySelector(s);
+function el(tag, attrs, ...kids){
+  const n = document.createElement(tag);
+  if (attrs) for (const k in attrs){ if (k==='class') n.className = attrs[k]; else if (k==='text') n.textContent = attrs[k]; else if (k==='style') n.setAttribute('style', attrs[k]); else n.setAttribute(k, attrs[k]); }
+  kids.flat().forEach(c => { if (c==null || c===false) return; n.appendChild(typeof c==='string' ? document.createTextNode(c) : c); });
+  return n;
+}
+
+/* ---------- week tab ---------- */
+let WEEK = null;
+function renderWeek(){
+  if (WEEK==null){
+    const cur = mondayOf(TODAY);
+    WEEK = [...MODEL.pdays.values()].some(p => p.day>=cur && p.day<=cur+6 && MODEL.staff.includes(p.email)) ? cur : mondayOf(MODEL.maxDay);
+  }
+  const days = [0,1,2,3,4,5,6].map(i => WEEK+i);
+  $('#weekLbl').textContent = 'Sett. '+isoWeek(WEEK)+' · '+fmtShort(WEEK)+' – '+fmtShort(WEEK+6);
+  const t = $('#weekGrid'); t.replaceChildren();
+  const head = el('tr', null, el('th', {text:'Dipendente'}), days.map(d => el('th', {class:'day'+(d===TODAY?' today':''), text: DOW[dow(d)]+' '+ddate(d).getUTCDate()})), el('th', {text:'Totale'}));
+  t.appendChild(el('thead', null, head));
+  const tb = el('tbody');
+  let wk = {worked:0, exp:0, present:0, abs:0, issues:0, late:0};
+  if (!MODEL.staff.length) tb.appendChild(el('tr', null, el('td', {colspan:'9', class:'empty', text:'Nessun dipendente selezionato nelle impostazioni.'})));
+  MODEL.staff.forEach(email => {
+    const tr = el('tr', null, el('td', {class:'name', text:nameOf(email)}));
+    let worked = 0;
+    days.forEach(d => {
+      const st = dayState(email, d); let cell;
+      if (st.p){
+        const p = st.p; worked += p.worked; wk.present++; wk.issues += p.issues; if (p.late) wk.late++;
+        const times = p.sessions.map(s => hm(s.in)+'–'+hm(s.out)).concat(p.open.map(o => hm(o.min)+'–?')).concat(p.orphans.map(o => '?–'+hm(o.min)));
+        cell = el('div', {class:'cell '+st.kind, title: p.list.map(e => (e.tipo==='I'?'Ingresso ':'Uscita ')+hm(e.min)+(e.note?' · '+e.note:'')).join('\n')},
+          el('span', {class:'h', text: p.worked ? dur(p.worked) : 'da verificare'}),
+          el('span', {class:'t', text: times.join(' · ')}),
+          p.late ? el('span', {class:'pill late', title:'Primo ingresso '+hm(p.firstIn), text:'R '+hm(p.firstIn)}) : null);
+      } else if (st.kind==='abs'){ wk.abs++; cell = el('div', {class:'cell abs', text:'Assente'}); }
+      else cell = el('div', {class:'cell off', text: st.label || ''});
+      tr.appendChild(el('td', null, cell));
+    });
+    const exp = expectedMin(email, WEEK, WEEK+6); wk.worked += worked; wk.exp += exp;
+    const pct = exp ? Math.min(100, worked/exp*100) : 0;
+    tr.appendChild(el('td', {class:'tot'}, el('div', {text: dur(worked)}), el('div', {class:'muted', style:'font-size:11px', text: exp ? 'previste '+dur(exp) : ''}), exp ? el('div', {class:'bar'}, el('i', {class: worked>=exp?'over':'', style:'width:'+pct+'%'})) : null));
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+
+  // KPI con confronto settimana precedente
+  let prevWorked = 0; MODEL.staff.forEach(e => { for (let d=WEEK-7; d<WEEK; d++){ const p = pd(e,d); if (p) prevWorked += p.worked; } });
+  const delta = wk.worked - prevWorked;
+  const k = $('#weekKpis'); k.replaceChildren(
+    kpi('Ore lavorate', dur(wk.worked), wk.exp ? 'su '+dur(wk.exp)+' previste' : '', null, prevWorked ? el('span', {class: delta>=0?'up':'down', text: (delta>=0?'+':'−')+dur(Math.abs(delta))+' vs sett. prec.'}) : null),
+    kpi('Presenze', String(wk.present), 'giornate lavorate'),
+    kpi('Assenze', String(wk.abs), 'giorni lavorativi senza timbrature', wk.abs ? 'bad' : null),
+    kpi('Da verificare', String(wk.issues), 'timbrature incomplete o corrette', wk.issues ? 'warn' : null),
+    kpi('Ritardi', String(wk.late), 'ingressi dopo le '+S.lateAfter, wk.late ? 'warn' : null)
+  );
+  const parts = [];
+  if (wk.abs) parts.push(wk.abs+(wk.abs===1?' assenza':' assenze'));
+  if (wk.issues) parts.push(wk.issues+(wk.issues===1?' timbratura da sistemare':' timbrature da sistemare'));
+  if (wk.late) parts.push(wk.late+(wk.late===1?' ritardo':' ritardi'));
+  $('#takeaway').textContent = 'Settimana '+isoWeek(WEEK)+': '+dur(wk.worked)+' lavorate'+(wk.exp?' su '+dur(wk.exp)+' previste':'')+(parts.length ? ', con '+parts.join(', ')+'.' : ', nessuna assenza né anomalia.');
+}
+function kpi(l, v, s, cls, extra){ return el('div', {class:'kpi'+(cls?' '+cls:'')}, el('span',{class:'l',text:l}), el('span',{class:'v',text:v}), el('span',{class:'s',text:s}), extra ? el('span',{class:'s'},extra) : null); }
+
+/* ---------- trend tab ---------- */
+function renderTrend(){
+  const [from, to] = periodRange(PERIOD);
+  const weeks = []; for (let w = mondayOf(from); w <= to; w += 7) weeks.push(w);
+  const series = MODEL.staff.map((email,i) => ({email, color: COLORS[i%COLORS.length], vals: weeks.map(w => { let s=0; for (let d=Math.max(w,from); d<=Math.min(w+6,to); d++){ const p = pd(email,d); if (p) s += p.worked; } return s; })}));
+  $('#chartLegend').replaceChildren(...series.map(s => el('span', null, el('i', {class:'sw', style:'background:'+s.color}), nameOf(s.email))));
+  drawChart($('#chart'), weeks, series);
+
+  const t = $('#sumTable'); t.replaceChildren();
+  const cols = ['Dipendente','Ore lavorate','Ore previste','Saldo','Giorni presenti','Media / giorno','Assenze','Ritardi','Da verificare','Ingresso medio'];
+  t.appendChild(el('thead', null, el('tr', null, cols.map(c => el('th', {text:c})))));
+  const tb = el('tbody'); SUMMARY = [cols];
+  MODEL.staff.forEach(email => {
+    const s = stats(email, from, to); const bal = s.worked - s.expected;
+    const row = [nameOf(email), dur(s.worked), dur(s.expected), (bal>=0?'+':'−')+dur(Math.abs(bal)), String(s.present), s.present ? dur(s.worked/s.present) : '—', String(s.abs), String(s.late), String(s.issues), hm(s.avgIn)];
+    SUMMARY.push([nameOf(email), hdec(s.worked), hdec(s.expected), hdec(bal), s.present, s.present ? hdec(s.worked/s.present) : '', s.abs, s.late, s.issues, hm(s.avgIn)]);
+    tb.appendChild(el('tr', null, row.map((v,i) => {
+      const td = el('td', {class: i===0 ? 'name' : 'mono', text:v});
+      if (i===3) td.style.color = bal>=0 ? 'var(--ok)' : 'var(--bad)';
+      if (i===6 && s.abs) td.style.color = 'var(--bad)';
+      if (i===8 && s.issues) td.style.color = 'var(--warn)';
+      return td;
+    })));
+  });
+  t.appendChild(tb);
+}
+let SUMMARY = [];
+function drawChart(box, weeks, series){
+  box.replaceChildren();
+  const W = Math.max(320, box.clientWidth || 600), H = 280, NS = 'http://www.w3.org/2000/svg';
+  const max = Math.max(1, ...series.flatMap(s => s.vals)) / 60;
+  const step = max > 40 ? 10 : max > 16 ? 5 : 2; const top = Math.ceil(max/step)*step;
+  const m = {l:40, r:8, t:10, b:30}; const iw = W-m.l-m.r, ih = H-m.t-m.b;
+  const svg = document.createElementNS(NS,'svg'); svg.setAttribute('viewBox', '0 0 '+W+' '+H); svg.setAttribute('width','100%'); svg.setAttribute('height', H); svg.setAttribute('role','img'); svg.setAttribute('aria-label','Ore lavorate per settimana');
+  const mk = (tag, a) => { const n = document.createElementNS(NS, tag); for (const k in a) n.setAttribute(k, a[k]); svg.appendChild(n); return n; };
+  for (let v=0; v<=top; v+=step){
+    const y = m.t + ih - v/top*ih;
+    mk('line', {x1:m.l, x2:W-m.r, y1:y, y2:y, stroke:'var(--line)', 'stroke-width':1});
+    const tx = mk('text', {x:m.l-6, y:y+4, 'text-anchor':'end', 'font-size':11, fill:'var(--muted)', 'font-family':'IBM Plex Mono, monospace'}); tx.textContent = v+'h';
+  }
+  if (!weeks.length || !series.length){ box.appendChild(svg); return; }
+  const gw = iw / weeks.length, pad = Math.min(14, gw*0.18), bw = Math.min(26, (gw-2*pad)/series.length);
+  const tip = el('div', {class:'tip', hidden:''});
+  weeks.forEach((w,i) => {
+    const gx = m.l + i*gw + (gw - bw*series.length)/2;
+    series.forEach((s,j) => {
+      const v = s.vals[i]/60, h = v/top*ih;
+      const r = mk('rect', {x: gx + j*bw + 1, y: m.t+ih-h, width: Math.max(2,bw-2), height: Math.max(0,h), rx: 3, fill: s.color});
+      r.addEventListener('mousemove', ev => {
+        tip.hidden = false; tip.replaceChildren(el('div',{class:'d',text:'Sett. '+isoWeek(w)+' · '+fmtShort(w)+' – '+fmtShort(w+6)}), el('div',null, el('i',{class:'sw',style:'background:'+s.color+';margin-right:6px;vertical-align:-1px'}), nameOf(s.email)+': ', el('b',{text:dur(s.vals[i])})));
+        const bx = box.getBoundingClientRect(); let x = ev.clientX - bx.left + 12; const tw = tip.offsetWidth; if (x + tw > bx.width) x = ev.clientX - bx.left - tw - 12;
+        tip.style.left = Math.max(0,x)+'px'; tip.style.top = (ev.clientY - bx.top - 10)+'px';
+      });
+      r.addEventListener('mouseleave', () => { tip.hidden = true; });
+    });
+    const every = Math.ceil(weeks.length / Math.max(1, Math.floor(iw/70)));
+    if (i % every === 0){ const tx = mk('text', {x: m.l + i*gw + gw/2, y: H-10, 'text-anchor':'middle', 'font-size':11, fill:'var(--muted)', 'font-family':'IBM Plex Sans, sans-serif'}); tx.textContent = 'S'+isoWeek(w)+' · '+fmtShort(w); }
+  });
+  box.appendChild(svg); box.appendChild(tip);
+}
+
+/* ---------- absences tab ---------- */
+function renderAbs(){
+  const [from, to] = periodRange(PERIOD);
+  const abs = [];
+  MODEL.staff.forEach(email => stats(email, from, to).absDays.forEach(d => abs.push({d, email})));
+  abs.sort((a,b) => b.d-a.d || nameOf(a.email).localeCompare(nameOf(b.email)));
+  $('#absNote').textContent = 'Giorni lavorativi ('+S.days.map(d=>DOW[d]).join(', ')+', festivi esclusi) senza alcuna timbratura'+(S.openOnly?', solo nei giorni in cui almeno un collega ha timbrato.':'.');
+  const t1 = $('#absTable'); t1.replaceChildren(el('thead', null, el('tr', null, el('th',{text:'Data'}), el('th',{text:'Giorno'}), el('th',{text:'Dipendente'}))));
+  const b1 = el('tbody'); if (!abs.length) b1.appendChild(el('tr',null,el('td',{colspan:'3',class:'empty',text:'Nessuna assenza nel periodo.'})));
+  abs.forEach(a => b1.appendChild(el('tr', null, el('td',{class:'mono',text:fmtDay(a.d)}), el('td',{text:DOW[dow(a.d)]}), el('td',{text:nameOf(a.email)}))));
+  t1.appendChild(b1);
+
+  const an = MODEL.anomalies.filter(a => a.day>=from && a.day<=to && MODEL.staff.includes(a.email)).sort((a,b) => b.day-a.day);
+  const t2 = $('#anTable'); t2.replaceChildren(el('thead', null, el('tr', null, el('th',{text:'Data'}), el('th',{text:'Dipendente'}), el('th',{text:'Tipo'}), el('th',{text:'Dettaglio'}))));
+  const b2 = el('tbody'); if (!an.length) b2.appendChild(el('tr',null,el('td',{colspan:'4',class:'empty',text:'Nessuna anomalia nel periodo.'})));
+  an.forEach(a => b2.appendChild(el('tr', null, el('td',{class:'mono',text:fmtDay(a.day)}), el('td',{text:nameOf(a.email)}), el('td',null, el('span',{class:'pill '+a.sev, text:a.type})), el('td',{class:'muted',text:a.detail}))));
+  t2.appendChild(b2);
+}
+
+/* ---------- log tab ---------- */
+function renderLog(){
+  const q = ($('#q').value||'').toLowerCase().trim();
+  const rows = MODEL.evs.slice().sort((a,b) => b.day-a.day || b.min-a.min).filter(e => !q || [fmtDay(e.day), nameOf(e.email), e.email, e.note, e.luogo, e.metodo, e.tipo==='I'?'ingresso':'uscita'].join(' ').toLowerCase().includes(q));
+  const t = $('#logTable'); t.replaceChildren(el('thead', null, el('tr', null, ['Data','Ora','Dipendente','Tipo','Modalità','Note','Posizione'].map(c => el('th',{text:c})))));
+  const b = el('tbody');
+  if (!rows.length) b.appendChild(el('tr',null,el('td',{colspan:'7',class:'empty',text:'Nessuna timbratura trovata.'})));
+  rows.forEach(e => b.appendChild(el('tr', null,
+    el('td',{class:'mono',text:DOW[dow(e.day)]+' '+fmtDay(e.day)}),
+    el('td',{class:'mono',text:hm(e.min)}),
+    el('td',{text:nameOf(e.email)+(S.excluded.includes(e.email)?' (escluso)':'')}),
+    el('td',null, el('span',{class:'pill '+(e.tipo==='I'?'ok':'mut'), text:e.tipo==='I'?'Ingresso':'Uscita'})),
+    el('td',{class:'muted',text:e.metodo}),
+    el('td',{text:e.note||''}),
+    el('td',{class:'muted',style:'font-size:12px',text:e.luogo}))));
+  t.appendChild(b);
+}
+
+/* ---------- settings ---------- */
+function renderSettings(){
+  const db = $('#daysBox'); db.replaceChildren(el('strong',{text:'Giorni lavorativi: '}));
+  [1,2,3,4,5,6,0].forEach(d => { const id = 'dw'+d; const cb = el('input',{type:'checkbox',id}); cb.checked = S.days.includes(d);
+    cb.addEventListener('change', () => { S.days = cb.checked ? [...new Set(S.days.concat(d))] : S.days.filter(x => x!==d); saveS(); refresh(); });
+    db.appendChild(el('label',{for:id}, cb, DOW[d])); });
+  $('#lateAfter').value = S.lateAfter; $('#fixDouble').checked = S.fixDouble; $('#openOnly').checked = S.openOnly;
+  const t = $('#empTable'); t.replaceChildren(el('thead',null,el('tr',null, el('th',{text:'Includi'}), el('th',{text:'Dipendente'}), el('th',{text:'Account'}), el('th',{text:'Ore previste al giorno'}))));
+  const b = el('tbody');
+  MODEL.emails.forEach((email,i) => {
+    const cb = el('input',{type:'checkbox',id:'inc'+i,'aria-label':'Includi '+nameOf(email)}); cb.checked = !S.excluded.includes(email);
+    cb.addEventListener('change', () => { S.excluded = cb.checked ? S.excluded.filter(x => x!==email) : S.excluded.concat(email); saveS(); refresh(); });
+    const h = el('input',{type:'number',id:'hrs'+i,min:'0',max:'12',step:'0.5',style:'width:6em','aria-label':'Ore previste '+nameOf(email)}); h.value = hoursOf(email);
+    h.addEventListener('change', () => { const v = parseFloat(h.value); if (!isNaN(v) && v>=0 && v<=12){ S.hours[email] = v; saveS(); refresh(); } });
+    b.appendChild(el('tr',null, el('td',null,cb), el('td',{text:nameOf(email)}), el('td',{class:'muted mono',text:email}), el('td',null,h)));
+  });
+  t.appendChild(b);
+}
+$('#lateAfter').addEventListener('change', e => { if (e.target.value){ S.lateAfter = e.target.value; saveS(); refresh(); } });
+$('#fixDouble').addEventListener('change', e => { S.fixDouble = e.target.checked; saveS(); refresh(); });
+$('#openOnly').addEventListener('change', e => { S.openOnly = e.target.checked; saveS(); refresh(); });
+
+/* ---------- tabs & controls ---------- */
+let TAB = 'settimana';
+function showTab(name){
+  TAB = name;
+  document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab===name)));
+  document.querySelectorAll('.panel').forEach(p => { p.hidden = p.id !== name; });
+  try { history.replaceState(null, '', '#'+name); } catch(e){}
+  renderCurrent();
+}
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+$('#prevW').addEventListener('click', () => { WEEK -= 7; renderWeek(); });
+$('#nextW').addEventListener('click', () => { WEEK += 7; renderWeek(); });
+$('#thisW').addEventListener('click', () => { WEEK = mondayOf(TODAY); renderWeek(); });
+['#period','#period2'].forEach(s => { $(s).value = PERIOD; $(s).addEventListener('change', e => { PERIOD = e.target.value; store.set('period', PERIOD); $('#period').value = PERIOD; $('#period2').value = PERIOD; renderCurrent(); }); });
+$('#q').addEventListener('input', renderLog);
+$('#copySum').addEventListener('click', () => {
+  const txt = SUMMARY.map(r => r.join('\t')).join('\n'); const btn = $('#copySum');
+  const done = ok => { btn.textContent = ok ? 'Copiato' : 'Copia non riuscita'; setTimeout(() => { btn.textContent = 'Copia per Excel'; }, 1800); };
+  try { navigator.clipboard.writeText(txt).then(() => done(true), () => done(false)); } catch(e){ done(false); }
+});
+let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (TAB==='andamento') renderTrend(); }, 150); });
+
+function renderCurrent(){
+  if (!MODEL) return;
+  renderWeek(); // tiene aggiornato anche il messaggio in testa
+  if (TAB==='andamento') renderTrend();
+  if (TAB==='assenze') renderAbs();
+  if (TAB==='cartellino') renderLog();
+}
+function refresh(){ build(); renderSettings(); renderCurrent(); }
+
+/* ---------- loading ---------- */
+function setBanner(){
+  const b = $('#banner'); b.classList.toggle('snap', SOURCE.kind!=='live');
+  const n = MODEL ? MODEL.evs.length : 0;
+  $('#bannerText').textContent =
+    SOURCE.kind==='live' ? 'Dati in tempo reale dal foglio presenze · '+n+' timbrature · letti alle '+SOURCE.when :
+    SOURCE.kind==='file' ? 'Dati dal file caricato ('+SOURCE.when+') · '+n+' timbrature' :
+    'Copia del foglio salvata il '+SNAPSHOT_AT+' ('+n+' timbrature). Qui il collegamento diretto non è disponibile: ospitata su GitHub Pages la pagina legge il foglio in tempo reale, oppure usa “Carica CSV”.';
+}
+function useText(text, kind, when){
+  EVENTS = toEvents(parseCSV(text.replace(/^﻿/,'')));
+  SOURCE = {kind, when};
+  WEEK = null; refresh(); setBanner();
+}
+async function load(){
+  $('#reload').disabled = true; $('#bannerText').textContent = 'Lettura del foglio presenze…';
+  try {
+    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 8000);
+    const r = await fetch(CSV_URL + '&t=' + Date.now(), {cache:'no-store', signal: ctl.signal});
+    clearTimeout(tm);
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const txt = await r.text();
+    if (/^\s*</.test(txt)) throw new Error('not csv');
+    useText(txt, 'live', new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}));
+  } catch(e){
+    if (!EVENTS.length || SOURCE.kind==='snapshot' || SOURCE.kind==='') useText(SNAPSHOT, 'snapshot', SNAPSHOT_AT);
+    else setBanner();
+  } finally { $('#reload').disabled = false; }
+}
+$('#reload').addEventListener('click', load);
+$('#file').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  const rd = new FileReader(); rd.onload = () => useText(String(rd.result), 'file', f.name); rd.readAsText(f); e.target.value = '';
+});
+
+const start = (location.hash||'').slice(1);
+if (['settimana','andamento','assenze','cartellino'].includes(start)) TAB = start;
+// prima resa immediata con la copia salvata, poi tentativo di lettura dal vivo
+useText(SNAPSHOT, 'snapshot', SNAPSHOT_AT);
+showTab(TAB);
+load();
+})();
+</script>
