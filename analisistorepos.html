@@ -2652,10 +2652,14 @@ ${userPrompt}`;
                             return `<span class="badge bg-primary card-filter-btn px-2 py-1" title="Filtra lo storico di questa Card" onclick="filterByCard('${cellVal.trim()}')"><i class="fas fa-id-card me-1"></i>${cellVal}</span>`;
                         } 
                         else if (col === COL_EAN) {
-                            return `<span class="badge bg-success card-filter-btn px-2 py-1" title="Filtra per questo EAN" onclick="filterByProduct('${cellVal.trim()}')"><i class="fas fa-barcode me-1"></i>${cellVal}</span>`;
+                            const safe = cellVal.trim().replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                            return `<span class="badge bg-success card-filter-btn px-2 py-1" title="Filtra per questo EAN" onclick="filterByProduct('${safe}')"><i class="fas fa-barcode me-1"></i>${cellVal}</span>` +
+                                   `<span class="badge card-filter-btn ms-1 px-2 py-1 text-white" style="background:#d63384;" title="Posizione di questo articolo (magazzino e negozi)" onclick="openPosizioneCodici('${safe}')"><i class="fas fa-map-marker-alt"></i></span>`;
                         }
                         else if (col === COL_COD_INT) {
-                            return `<span class="badge bg-secondary card-filter-btn px-2 py-1 text-white" title="Filtra per questo Codice Interno" onclick="filterByProduct('${cellVal.trim()}')"><i class="fas fa-hashtag me-1"></i>${cellVal}</span>`;
+                            const safe = cellVal.trim().replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                            return `<span class="badge bg-secondary card-filter-btn px-2 py-1 text-white" title="Filtra per questo Codice Interno" onclick="filterByProduct('${safe}')"><i class="fas fa-hashtag me-1"></i>${cellVal}</span>` +
+                                   `<span class="badge card-filter-btn ms-1 px-2 py-1 text-white" style="background:#d63384;" title="Posizione di questo modello (magazzino e negozi)" onclick="openPosizioneCodici('${safe}')"><i class="fas fa-map-marker-alt"></i></span>`;
                         }
                     }
                     
@@ -3366,10 +3370,20 @@ ${userPrompt}`;
     }
 
     // ---------------- collegamenti UI ----------------
+    // Apertura della finestra; con un codice (es. dal pulsante 📍 della tabella) la ricerca parte da sola
     function openPc(code) {
         const modalEl = document.getElementById('pcModal');
-        if (code) document.getElementById('pcSearch').value = code;
-        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        if (code) {
+            document.getElementById('pcSearch').value = String(code).trim();
+            document.getElementById('pcShow').value = 'all';
+            document.getElementById('pcDetailCard').classList.add('d-none');
+            st.current = null;
+        }
+        if (modalEl.classList.contains('show')) {        // finestra gia' aperta: aggiorno solo la ricerca
+            if (st.data) renderResults();
+        } else {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
     }
     window.openPosizioneCodici = openPc;
 
