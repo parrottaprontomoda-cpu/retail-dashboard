@@ -2679,5 +2679,613 @@ ${userPrompt}`;
         $('#dataTable thead').addClass('table-dark');
     }
 </script>
+<!-- =====================================================================
+     MODULO "POSIZIONE CODICI"
+     Incollare TUTTO questo blocco nella dashboard, subito PRIMA di </body>
+     (dopo l'ultimo </script> già presente).
+     Usa i dati VENDITE già caricati dalla dashboard + il foglio NOTE (Elenco Note).
+     ===================================================================== -->
+<style>
+    #pcModal .pc-neg  { color:#dc3545; font-weight:700; }
+    #pcModal .pc-zero { color:#adb5bd; }
+    #pcModal .pc-pos  { color:#198754; font-weight:600; }
+    #pcModal .pc-row  { cursor:pointer; }
+    #pcModal .pc-row:hover td { background:#f1f5ff; }
+    #pcModal th, #pcModal td { white-space:nowrap; }
+    #pcModal .pc-desc { white-space:normal; min-width:220px; }
+    #pcModal .pc-store-head { max-width:130px; white-space:normal; font-size:0.78rem; }
+    #pcModal .pc-tot { background:#eef4ff; }
+</style>
+
+<!-- Finestra Posizione Codici -->
+<div class="modal fade" id="pcModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #d63384, #6f42c1); color: white;">
+                <h5 class="modal-title fw-bold"><i class="fas fa-map-marker-alt me-2"></i>Posizione Codici — Magazzino centrale e Punti vendita</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body bg-light">
+
+                <div class="card mb-3">
+                    <div class="card-body py-3">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-lg-5">
+                                <label class="form-label small fw-bold text-secondary"><i class="fas fa-search me-1"></i>Cerca codice, EAN o descrizione</label>
+                                <div class="input-group">
+                                    <input type="text" id="pcSearch" class="form-control form-control-lg" placeholder="Es. 9302300, 8056281064134, tuta donna...">
+                                    <button class="btn btn-outline-secondary" type="button" id="pcClear" title="Azzera"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
+                            <div class="col-lg-2 col-md-4">
+                                <label class="form-label small fw-bold text-secondary" title="Le vendite dei negozi precedenti a questa data non vengono sottratte">Vendite contate dal</label>
+                                <input type="date" id="pcFrom" class="form-control">
+                            </div>
+                            <div class="col-lg-2 col-md-4">
+                                <label class="form-label small fw-bold text-secondary">Mostra</label>
+                                <select id="pcShow" class="form-select">
+                                    <option value="all">Tutti i codici trovati</option>
+                                    <option value="neg">Solo con giacenze negative</option>
+                                    <option value="store">Solo presenti nei negozi</option>
+                                </select>
+                            </div>
+                            <div class="col-lg-3 col-md-4 text-end">
+                                <button class="btn btn-outline-primary" type="button" id="pcReload"><i class="fas fa-sync-alt me-1"></i>Aggiorna foglio NOTE</button>
+                            </div>
+                        </div>
+                        <div class="small text-muted mt-2" id="pcStatus"></div>
+                    </div>
+                </div>
+
+                <!-- Impostazioni -->
+                <div class="accordion mb-3" id="pcAccSettings">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#pcSettings">
+                                <i class="fas fa-cog me-2"></i>Impostazioni: link foglio NOTE e abbinamento destinatari → negozi
+                            </button>
+                        </h2>
+                        <div id="pcSettings" class="accordion-collapse collapse" data-bs-parent="#pcAccSettings">
+                            <div class="accordion-body">
+                                <div class="row g-3">
+                                    <div class="col-lg-6">
+                                        <label class="form-label small fw-bold">🔗 Link CSV foglio NOTE (Elenco Note):</label>
+                                        <input type="text" id="pcNoteUrl" class="form-control mb-3">
+                                        <label class="form-label small fw-bold">Abbinamenti manuali (DESTINATARIO NOTE = NEGOZIO VENDITE):</label>
+                                        <textarea id="pcAliases" class="form-control" rows="5" placeholder="Una riga per abbinamento, es.&#10;PARROTTA PRONTO MODA = PARROTTA POINT - LOCRI&#10;PARROTTA POINT CHIARAVALLE = PARROTTA POINT - CHIARAVALLE CLE&#10;Per escludere un destinatario: NOME = NESSUNO"></textarea>
+                                        <small class="text-muted d-block mt-1">I destinatari con POINT, PEPLO o CARAMELLO nel nome vengono abbinati in automatico al negozio con il nome più simile. Scrivi qui solo le correzioni.</small>
+                                        <button class="btn btn-primary btn-sm mt-2" type="button" id="pcSaveSettings"><i class="fas fa-save me-1"></i>Salva e ricalcola</button>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <label class="form-label small fw-bold">Destinatari del foglio NOTE riconosciuti come negozi:</label>
+                                        <div id="pcMapInfo" class="small"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risultati ricerca -->
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h6 class="fw-bold text-primary mb-2"><i class="fas fa-list me-2"></i>Codici trovati <span class="text-muted fw-normal small" id="pcResCount"></span></h6>
+                        <div class="table-responsive" style="max-height: 45vh;">
+                            <table class="table table-sm table-hover align-middle text-center mb-0" id="pcResults"></table>
+                        </div>
+                        <small class="text-muted">Clicca su un codice per vedere taglie/colori e tutti i movimenti.</small>
+                    </div>
+                </div>
+
+                <!-- Dettaglio codice -->
+                <div class="card d-none" id="pcDetailCard">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                            <div>
+                                <h5 class="fw-bold mb-0" id="pcDetTitle"></h5>
+                                <div class="text-muted small" id="pcDetSub"></div>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary" type="button" id="pcToDashboard"><i class="fas fa-chart-line me-1"></i>Vedi vendite in dashboard</button>
+                        </div>
+                        <div class="row g-2 mb-4" id="pcDetKpi"></div>
+
+                        <h6 class="fw-bold text-secondary"><i class="fas fa-th me-2"></i>Posizione per taglia / colore (EAN)</h6>
+                        <div class="table-responsive mb-4">
+                            <table class="table table-sm table-hover align-middle text-center" id="pcDetVariants"></table>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                            <h6 class="fw-bold text-secondary mb-0"><i class="fas fa-exchange-alt me-2"></i>Movimenti (più recenti in alto)</h6>
+                            <select id="pcMovFilter" class="form-select form-select-sm" style="width:auto;"></select>
+                        </div>
+                        <div class="table-responsive" style="max-height: 50vh;">
+                            <table class="table table-sm table-striped align-middle" id="pcDetMovs"></table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="small text-muted mt-3">
+                    <strong>Come si calcola:</strong> Magazzino centrale = somma di VALMAG del foglio NOTE (acquisti e resi in entrata, invii e vendite ingrosso in uscita).
+                    Negozio = pezzi inviati dal magazzino meno resi al magazzino (da NOTE) meno pezzi venduti in cassa (da VENDITE, dalla data indicata).
+                    <span class="pc-neg">Valori negativi</span> = il negozio ha venduto più di quanto risulta ricevuto: possibile errore di scarico, merce arrivata prima del periodo NOTE, codice battuto male o ammanco.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    const PC_DEFAULT_NOTE_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQTqBOs64MuHXcttnnLWFWs9QMCoIczq7IvOd0LrgUq3Lj9LRCy9PYamHUAoIiU-ehq42zylJD_13_0/pub?gid=863826375&single=true&output=csv';
+    const PC_CACHE_KEY = 'note_cache_v1';
+    const PC_SKIP = new Set(['SCATOLA', 'SCATOLE', 'BUSTA', 'BUSTE']);
+    const NO_EAN = '(senza EAN)';
+    const GENERIC = new Set(['POINT', 'SHOP', 'STORE', 'NEGOZIO', 'SRL', 'SAS', 'SNC', 'DEI', 'DEL', 'DELLA']);
+    const NOTE_DATE_FORMATS = ['D/M/YYYY H.mm.ss', 'D/M/YYYY H:mm:ss', 'D/M/YYYY H.mm', 'D/M/YYYY', 'YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD'];
+    const SALE_DATE_FORMATS = ['DD/MM/YYYY', 'DD/MM/YYYY HH:mm', 'DD/MM/YYYY HH:mm:ss', 'YYYY-MM-DD', 'YYYY-MM-DD HH:mm:ss'];
+
+    const st = { csv: null, ts: null, notes: null, minDate: '', data: null, current: null, busy: false, timer: null };
+
+    // ---------------- utilità ----------------
+    const num = v => (typeof parseEuro === 'function') ? parseEuro(v) : (parseFloat(String(v || '').replace(',', '.')) || 0);
+    const up = v => String(v == null ? '' : v).trim().toUpperCase().replace(/\s+/g, ' ');
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmtQ = v => { const r = Math.round(v * 10) / 10; return (Number.isInteger(r) ? r : r.toFixed(1)).toLocaleString('it-IT'); };
+    function qCell(v, extraCls) {
+        const r = Math.round((v || 0) * 10) / 10;
+        const cls = r < 0 ? 'pc-neg' : (r === 0 ? 'pc-zero' : 'pc-pos');
+        const warn = r < 0 ? '<i class="fas fa-exclamation-triangle me-1 small" title="Giacenza teorica negativa: da verificare"></i>' : '';
+        return `<td class="${cls} ${extraCls || ''}">${warn}${fmtQ(r)}</td>`;
+    }
+    function pickEan(a, b) {
+        for (const x of [a, b]) {
+            const s = String(x || '').trim();
+            if (/^\d{8,14}$/.test(s) && !/^0+$/.test(s)) return s;
+        }
+        return '';
+    }
+    function tokens(s) {
+        return up(s).split(/[^A-Z0-9]+/).filter(t => t.length >= 3 && !GENERIC.has(t));
+    }
+    function getAliases() {
+        const map = {};
+        (localStorage.getItem('pcAliases') || '').split(/\r?\n/).forEach(line => {
+            const i = line.indexOf('=');
+            if (i > 0) {
+                const a = up(line.slice(0, i)), b = up(line.slice(i + 1));
+                if (a && b) map[a] = b;
+            }
+        });
+        return map;
+    }
+    function noteUrl() { return (localStorage.getItem('pcNoteUrl') || PC_DEFAULT_NOTE_URL).trim(); }
+
+    // ---------------- lettura foglio NOTE ----------------
+    function parseNoteCsv(csv) {
+        const res = Papa.parse(csv, { header: true, skipEmptyLines: true });
+        const fields = res.meta.fields || [];
+        const find = (...names) => fields.find(f => names.includes(up(f))) || null;
+        const F = {
+            data: find('DATA'), cod: find('COD', 'CODICE'), qta: find('QTA', 'QUANTITA', 'QUANTITÀ'),
+            desc: find('DESCRIZIONE'), cli: find('CLI', 'CLIENTE'), mag: find('MAG'),
+            val: find('VALMAG'), ean1: find('LISTATO EAN'), ean2: find('LISTA RIC'),
+            mis: find('MIS', 'TAGLIA'), col: find('COL', 'COLORE'), forn: find('FORN', 'FORNITORE')
+        };
+        if (!F.cod || !F.val || !F.cli) {
+            throw new Error('Nel foglio NOTE non trovo le colonne COD, CLI e VALMAG.');
+        }
+        const out = [];
+        let minDate = '';
+        res.data.forEach(r => {
+            const cod = up(r[F.cod]);
+            if (!cod || PC_SKIP.has(cod)) return;
+            const m = moment(String(r[F.data] || '').trim(), NOTE_DATE_FORMATS);
+            const d = m.isValid() ? m.format('YYYY-MM-DD') : '';
+            if (d && (!minDate || d < minDate)) minDate = d;
+            out.push({
+                d, t: m.isValid() ? m.format('DD/MM/YYYY HH:mm') : String(r[F.data] || ''),
+                cod, cli: up(r[F.cli]), mag: F.mag ? String(r[F.mag] || '').trim() : '',
+                qta: F.qta ? num(r[F.qta]) : 0, val: num(r[F.val]),
+                ean: pickEan(F.ean1 ? r[F.ean1] : '', F.ean2 ? r[F.ean2] : ''),
+                desc: F.desc ? String(r[F.desc] || '').trim() : '',
+                mis: F.mis ? String(r[F.mis] || '').trim() : '',
+                col: F.col ? String(r[F.col] || '').trim() : '',
+                forn: F.forn ? String(r[F.forn] || '').trim() : ''
+            });
+        });
+        return { rows: out, minDate };
+    }
+
+    // ---------------- righe VENDITE dalla dashboard ----------------
+    function getSalesRows() {
+        if (typeof rawData === 'undefined' || !rawData.length) return [];
+        const out = [];
+        rawData.forEach(row => {
+            const store = up(row[COL_STORE]);
+            if (!store) return;
+            const m = moment(String(row[COL_DATA] || '').trim(), SALE_DATE_FORMATS);
+            if (!m.isValid()) return;
+            let q = num(row[COL_QTA]); if (q === 0) q = 1;
+            out.push({
+                d: m.format('YYYY-MM-DD'), t: m.format('DD/MM/YYYY HH:mm'), store,
+                cod: up(row[COL_COD_INT]), ean: String(row[COL_EAN] || '').trim(), qta: q
+            });
+        });
+        return out;
+    }
+
+    // ---------------- abbinamento destinatario NOTE -> negozio ----------------
+    function makeResolver(salesStores, aliases) {
+        const cache = {};
+        const storeTok = salesStores.map(s => ({ s, t: new Set(tokens(s)) }));
+        function bestMatch(cli) {
+            const ct = tokens(cli);
+            let best = null, bestSc = 0, second = 0;
+            storeTok.forEach(o => {
+                const sc = ct.filter(t => o.t.has(t)).length;
+                if (sc > bestSc) { second = bestSc; bestSc = sc; best = o.s; }
+                else if (sc > second) second = sc;
+            });
+            return (bestSc >= 1 && bestSc > second) ? best : null;
+        }
+        return function (cli) {
+            if (cli in cache) return cache[cli];
+            let r = null;
+            if (aliases[cli]) {
+                r = (aliases[cli] === 'NESSUNO' || aliases[cli] === '-') ? null : aliases[cli];
+            } else if (cli === 'PARROTTA PRONTO MODA') {
+                r = salesStores.find(s => s.includes('PARROTTA') && s.includes('LOCRI')) || 'PARROTTA POINT - LOCRI';
+            } else if (/POINT|PEPLO|CARAMELLO/.test(cli)) {
+                r = bestMatch(cli) || cli;
+            }
+            cache[cli] = r;
+            return r;
+        };
+    }
+
+    // ---------------- calcolo giacenze ----------------
+    function pcBuild(notes, sales, opt) {
+        const salesStores = Array.from(new Set(sales.map(s => s.store))).sort();
+        const resolve = makeResolver(salesStores, opt.aliases || {});
+        const codes = {}, eanToCod = {}, cliMap = {};
+
+        const variant = (c, key, src) => c.variants[key] || (c.variants[key] = {
+            ean: key === NO_EAN ? '' : key, mis: src ? src.mis : '', col: src ? src.col : '',
+            central: 0, inS: {}, soldS: {}
+        });
+
+        notes.forEach(m => {
+            const store = resolve(m.cli);
+            const c = codes[m.cod] || (codes[m.cod] = {
+                cod: m.cod, desc: m.desc, forn: m.forn, central: 0, inS: {}, soldS: {},
+                bought: 0, wholesale: 0, eans: new Set(), movs: [], variants: {}
+            });
+            if (!c.desc && m.desc) c.desc = m.desc;
+            if (!c.forn && m.forn) c.forn = m.forn;
+            const v = variant(c, m.ean || NO_EAN, m);
+            if (!v.mis && m.mis) v.mis = m.mis;
+            if (!v.col && m.col) v.col = m.col;
+
+            c.central += m.val; v.central += m.val;
+            if (m.ean) { eanToCod[m.ean] = m.cod; c.eans.add(m.ean); }
+
+            let kind, who;
+            if (store) {
+                const q = -m.val;
+                c.inS[store] = (c.inS[store] || 0) + q;
+                v.inS[store] = (v.inS[store] || 0) + q;
+                (cliMap[m.cli] = cliMap[m.cli] || { store, n: 0 }).n++;
+                kind = m.val < 0 ? 'Invio al negozio' : (m.val > 0 ? 'Reso dal negozio' : 'Movimento negozio (senza effetto)');
+                who = store;
+            } else if (m.cli === 'ACQUISTO FORNITORE') {
+                c.bought += m.val; kind = m.val >= 0 ? 'Acquisto fornitore' : 'Reso a fornitore'; who = m.mag || 'Fornitore';
+            } else if (m.val < 0) {
+                c.wholesale += -m.val; kind = 'Vendita ingrosso'; who = m.cli;
+            } else if (m.val > 0) {
+                c.wholesale -= m.val; kind = 'Reso da cliente'; who = m.cli;
+            } else {
+                kind = 'Senza effetto sul magazzino'; who = m.cli;
+            }
+            c.movs.push({ d: m.d, t: m.t, kind, who, ean: m.ean, size: [m.mis, m.col].filter(Boolean).join(' / '), qta: m.qta, eff: m.val, src: 'NOTE' });
+        });
+
+        const from = opt.fromDate || '';
+        let salesUsed = 0, salesUnknown = 0;
+        sales.forEach(s => {
+            if (from && s.d < from) return;
+            const cod = codes[s.cod] ? s.cod : ((s.ean && eanToCod[s.ean]) || eanToCod[s.cod] || null);
+            if (!cod) { salesUnknown++; return; }
+            salesUsed++;
+            const c = codes[cod];
+            c.soldS[s.store] = (c.soldS[s.store] || 0) + s.qta;
+            const v = variant(c, (s.ean && c.variants[s.ean]) ? s.ean : NO_EAN, null);
+            v.soldS[s.store] = (v.soldS[s.store] || 0) + s.qta;
+            c.movs.push({ d: s.d, t: s.t, kind: s.qta >= 0 ? 'Vendita in cassa' : 'Reso in cassa', who: s.store, ean: s.ean, size: '', qta: -s.qta, eff: null, src: 'VENDITE' });
+        });
+
+        const storeSet = new Set(salesStores);
+        Object.values(cliMap).forEach(o => storeSet.add(o.store));
+        const stores = Array.from(storeSet).sort();
+
+        Object.values(codes).forEach(c => {
+            c.stock = {};
+            let tot = 0;
+            stores.forEach(s => { const q = (c.inS[s] || 0) - (c.soldS[s] || 0); c.stock[s] = q; tot += q; });
+            c.storesTot = tot;
+            c.netTot = c.central + tot;
+            c.hasNeg = c.central < 0 || stores.some(s => c.stock[s] < 0);
+            c.inStore = stores.some(s => c.stock[s] > 0);
+        });
+
+        return { codes, stores, eanToCod, cliMap, salesUsed, salesUnknown };
+    }
+    window.PC_TEST = { parseNoteCsv, pcBuild, pickEan, makeResolver };
+
+    // ---------------- caricamento ----------------
+    function setStatus(html) { document.getElementById('pcStatus').innerHTML = html; }
+
+    async function loadNotes(force) {
+        if (st.busy) return;
+        st.busy = true;
+        const btn = document.getElementById('pcReload');
+        btn.disabled = true;
+        try {
+            const url = noteUrl();
+            if (!force && !st.csv) {
+                try {
+                    const c = await localforage.getItem(PC_CACHE_KEY);
+                    if (c && c.csv && c.url === url) { st.csv = c.csv; st.ts = c.ts; }
+                } catch (e) { /* cache non disponibile */ }
+            }
+            if (force || !st.csv) {
+                setStatus('<i class="fas fa-spinner fa-spin me-1"></i>Scarico il foglio NOTE da Google Fogli...');
+                const r = await fetch(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now());
+                if (!r.ok) throw new Error('download non riuscito (' + r.status + ')');
+                st.csv = await r.text();
+                st.ts = Date.now();
+                try { await localforage.setItem(PC_CACHE_KEY, { csv: st.csv, ts: st.ts, url }); } catch (e) {}
+            }
+            const parsed = parseNoteCsv(st.csv);
+            st.notes = parsed.rows;
+            st.minDate = parsed.minDate;
+            const fromEl = document.getElementById('pcFrom');
+            if (!fromEl.value) fromEl.value = localStorage.getItem('pcFrom') || st.minDate;
+            recompute();
+        } catch (err) {
+            setStatus(`<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Foglio NOTE non caricato: ${esc(err.message)}. Controlla il link nelle impostazioni.</span>`);
+        } finally {
+            st.busy = false;
+            btn.disabled = false;
+        }
+    }
+
+    function recompute() {
+        if (!st.notes) return;
+        const sales = getSalesRows();
+        st.data = pcBuild(st.notes, sales, { aliases: getAliases(), fromDate: document.getElementById('pcFrom').value });
+        const nCodes = Object.keys(st.data.codes).length;
+        let msg = `<i class="fas fa-database me-1"></i>NOTE: <strong>${st.notes.length.toLocaleString('it-IT')}</strong> movimenti, <strong>${nCodes.toLocaleString('it-IT')}</strong> codici` +
+            (st.ts ? ` (scaricato il ${moment(st.ts).format('DD/MM/YYYY HH:mm')})` : '') +
+            ` &nbsp;|&nbsp; VENDITE: <strong>${st.data.salesUsed.toLocaleString('it-IT')}</strong> righe abbinate`;
+        if (st.data.salesUnknown) msg += `, ${st.data.salesUnknown.toLocaleString('it-IT')} con codici non presenti in NOTE`;
+        if (!sales.length) msg += ' &nbsp;<span class="text-warning fw-bold">— vendite non ancora caricate: premi "Aggiorna Dati" nella dashboard</span>';
+        setStatus(msg);
+        renderMapInfo();
+        renderResults();
+        if (st.current && st.data.codes[st.current]) renderDetail(st.current);
+        else document.getElementById('pcDetailCard').classList.add('d-none');
+    }
+
+    // ---------------- rendering ----------------
+    function renderMapInfo() {
+        const el = document.getElementById('pcMapInfo');
+        const entries = Object.entries(st.data.cliMap).sort((a, b) => a[1].store.localeCompare(b[1].store));
+        const salesStores = new Set(getSalesRows().map(s => s.store));
+        if (!entries.length) { el.innerHTML = '<span class="text-muted">Nessun destinatario riconosciuto come negozio.</span>'; return; }
+        el.innerHTML = '<table class="table table-sm mb-0"><thead><tr><th>Destinatario NOTE</th><th>Negozio</th><th>Righe</th></tr></thead><tbody>' +
+            entries.map(([cli, o]) => `<tr><td>${esc(cli)}</td><td>${esc(o.store)}${salesStores.size && !salesStores.has(o.store) ? ' <span class="badge bg-warning text-dark" title="Questo nome non compare nel foglio VENDITE: aggiungi un abbinamento manuale">non in VENDITE</span>' : ''}</td><td>${o.n.toLocaleString('it-IT')}</td></tr>`).join('') +
+            '</tbody></table>';
+    }
+
+    function storeHeads() {
+        return st.data.stores.map(s => `<th class="pc-store-head">${esc(s)}</th>`).join('');
+    }
+
+    function searchCodes(term) {
+        const codes = st.data.codes;
+        const t = up(term);
+        if (!t) return [];
+        if (codes[t]) return [codes[t]];
+        if (st.data.eanToCod[t]) return [codes[st.data.eanToCod[t]]];
+        const words = t.split(' ').filter(Boolean);
+        return Object.values(codes).filter(c => {
+            if (c.cod.includes(t)) return true;
+            for (const e of c.eans) if (e.includes(t)) return true;
+            const d = up(c.desc);
+            return words.every(w => d.includes(w));
+        });
+    }
+
+    function renderResults() {
+        const tbl = document.getElementById('pcResults');
+        const cnt = document.getElementById('pcResCount');
+        if (!st.data) { tbl.innerHTML = ''; return; }
+        const term = document.getElementById('pcSearch').value.trim();
+        const show = document.getElementById('pcShow').value;
+        let list;
+        if (term) list = searchCodes(term);
+        else if (show !== 'all') list = Object.values(st.data.codes);
+        else { tbl.innerHTML = '<tbody><tr><td class="text-muted py-3">Scrivi un codice, un EAN o una parola della descrizione.</td></tr></tbody>'; cnt.textContent = ''; return; }
+
+        if (show === 'neg') list = list.filter(c => c.hasNeg);
+        if (show === 'store') list = list.filter(c => c.inStore);
+        list.sort((a, b) => (b.netTot - a.netTot) || a.cod.localeCompare(b.cod));
+        const total = list.length;
+        list = list.slice(0, 150);
+        cnt.textContent = total ? `(${total.toLocaleString('it-IT')}${total > 150 ? ', mostrati i primi 150' : ''})` : '';
+
+        if (!list.length) { tbl.innerHTML = '<tbody><tr><td class="text-muted py-3">Nessun codice trovato.</td></tr></tbody>'; return; }
+
+        let h = '<thead class="table-light" style="position:sticky;top:0;z-index:1;"><tr><th class="text-start">Codice</th><th class="text-start">Descrizione</th><th class="pc-tot">Mag. centrale</th>' +
+            storeHeads() + '<th>Tot. negozi</th><th class="pc-tot">Tot. rete</th></tr></thead><tbody>';
+        list.forEach(c => {
+            h += `<tr class="pc-row" data-cod="${esc(c.cod)}"><td class="text-start fw-bold text-primary">${esc(c.cod)}</td><td class="text-start pc-desc small">${esc(c.desc)}</td>` +
+                qCell(c.central, 'pc-tot') + st.data.stores.map(s => qCell(c.stock[s])).join('') + qCell(c.storesTot) + qCell(c.netTot, 'pc-tot') + '</tr>';
+        });
+        tbl.innerHTML = h + '</tbody>';
+        tbl.querySelectorAll('.pc-row').forEach(tr => tr.addEventListener('click', () => {
+            renderDetail(tr.getAttribute('data-cod'));
+            document.getElementById('pcDetailCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }));
+        if (list.length === 1 && term) renderDetail(list[0].cod);
+    }
+
+    function kpiBox(lbl, val, cls) {
+        return `<div class="col-xl-2 col-md-4 col-6"><div class="crm-stat-box"><div class="crm-stat-lbl">${lbl}</div><div class="crm-stat-val ${cls || ''}">${val}</div></div></div>`;
+    }
+
+    function renderDetail(cod) {
+        const c = st.data.codes[cod];
+        if (!c) return;
+        st.current = cod;
+        const stores = st.data.stores;
+        document.getElementById('pcDetailCard').classList.remove('d-none');
+        document.getElementById('pcDetTitle').innerHTML = `<span class="text-primary">${esc(c.cod)}</span> — ${esc(c.desc)}`;
+        document.getElementById('pcDetSub').textContent = (c.forn ? 'Fornitore/marca: ' + c.forn + ' · ' : '') + `${c.eans.size} EAN · ${c.movs.length} movimenti`;
+
+        const soldTot = stores.reduce((a, s) => a + (c.soldS[s] || 0), 0);
+        document.getElementById('pcDetKpi').innerHTML =
+            kpiBox('Magazzino centrale', fmtQ(c.central), c.central < 0 ? 'text-danger' : 'text-primary') +
+            kpiBox('Nei negozi', fmtQ(c.storesTot), c.storesTot < 0 ? 'text-danger' : 'text-success') +
+            kpiBox('Totale rete', fmtQ(c.netTot), 'text-dark') +
+            kpiBox('Acquistato da fornitore', fmtQ(c.bought), 'text-secondary') +
+            kpiBox('Venduto ingrosso (netto)', fmtQ(c.wholesale), 'text-info') +
+            kpiBox('Venduto nei negozi', fmtQ(soldTot), 'text-warning');
+
+        // Varianti
+        const vars = Object.values(c.variants).sort((a, b) => (a.ean === '' ? 1 : 0) - (b.ean === '' ? 1 : 0) || String(a.mis).localeCompare(String(b.mis), 'it', { numeric: true }) || String(a.col).localeCompare(String(b.col)));
+        let vh = '<thead class="table-light"><tr><th class="text-start">EAN</th><th>Taglia</th><th>Colore</th><th class="pc-tot">Mag. centrale</th>' + storeHeads() + '<th class="pc-tot">Tot. rete</th></tr></thead><tbody>';
+        vars.forEach(v => {
+            let tot = v.central;
+            const cells = stores.map(s => { const q = (v.inS[s] || 0) - (v.soldS[s] || 0); tot += q; return qCell(q); }).join('');
+            vh += `<tr><td class="text-start small">${v.ean ? esc(v.ean) : '<span class="text-muted">' + NO_EAN + '</span>'}</td><td>${esc(v.mis) || '-'}</td><td>${esc(v.col) || '-'}</td>` +
+                qCell(v.central, 'pc-tot') + cells + qCell(tot, 'pc-tot') + '</tr>';
+        });
+        document.getElementById('pcDetVariants').innerHTML = vh + '</tbody>';
+
+        // Filtro movimenti
+        const fSel = document.getElementById('pcMovFilter');
+        const prev = fSel.value;
+        fSel.innerHTML = '<option value="">Tutti i movimenti</option><option value="__CENTRAL">Solo magazzino centrale (NOTE)</option>' +
+            stores.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+        fSel.value = Array.from(fSel.options).some(o => o.value === prev) ? prev : '';
+        renderMovs();
+    }
+
+    function renderMovs() {
+        const c = st.current && st.data.codes[st.current];
+        if (!c) return;
+        const f = document.getElementById('pcMovFilter').value;
+        let movs = c.movs.slice();
+        if (f === '__CENTRAL') movs = movs.filter(m => m.src === 'NOTE');
+        else if (f) movs = movs.filter(m => m.who === f);
+        movs.sort((a, b) => (b.d || '').localeCompare(a.d || '') || (b.t || '').localeCompare(a.t || ''));
+        const total = movs.length;
+        movs = movs.slice(0, 400);
+        const badge = k => {
+            const map = { 'Acquisto fornitore': 'bg-success', 'Invio al negozio': 'bg-primary', 'Reso dal negozio': 'bg-info text-dark', 'Vendita ingrosso': 'bg-secondary', 'Reso da cliente': 'bg-light text-dark border', 'Vendita in cassa': 'bg-warning text-dark', 'Reso in cassa': 'bg-light text-dark border', 'Reso a fornitore': 'bg-dark' };
+            return `<span class="badge ${map[k] || 'bg-light text-muted border'}">${esc(k)}</span>`;
+        };
+        let h = '<thead class="table-dark" style="position:sticky;top:0;"><tr><th>Data</th><th>Tipo</th><th>Negozio / Cliente / Fornitore</th><th>EAN</th><th>Taglia / Colore</th><th class="text-end">Pezzi</th><th class="text-end">Effetto mag. centrale</th></tr></thead><tbody>';
+        movs.forEach(m => {
+            h += `<tr><td>${esc(m.t)}</td><td>${badge(m.kind)}</td><td>${esc(m.who)}</td><td class="small">${esc(m.ean)}</td><td class="small">${esc(m.size)}</td>` +
+                `<td class="text-end fw-semibold">${fmtQ(m.qta)}</td><td class="text-end ${m.eff > 0 ? 'text-success' : (m.eff < 0 ? 'text-danger' : 'text-muted')}">${m.eff == null ? '—' : (m.eff > 0 ? '+' : '') + fmtQ(m.eff)}</td></tr>`;
+        });
+        if (total > 400) h += `<tr><td colspan="7" class="text-muted small">Mostrati 400 movimenti su ${total.toLocaleString('it-IT')}. Usa il filtro per negozio per restringere.</td></tr>`;
+        document.getElementById('pcDetMovs').innerHTML = h + '</tbody>';
+    }
+
+    // ---------------- collegamenti UI ----------------
+    function openPc(code) {
+        const modalEl = document.getElementById('pcModal');
+        if (code) document.getElementById('pcSearch').value = code;
+        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+    window.openPosizioneCodici = openPc;
+
+    document.addEventListener('DOMContentLoaded', init);
+    if (document.readyState !== 'loading') init();
+    let inited = false;
+    function init() {
+        if (inited) return; inited = true;
+
+        // Pulsante nell'intestazione, accanto a "Dati Storici"
+        const anchor = document.getElementById('btnStorico');
+        if (anchor && !document.getElementById('btnPosCodici')) {
+            anchor.insertAdjacentHTML('afterend',
+                '<button id="btnPosCodici" class="btn btn-light fw-bold mt-2 ms-2" style="color:#d63384;"><i class="fas fa-map-marker-alt me-2"></i>Posizione Codici</button>');
+            document.getElementById('btnPosCodici').addEventListener('click', () => openPc());
+        }
+
+        document.getElementById('pcNoteUrl').value = noteUrl();
+        document.getElementById('pcAliases').value = localStorage.getItem('pcAliases') || '';
+
+        const modalEl = document.getElementById('pcModal');
+        modalEl.addEventListener('shown.bs.modal', () => {
+            if (!st.notes) loadNotes(false);
+            else recompute();     // ricalcola con le vendite più recenti caricate in dashboard
+            document.getElementById('pcSearch').focus();
+        });
+
+        document.getElementById('pcSearch').addEventListener('input', () => {
+            clearTimeout(st.timer);
+            st.timer = setTimeout(renderResults, 300);
+        });
+        document.getElementById('pcClear').addEventListener('click', () => {
+            document.getElementById('pcSearch').value = '';
+            document.getElementById('pcDetailCard').classList.add('d-none');
+            st.current = null;
+            renderResults();
+        });
+        document.getElementById('pcShow').addEventListener('change', renderResults);
+        document.getElementById('pcFrom').addEventListener('change', e => {
+            try { localStorage.setItem('pcFrom', e.target.value); } catch (x) {}
+            recompute();
+        });
+        document.getElementById('pcReload').addEventListener('click', () => loadNotes(true));
+        document.getElementById('pcMovFilter').addEventListener('change', renderMovs);
+        document.getElementById('pcSaveSettings').addEventListener('click', () => {
+            const newUrl = document.getElementById('pcNoteUrl').value.trim() || PC_DEFAULT_NOTE_URL;
+            const urlChanged = newUrl !== noteUrl();
+            localStorage.setItem('pcNoteUrl', newUrl);
+            localStorage.setItem('pcAliases', document.getElementById('pcAliases').value);
+            if (urlChanged) { st.csv = null; st.notes = null; loadNotes(true); } else recompute();
+        });
+        document.getElementById('pcToDashboard').addEventListener('click', () => {
+            if (!st.current) return;
+            bootstrap.Modal.getInstance(modalEl).hide();
+            if (typeof filterByProduct === 'function') {
+                document.getElementById('filterDay').value = 'ALL';
+                document.getElementById('filterMonth').value = 'ALL';
+                filterByProduct(st.current);
+            }
+        });
+
+        // Apertura diretta da indirizzo: ...?posizione=9302300
+        const p = new URLSearchParams(window.location.search).get('posizione');
+        if (p) {
+            let tries = 0;
+            const wait = setInterval(() => {
+                tries++;
+                if ((typeof rawData !== 'undefined' && rawData.length) || tries > 40) { clearInterval(wait); openPc(p.trim()); }
+            }, 500);
+        }
+    }
+})();
+</script>
+<!-- ===================== FINE MODULO POSIZIONE CODICI ===================== -->
+
 </body>
 </html>
