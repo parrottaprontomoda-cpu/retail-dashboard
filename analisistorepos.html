@@ -1619,9 +1619,12 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
 
                 COL_TRANS   = columns[0];
                 COL_DATA    = columns[1] || columns[0];
-                COL_COD_INT = columns[2] || columns[0];
-                COL_DESC    = columns[3] || columns[0];
-                COL_EAN     = columns[4] || columns[0];
+                // Foglio Vendite della POS Web App: C = EAN, D = codice interno, E = nome articolo.
+                // Se le intestazioni sono riconoscibili si usano quelle, altrimenti l'ordine della cassa.
+                const colByHeader = (re, notRe) => columns.find(c => re.test(String(c).trim()) && !(notRe && notRe.test(String(c).trim()))) || null;
+                COL_EAN     = colByHeader(/\bEAN\b|BARCODE|BAR ?CODE/i) || columns[2] || columns[0];
+                COL_COD_INT = colByHeader(/COD\w*\.?\s*INT|^COD(ICE)?$|^SKU$/i, /EAN|FISC|CLIENT|CARD/i) || columns[3] || columns[0];
+                COL_DESC    = colByHeader(/^NOME$|^NOME ?ART|DESCR|^ARTICOLO$|^PRODOTTO$/i, /CLIENT|NEGOZ|STORE|OPER/i) || columns[4] || columns[0];
                 COL_QTA     = columns[7] || columns[0];
                 COL_LISTINO = columns[8] || columns[0];
                 COL_NETTO   = columns[9] || columns[0];
@@ -2754,11 +2757,24 @@ ${userPrompt}`;
                                         <label class="form-label small fw-bold">Abbinamenti manuali (DESTINATARIO NOTE = NEGOZIO VENDITE):</label>
                                         <textarea id="pcAliases" class="form-control" rows="5" placeholder="Una riga per abbinamento, es.&#10;PARROTTA PRONTO MODA = PARROTTA POINT - LOCRI&#10;PARROTTA POINT CHIARAVALLE = PARROTTA POINT - CHIARAVALLE CLE&#10;Per escludere un destinatario: NOME = NESSUNO"></textarea>
                                         <small class="text-muted d-block mt-1">I destinatari con POINT, PEPLO o CARAMELLO nel nome vengono abbinati in automatico al negozio con il nome più simile. Scrivi qui solo le correzioni.</small>
+                                        <div class="row g-2 mt-2">
+                                            <div class="col-sm-6">
+                                                <label class="form-label small fw-bold">Colonna CODICE articolo nel foglio VENDITE:</label>
+                                                <select id="pcColCod" class="form-select form-select-sm"></select>
+                                            </div>
+                                            <div class="col-sm-6">
+                                                <label class="form-label small fw-bold">Colonna EAN nel foglio VENDITE:</label>
+                                                <select id="pcColEan" class="form-select form-select-sm"></select>
+                                            </div>
+                                        </div>
+                                        <small class="text-muted d-block mt-1">Se la cassa non registra l'EAN, scegli "Nessuna": le vendite vengono abbinate per codice articolo. In ogni caso il modulo cerca da solo un EAN noto in tutte le colonne della riga.</small>
                                         <button class="btn btn-primary btn-sm mt-2" type="button" id="pcSaveSettings"><i class="fas fa-save me-1"></i>Salva e ricalcola</button>
                                     </div>
                                     <div class="col-lg-6">
                                         <label class="form-label small fw-bold">Destinatari del foglio NOTE riconosciuti come negozi:</label>
                                         <div id="pcMapInfo" class="small"></div>
+                                        <label class="form-label small fw-bold mt-3">Abbinamento vendite → codici NOTE:</label>
+                                        <div id="pcSalesDiag" class="small"></div>
                                     </div>
                                 </div>
                             </div>
@@ -2846,6 +2862,13 @@ ${userPrompt}`;
         }
         return '';
     }
+    // Normalizza codici/EAN per il confronto: maiuscolo, senza apostrofo iniziale, senza ".0", senza zeri iniziali
+    function normCode(v) {
+        let s = up(v).replace(/^'+/, '').replace(/\s+/g, '');
+        if (/^\d+[.,]0+$/.test(s)) s = s.replace(/[.,]0+$/, '');
+        if (/^\d+$/.test(s)) s = s.replace(/^0+(?=\d)/, '');
+        return s;
+    }
     function tokens(s) {
         return up(s).split(/[^A-Z0-9]+/).filter(t => t.length >= 3 && !GENERIC.has(t));
     }
@@ -2888,7 +2911,7 @@ ${userPrompt}`;
                 d, t: m.isValid() ? m.format('DD/MM/YYYY HH:mm') : String(r[F.data] || ''),
                 cod, cli: up(r[F.cli]), mag: F.mag ? String(r[F.mag] || '').trim() : '',
                 qta: F.qta ? num(r[F.qta]) : 0, val: num(r[F.val]),
-                ean: pickEan(F.ean1 ? r[F.ean1] : '', F.ean2 ? r[F.ean2] : ''),
+                ean: normCode(pickEan(F.ean1 ? r[F.ean1] : '', F.ean2 ? r[F.ean2] : '')),
                 desc: F.desc ? String(r[F.desc] || '').trim() : '',
                 mis: F.mis ? String(r[F.mis] || '').trim() : '',
                 col: F.col ? String(r[F.col] || '').trim() : '',
@@ -2899,18 +2922,39 @@ ${userPrompt}`;
     }
 
     // ---------------- righe VENDITE dalla dashboard ----------------
+    // Colonne VENDITE usate dal modulo: '' = quelle della dashboard (codice) / ricerca automatica (EAN)
+    function salesColCod() {
+        const c = localStorage.getItem('pcColCod') || '';
+        return (c && typeof columns !== 'undefined' && columns.includes(c)) ? c : COL_COD_INT;
+    }
+    function salesColEan() {
+        const c = localStorage.getItem('pcColEan') || '';
+        if (c === '__NONE') return '';
+        return (c && typeof columns !== 'undefined' && columns.includes(c)) ? c : COL_EAN;
+    }
+
     function getSalesRows() {
         if (typeof rawData === 'undefined' || !rawData.length) return [];
+        const cCod = salesColCod(), cEan = salesColEan();
+        // Misura e colore: colonne F e G del foglio Vendite della cassa (o per intestazione)
+        const byH = re => columns.find(c => re.test(String(c).trim())) || null;
+        const cMis = byH(/^MIS(URA)?$|TAGLIA/i) || columns[5] || '';
+        const cCol = byH(/^COL(ORE)?$/i) || columns[6] || '';
+        const cTipo = columns[2];
         const out = [];
         rawData.forEach(row => {
             const store = up(row[COL_STORE]);
             if (!store) return;
+            const tipo = up(row[cTipo]);
+            if (tipo === 'MOV_CASSA' || tipo === 'SALDO_CREDITO') return;   // movimenti di cassa e incassi crediti, non merce
             const m = moment(String(row[COL_DATA] || '').trim(), SALE_DATE_FORMATS);
             if (!m.isValid()) return;
             let q = num(row[COL_QTA]); if (q === 0) q = 1;
             out.push({
                 d: m.format('YYYY-MM-DD'), t: m.format('DD/MM/YYYY HH:mm'), store,
-                cod: up(row[COL_COD_INT]), ean: String(row[COL_EAN] || '').trim(), qta: q
+                cod: normCode(row[cCod]), codRaw: String(row[cCod] || '').trim(),
+                ean: cEan ? normCode(row[cEan]) : '', qta: q, row,
+                mis: cMis ? String(row[cMis] || '').trim() : '', col: cCol ? String(row[cCol] || '').trim() : ''
             });
         });
         return out;
@@ -2930,15 +2974,28 @@ ${userPrompt}`;
             });
             return (bestSc >= 1 && bestSc > second) ? best : null;
         }
+        // Stesse regole di Posizione.gs della cassa, nello stesso ordine:
+        // Chiaravalle viene prima, cosi' "PARROTTA POINT CHIARAVALLE" non finisce su Locri;
+        // si usano frasi intere perche' molti clienti all'ingrosso si chiamano "... PRONTO MODA".
+        const findStore = (must, fallback) => salesStores.find(s => must.every(w => s.includes(w))) || fallback;
+        const RULES = [
+            { words: ['CHIARAVALLE'], store: () => findStore(['CHIARAVALLE'], 'PARROTTA POINT CHIARAVALLE') },
+            { words: ['PARROTTA PRONTO MODA', 'PARROTTA POINT'], store: () => findStore(['PARROTTA', 'LOCRI'], null) || salesStores.find(s => s.includes('LOCRI') && !s.includes('PEPLO') && !s.includes('CARAMELLO')) || 'PARROTTA POINT LOCRI' },
+            { words: ['CARAMELLO'], store: () => findStore(['CARAMELLO'], 'CARAMELLO') },
+            { words: ['PEPLO'], store: () => findStore(['PEPLO'], 'PEPLO') }
+        ];
+        const norm = s => ' ' + up(s).replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
         return function (cli) {
+            if (!cli) return null;
             if (cli in cache) return cache[cli];
             let r = null;
             if (aliases[cli]) {
                 r = (aliases[cli] === 'NESSUNO' || aliases[cli] === '-') ? null : aliases[cli];
-            } else if (cli === 'PARROTTA PRONTO MODA') {
-                r = salesStores.find(s => s.includes('PARROTTA') && s.includes('LOCRI')) || 'PARROTTA POINT - LOCRI';
-            } else if (/POINT|PEPLO|CARAMELLO/.test(cli)) {
-                r = bestMatch(cli) || cli;
+            } else {
+                const t = norm(cli);
+                const rule = RULES.find(x => x.words.some(w => t.includes(norm(w))));
+                if (rule) r = rule.store();
+                else if (/\bPOINT\b|\bSHOP\b/.test(cli)) r = bestMatch(cli);   // altri negozi con nome simile a quello in cassa
             }
             cache[cli] = r;
             return r;
@@ -2957,7 +3014,8 @@ ${userPrompt}`;
         });
 
         notes.forEach(m => {
-            const store = resolve(m.cli);
+            // come in Posizione.gs: negozio riconosciuto nella colonna CLI, altrimenti nella colonna MAG
+            const store = resolve(m.cli) || (m.cli === 'ACQUISTO FORNITORE' ? null : resolve(up(m.mag)));
             const c = codes[m.cod] || (codes[m.cod] = {
                 cod: m.cod, desc: m.desc, forn: m.forn, central: 0, inS: {}, soldS: {},
                 bought: 0, wholesale: 0, eans: new Set(), movs: [], variants: {}
@@ -2991,18 +3049,79 @@ ${userPrompt}`;
             c.movs.push({ d: m.d, t: m.t, kind, who, ean: m.ean, size: [m.mis, m.col].filter(Boolean).join(' / '), qta: m.qta, eff: m.val, src: 'NOTE' });
         });
 
+        // Indice codici NOTE normalizzati (es. "009302300" = "9302300")
+        const codNorm = {};
+        Object.keys(codes).forEach(k => { const n = normCode(k); if (!(n in codNorm)) codNorm[n] = k; });
+
+        // Cerca un EAN noto in qualunque colonna della riga di vendita (quando la colonna EAN è vuota o sbagliata)
+        function scanEan(row) {
+            if (!row) return '';
+            for (const val of Object.values(row)) {
+                const n = normCode(val);
+                if (n.length >= 7 && n.length <= 14 && /^\d+$/.test(n) && eanToCod[n]) return n;
+            }
+            return '';
+        }
+
+        // Misura/colore: vuoto, "-", "ASS", "NON DISPO" = assortito (come posVar_ di Posizione.gs)
+        const vNorm = x => {
+            const s = up(x).replace(/[.,]0+$/, '');
+            return (!s || ['-', 'ASS', 'ASSORTITO', 'N.D.', 'ND', '#N/D', 'NON DISPO', 'UNICA', 'TU', 'U'].includes(s)) ? 'ASS' : s;
+        };
+        const vPart = (a, b) => {   // "5/XL" contiene "XL"; "004-NERO" contiene "NERO"
+            if (a === b) return true;
+            if (a === 'ASS' || b === 'ASS') return false;
+            const pa = a.split(/[\/\-\s]+/).filter(Boolean), pb = b.split(/[\/\-\s]+/).filter(Boolean);
+            return pa.some(x => pb.includes(x));
+        };
+        function variantByMisCol(c, mis, col) {
+            const m = vNorm(mis), k = vNorm(col);
+            if (m === 'ASS' && k === 'ASS') return null;
+            let best = null, bestSc = 0;
+            Object.keys(c.variants).forEach(key => {
+                const v = c.variants[key];
+                const vm = vNorm(v.mis), vk = vNorm(v.col);
+                let sc = 0;
+                if (m !== 'ASS') { if (vm === m) sc += 3; else if (vPart(vm, m)) sc += 2; else if (vm !== 'ASS') return; }
+                if (k !== 'ASS') { if (vk === k) sc += 3; else if (vPart(vk, k)) sc += 2; else if (vk !== 'ASS') return; }
+                if (sc > bestSc) { bestSc = sc; best = key; }
+            });
+            return best;
+        }
+
         const from = opt.fromDate || '';
         let salesUsed = 0, salesUnknown = 0;
+        const how = { ean: 0, cod: 0, codAsEan: 0, scan: 0 };
+        const unknown = {};
         sales.forEach(s => {
             if (from && s.d < from) return;
-            const cod = codes[s.cod] ? s.cod : ((s.ean && eanToCod[s.ean]) || eanToCod[s.cod] || null);
-            if (!cod) { salesUnknown++; return; }
+            let cod = null, ean = '';
+            if (s.ean && eanToCod[s.ean]) { cod = eanToCod[s.ean]; ean = s.ean; how.ean++; }
+            else if (s.cod && codNorm[s.cod]) { cod = codNorm[s.cod]; how.cod++; }
+            else if (s.cod && eanToCod[s.cod]) { cod = eanToCod[s.cod]; ean = s.cod; how.codAsEan++; }
+            else { ean = scanEan(s.row); if (ean) { cod = eanToCod[ean]; how.scan++; } }
+
+            if (!cod) {
+                salesUnknown++;
+                const k = s.codRaw || '(vuoto)';
+                (unknown[k] = unknown[k] || { cod: k, qta: 0, n: 0, desc: s.row && typeof COL_DESC !== 'undefined' ? String(s.row[COL_DESC] || '') : '' });
+                unknown[k].qta += s.qta; unknown[k].n++;
+                return;
+            }
             salesUsed++;
             const c = codes[cod];
+            if (!ean && s.ean && c.variants[s.ean]) ean = s.ean;
             c.soldS[s.store] = (c.soldS[s.store] || 0) + s.qta;
-            const v = variant(c, (s.ean && c.variants[s.ean]) ? s.ean : NO_EAN, null);
+            let vKey = (ean && c.variants[ean]) ? ean : variantByMisCol(c, s.mis, s.col);
+            if (!vKey) {
+                // taglia/colore mai arrivati dalle note: riga propria con i dati della cassa
+                const m = vNorm(s.mis), k = vNorm(s.col);
+                vKey = (m === 'ASS' && k === 'ASS') ? NO_EAN : 'MC|' + m + '|' + k;
+                if (vKey !== NO_EAN && !c.variants[vKey]) c.variants[vKey] = { ean: ean || '', mis: s.mis, col: s.col, central: 0, inS: {}, soldS: {} };
+            }
+            const v = variant(c, vKey, null);
             v.soldS[s.store] = (v.soldS[s.store] || 0) + s.qta;
-            c.movs.push({ d: s.d, t: s.t, kind: s.qta >= 0 ? 'Vendita in cassa' : 'Reso in cassa', who: s.store, ean: s.ean, size: '', qta: -s.qta, eff: null, src: 'VENDITE' });
+            c.movs.push({ d: s.d, t: s.t, kind: s.qta >= 0 ? 'Vendita in cassa' : 'Reso in cassa', who: s.store, ean, size: [s.mis, s.col].filter(x => x && x !== '-').join(' / '), qta: -s.qta, eff: null, src: 'VENDITE' });
         });
 
         const storeSet = new Set(salesStores);
@@ -3019,9 +3138,10 @@ ${userPrompt}`;
             c.inStore = stores.some(s => c.stock[s] > 0);
         });
 
-        return { codes, stores, eanToCod, cliMap, salesUsed, salesUnknown };
+        const unknownTop = Object.values(unknown).sort((a, b) => b.n - a.n).slice(0, 20);
+        return { codes, stores, eanToCod, codNorm, cliMap, salesUsed, salesUnknown, how, unknownTop };
     }
-    window.PC_TEST = { parseNoteCsv, pcBuild, pickEan, makeResolver };
+    window.PC_TEST = { parseNoteCsv, pcBuild, pickEan, makeResolver, getSalesRows };
 
     // ---------------- caricamento ----------------
     function setStatus(html) { document.getElementById('pcStatus').innerHTML = html; }
@@ -3073,6 +3193,7 @@ ${userPrompt}`;
         if (!sales.length) msg += ' &nbsp;<span class="text-warning fw-bold">— vendite non ancora caricate: premi "Aggiorna Dati" nella dashboard</span>';
         setStatus(msg);
         renderMapInfo();
+        renderSalesDiag();
         renderResults();
         if (st.current && st.data.codes[st.current]) renderDetail(st.current);
         else document.getElementById('pcDetailCard').classList.add('d-none');
@@ -3089,6 +3210,41 @@ ${userPrompt}`;
             '</tbody></table>';
     }
 
+    function fillColSelects() {
+        if (typeof columns === 'undefined' || !columns || !columns.length) return;
+        const opts = columns.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+        const sCod = document.getElementById('pcColCod'), sEan = document.getElementById('pcColEan');
+        sCod.innerHTML = `<option value="">Come la dashboard (${esc(COL_COD_INT)})</option>` + opts;
+        sEan.innerHTML = `<option value="">Come la dashboard (${esc(COL_EAN)})</option><option value="__NONE">Nessuna (la cassa non registra l'EAN)</option>` + opts;
+        const vc = localStorage.getItem('pcColCod') || '', ve = localStorage.getItem('pcColEan') || '';
+        sCod.value = (vc && columns.includes(vc)) ? vc : '';
+        sEan.value = (ve === '__NONE' || (ve && columns.includes(ve))) ? ve : '';
+    }
+
+    function renderSalesDiag() {
+        const el = document.getElementById('pcSalesDiag');
+        const d = st.data, h = d.how;
+        const tot = d.salesUsed + d.salesUnknown;
+        if (!tot) { el.innerHTML = '<span class="text-muted">Nessuna vendita caricata nel periodo.</span>'; return; }
+        const pct = v => tot ? ' (' + (v / tot * 100).toFixed(1) + '%)' : '';
+        let html = `<ul class="mb-2">
+            <li>Abbinate tramite EAN: <strong>${h.ean.toLocaleString('it-IT')}</strong>${pct(h.ean)}</li>
+            <li>Abbinate tramite codice articolo: <strong>${h.cod.toLocaleString('it-IT')}</strong>${pct(h.cod)}</li>
+            <li>Codice della cassa che era un EAN: <strong>${h.codAsEan.toLocaleString('it-IT')}</strong>${pct(h.codAsEan)}</li>
+            <li>EAN trovato in un'altra colonna: <strong>${h.scan.toLocaleString('it-IT')}</strong>${pct(h.scan)}</li>
+            <li class="${d.salesUnknown ? 'text-danger fw-bold' : ''}">Non abbinate: ${d.salesUnknown.toLocaleString('it-IT')}${pct(d.salesUnknown)}</li></ul>`;
+        if (h.ean === 0 && h.scan === 0) {
+            html += '<div class="alert alert-warning py-1 px-2 mb-2">Nessuna vendita contiene un EAN riconoscibile: il conteggio per codice funziona, ma il dettaglio per taglia/colore dei negozi finisce nella riga "(senza EAN)".</div>';
+        }
+        if (d.unknownTop.length) {
+            html += '<div class="fw-bold mb-1">Codici venduti in cassa che non esistono nel foglio NOTE (i più frequenti):</div>' +
+                '<table class="table table-sm mb-0"><thead><tr><th>Codice in VENDITE</th><th>Descrizione</th><th>Righe</th><th>Pezzi</th></tr></thead><tbody>' +
+                d.unknownTop.map(u => `<tr><td>${esc(u.cod)}</td><td class="pc-desc">${esc(u.desc)}</td><td>${u.n}</td><td>${fmtQ(u.qta)}</td></tr>`).join('') +
+                '</tbody></table>';
+        }
+        el.innerHTML = html;
+    }
+
     function storeHeads() {
         return st.data.stores.map(s => `<th class="pc-store-head">${esc(s)}</th>`).join('');
     }
@@ -3098,7 +3254,9 @@ ${userPrompt}`;
         const t = up(term);
         if (!t) return [];
         if (codes[t]) return [codes[t]];
-        if (st.data.eanToCod[t]) return [codes[st.data.eanToCod[t]]];
+        const n = normCode(t);
+        if (st.data.codNorm[n]) return [codes[st.data.codNorm[n]]];
+        if (st.data.eanToCod[n]) return [codes[st.data.eanToCod[n]]];
         const words = t.split(' ').filter(Boolean);
         return Object.values(codes).filter(c => {
             if (c.cod.includes(t)) return true;
@@ -3234,6 +3392,7 @@ ${userPrompt}`;
 
         const modalEl = document.getElementById('pcModal');
         modalEl.addEventListener('shown.bs.modal', () => {
+            fillColSelects();
             if (!st.notes) loadNotes(false);
             else recompute();     // ricalcola con le vendite più recenti caricate in dashboard
             document.getElementById('pcSearch').focus();
@@ -3261,6 +3420,8 @@ ${userPrompt}`;
             const urlChanged = newUrl !== noteUrl();
             localStorage.setItem('pcNoteUrl', newUrl);
             localStorage.setItem('pcAliases', document.getElementById('pcAliases').value);
+            localStorage.setItem('pcColCod', document.getElementById('pcColCod').value);
+            localStorage.setItem('pcColEan', document.getElementById('pcColEan').value);
             if (urlChanged) { st.csv = null; st.notes = null; loadNotes(true); } else recompute();
         });
         document.getElementById('pcToDashboard').addEventListener('click', () => {
