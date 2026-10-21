@@ -56,6 +56,7 @@
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tClienti" type="button"><i class="fas fa-users me-1"></i>Clienti</button></li>
         <li class="nav-item"><button class="nav-link" id="tabCollegaBtn" data-bs-toggle="pill" data-bs-target="#tCollega" type="button"><i class="fas fa-link me-1"></i>Collega nomi <span class="badge bg-warning text-dark" id="kBadge"></span></button></li>
         <li class="nav-item"><button class="nav-link" id="tabVenditeBtn" data-bs-toggle="pill" data-bs-target="#tVendite" type="button"><i class="fas fa-chart-column me-1"></i>Vendite</button></li>
+        <li class="nav-item"><button class="nav-link" id="tabSettBtn" data-bs-toggle="pill" data-bs-target="#tSettimana" type="button"><i class="fas fa-calendar-week me-1"></i>Settimana</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tOfferte" type="button"><i class="fas fa-tags me-1"></i>Offerte</button></li>
         <li class="nav-item"><button class="nav-link" id="tabCampagnaBtn" data-bs-toggle="pill" data-bs-target="#tCampagna" type="button"><i class="fas fa-paper-plane me-1"></i>Campagna</button></li>
         <li class="nav-item"><button class="nav-link" id="tabBrandBtn" data-bs-toggle="pill" data-bs-target="#tBrand" type="button"><i class="fas fa-copyright me-1"></i>Brand</button></li>
@@ -237,6 +238,46 @@
                     <div class="small text-muted mt-2">I nominativi non ancora in anagrafica si possono aggiungere con un clic. Punti vendita e fornitori si escludono con <i class="fas fa-eye-slash"></i>.</div>
                 </div></div></div>
             </div>
+        </div>
+
+        <!-- SETTIMANA: stessa settimana anno precedente -->
+        <div class="tab-pane fade" id="tSettimana">
+            <div class="card"><div class="card-body">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" title="Settimana precedente" onclick="spostaSett(-1)"><i class="fas fa-chevron-left"></i></button>
+                        <button class="btn btn-outline-secondary" onclick="spostaSett(0)">Settimana in corso</button>
+                        <button class="btn btn-outline-secondary" title="Settimana successiva" onclick="spostaSett(1)"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                    <div class="fw-bold" id="sTitolo"></div>
+                    <div class="ms-auto d-flex flex-wrap gap-2 align-items-center">
+                        <select id="sStato" class="form-select form-select-sm" style="width:auto" onchange="renderSettimana()">
+                            <option value="">Tutti i clienti</option><option value="DA">Da ricontattare</option><option value="OK">Hanno già ordinato</option><option value="NUOVO">Nuovi quest'anno</option>
+                        </select>
+                        <div class="form-check mb-0"><input class="form-check-input" type="checkbox" id="sSoloAnag" onchange="renderSettimana()"><label class="form-check-label small" for="sSoloAnag">Solo in anagrafica</label></div>
+                        <input id="sCerca" class="form-control form-control-sm" style="width:180px" placeholder="Cliente o brand..." oninput="clearTimeout(window._st); window._st = setTimeout(renderSettimana, 250)">
+                        <button class="btn btn-sm btn-outline-primary" onclick="caricaSettimana(true)"><i class="fas fa-sync-alt me-1"></i>Rileggi</button>
+                        <button class="btn btn-sm btn-outline-secondary" title="Esporta clienti CSV" onclick="csvSettimana()"><i class="fas fa-download"></i></button>
+                    </div>
+                </div>
+                <div class="small text-muted mt-2" id="sInfo"></div>
+            </div></div>
+            <div class="row g-3 mb-1" id="sKpi"></div>
+            <div class="row g-3">
+                <div class="col-lg-5"><div class="card h-100"><div class="card-body">
+                    <h6 class="fw-bold"><i class="fas fa-chart-column me-2 text-primary"></i>Giorno per giorno</h6>
+                    <div style="position:relative;height:280px;"><canvas id="chartSett"></canvas></div>
+                </div></div></div>
+                <div class="col-lg-7"><div class="card h-100"><div class="card-body">
+                    <h6 class="fw-bold"><i class="fas fa-copyright me-2 text-primary"></i>Brand venduti in questa settimana l'anno scorso</h6>
+                    <div class="table-responsive" style="max-height:330px"><table class="table table-sm table-hover align-middle small mb-0" id="tbSettBrand"></table></div>
+                </div></div></div>
+            </div>
+            <div class="card mt-3"><div class="card-body">
+                <h6 class="fw-bold"><i class="fas fa-users me-2 text-primary"></i>Clienti che hanno acquistato in questa settimana l'anno scorso</h6>
+                <div class="table-responsive" style="max-height:560px"><table class="table table-sm table-hover align-middle small mb-0" id="tbSettClienti"></table></div>
+                <div class="small text-muted mt-2">"Da ricontattare" = ha comprato in questa settimana l'anno scorso ma quest'anno non ancora. Con <i class="fab fa-whatsapp"></i> parte un promemoria con i suoi brand di allora.</div>
+            </div></div>
         </div>
 
         <!-- BRAND -->
@@ -1153,7 +1194,7 @@ async function riammettiEscluso(i) {
         await api('saveSettings', { settings: { ESCLUDI_NOMI: nuovo } });
         DATA.cfg.ESCLUDI_NOMI = nuovo;
         salvaCacheLocale();
-        renderVendite(); renderCollega();
+        renderVendite(); renderCollega(); renderSettimana();
         const par = document.querySelector('.s-par[data-k="ESCLUDI_NOMI"]');
         if (par) par.value = nuovo;
         toast(`"${esc(nome)}" riammesso.`);
@@ -1167,7 +1208,7 @@ async function escludiTesto(nome) {
         await api('saveSettings', { settings: { ESCLUDI_NOMI: nuovo } });
         DATA.cfg.ESCLUDI_NOMI = nuovo;
         salvaCacheLocale();
-        renderVendite(); renderCollega();
+        renderVendite(); renderCollega(); renderSettimana();
         const par = document.querySelector('.s-par[data-k="ESCLUDI_NOMI"]');
         if (par) par.value = nuovo;
         toast(`"${esc(nome)}" escluso. Lo ritrovi nell'elenco "Esclusi" della scheda Vendite.`);
@@ -1399,13 +1440,171 @@ function telWa(t) {
     return d;
 }
 
+// ---------- Settimana: stessa settimana dell'anno precedente ----------
+let SETT = { off: 0, cache: {}, dati: null, p: null, req: 0, lista: [] };
+const GIORNI = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+
+function settISO(d) {
+    const t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    t.setDate(t.getDate() - (t.getDay() + 6) % 7 + 3);                 // giovedì della settimana
+    const g4 = new Date(t.getFullYear(), 0, 4);
+    return { anno: t.getFullYear(), n: 1 + Math.round(((t - g4) / 86400000 - 3 + (g4.getDay() + 6) % 7) / 7) };
+}
+function lunediISO(anno, n) {
+    const g4 = new Date(anno, 0, 4);
+    return new Date(anno, 0, 4 - (g4.getDay() + 6) % 7 + (n - 1) * 7);
+}
+function periodiSett() {
+    const oggi = new Date(), base = new Date(oggi);
+    base.setDate(base.getDate() + SETT.off * 7);
+    const w = settISO(base);
+    const nPrev = Math.min(w.n, settISO(new Date(w.anno - 1, 11, 28)).n);
+    const lunC = lunediISO(w.anno, w.n), lunP = lunediISO(w.anno - 1, nPrev);
+    const dom = l => { const d = new Date(l); d.setDate(d.getDate() + 6); return d; };
+    return { n: w.n, anno: w.anno, C: [isoD(lunC), isoD(dom(lunC))], P: [isoD(lunP), isoD(dom(lunP))],
+             fino: SETT.off === 0 ? (oggi.getDay() + 6) % 7 : (SETT.off < 0 ? 6 : -1) };   // ultimo giorno trascorso della settimana corrente
+}
+
+function spostaSett(d) { SETT.off = d === 0 ? 0 : SETT.off + d; caricaSettimana(); }
+
+async function caricaSettimana(force) {
+    if (!DATA) return;
+    const p = periodiSett(), key = p.P[0] + '_' + p.C[0], tok = ++SETT.req;
+    $('sTitolo').innerHTML = `Settimana ${p.n} · <span class="text-primary">${fmtD(p.P[0])} – ${fmtD(p.P[1])}</span> <span class="text-muted fw-normal">confrontata con</span> ${fmtD(p.C[0])} – ${fmtD(p.C[1])}`;
+    if (!force && SETT.cache[key]) { SETT.dati = SETT.cache[key]; SETT.p = p; renderSettimana(); return; }
+    $('sInfo').innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Lettura del foglio vendite...';
+    const cfg = DATA.cfg || {};
+    try {
+        const r = await api('venditeSettimana', {
+            fileId: cfg.VENDITE_FILE_ID || '', foglio: cfg.VENDITE_FOGLIO || 'note', importoUnitario: cfg.IMPORTO_UNITARIO,
+            col: { data: cfg.COL_DATA, cliente: cfg.COL_CLIENTE, imp: cfg.COL_IMPORTO, qta: cfg.COL_QTA, brand: cfg.COL_BRAND },
+            periodi: [{ k: 'P', dal: p.P[0], al: p.P[1] }, { k: 'C', dal: p.C[0], al: p.C[1] }]
+        });
+        if (tok !== SETT.req) return;                                     // nel frattempo è stata scelta un'altra settimana
+        SETT.cache[key] = r; SETT.dati = r; SETT.p = p;
+        renderSettimana();
+    } catch (e) {
+        if (tok === SETT.req) $('sInfo').innerHTML = `<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>${esc(e.message)}</span>`;
+    }
+}
+
+function renderSettimana() {
+    const r = SETT.dati, p = SETT.p;
+    if (!r || !p || !DATA) return;
+    const q = $('sCerca').value.trim().toUpperCase(), solo = $('sSoloAnag').checked, stato = $('sStato').value;
+    const mapCod = {};
+    (DATA._nomi || []).forEach(e => { if (e.cod) mapCod[e.k] = e.cod; });
+    const codDi = n => mapCod[normNomeJS(n)] || '';
+    const gg = d => (new Date(d + 'T12:00:00').getDay() + 6) % 7;
+    const righe = r.righe.filter(x => !nomeEscluso(x[1]) && (!solo || codDi(x[1])) && (!q || x[1].indexOf(q) >= 0 || x[2].indexOf(q) >= 0));
+    const P = righe.filter(x => x[0] === 'P'), C = righe.filter(x => x[0] === 'C');
+    const Pfin = p.fino >= 0 ? P.filter(x => gg(x[3]) <= p.fino) : [];
+    const s = (rr, k) => rr.reduce((a, x) => a + x[k], 0);
+    const nCli = rr => new Set(rr.map(x => x[1])).size;
+    const dP = (a, b) => b > 0 ? trendTxt(Math.round((a - b) / b * 100)) : '';
+    const giorniTrasc = p.fino >= 6 ? 'settimana intera' : p.fino >= 0 ? `lun–${GIORNI[p.fino].toLowerCase()}` : '';
+
+    // --- clienti ---
+    const CL = {};
+    const voce = x => CL[x[1]] || (CL[x[1]] = { nome: x[1], cod: codDi(x[1]), p: 0, pq: 0, c: 0, cq: 0, br: {}, gg: new Set() });
+    P.forEach(x => { const c = voce(x); c.p += x[4]; c.pq += x[5]; c.br[x[2]] = (c.br[x[2]] || 0) + x[4]; c.gg.add(x[3]); });
+    C.forEach(x => { const c = voce(x); c.c += x[4]; c.cq += x[5]; });
+    Object.values(CL).forEach(c => {
+        c.stato = c.p > 0 && c.c > 0 ? 'OK' : c.p > 0 ? 'DA' : 'NUOVO';
+        c.topBr = Object.keys(c.br).sort((a, b) => c.br[b] - c.br[a]).map(b => b || '(senza brand)');
+    });
+    const daRic = Object.values(CL).filter(c => c.stato === 'DA');
+
+    $('sInfo').innerHTML = `Righe di vendita lette: ${(r.letti || 0).toLocaleString('it-IT')} · in blu l'anno scorso, in verde quest'anno${giorniTrasc ? ` (${giorniTrasc})` : ' (settimana futura)'}`;
+    const k = [
+        [`Venduto sett. ${p.anno - 1}`, eur(s(P, 4)), `${Math.round(s(P, 5)).toLocaleString('it-IT')} capi`],
+        ['Clienti che acquistarono', nCli(P), `media ${eur(nCli(P) ? s(P, 4) / nCli(P) : 0)}`],
+        ['Brand venduti', new Set(P.map(x => x[2])).size, ''],
+        [`Stessi giorni ${p.anno - 1}`, p.fino >= 0 ? eur(s(Pfin, 4)) : '-', giorniTrasc],
+        [`Quest'anno finora`, p.fino >= 0 ? eur(s(C, 4)) : '-', p.fino >= 0 ? `${dP(s(C, 4), s(Pfin, 4))} · ${Math.round(s(C, 5)).toLocaleString('it-IT')} capi` : ''],
+        ['Da ricontattare', `<span class="text-danger">${daRic.length}</span>`, `valevano ${eur(daRic.reduce((a, c) => a + c.p, 0))}`]
+    ];
+    $('sKpi').innerHTML = k.map(x => `<div class="col-xl-2 col-md-4 col-6"><div class="card kpi"><div class="lbl">${x[0]}</div><div class="val">${x[1]}</div><div class="small text-muted">${x[2] || '&nbsp;'}</div></div></div>`).join('');
+
+    // --- grafico per giorno ---
+    const perG = rr => { const a = Array(7).fill(0); rr.forEach(x => { a[gg(x[3])] += x[4]; }); return a; };
+    const gP = perG(P), gC = perG(C).map((v, i) => i <= p.fino ? v : null);
+    if (charts.sett) charts.sett.destroy();
+    charts.sett = new Chart($('chartSett'), {
+        type: 'bar',
+        data: { labels: GIORNI.map((g, i) => { const d = new Date(p.P[0] + 'T12:00:00'); d.setDate(d.getDate() + i); return `${g} ${d.getDate()}`; }),
+            datasets: [{ label: String(p.anno - 1), data: gP, backgroundColor: '#2b6cb0', borderRadius: 3 },
+                       { label: String(p.anno), data: gC, backgroundColor: '#20c997', borderRadius: 3 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 12 } }, tooltip: { callbacks: { label: x => `${x.dataset.label}: ${eur(x.parsed.y)}` } } },
+            scales: { y: { beginAtZero: true, ticks: { callback: v => '€ ' + v.toLocaleString('it-IT') } } } }
+    });
+
+    // --- brand ---
+    const B = {};
+    const vb = b => B[b] || (B[b] = { p: 0, pq: 0, cli: new Set(), pf: 0, c: 0, cq: 0 });
+    P.forEach(x => { const b = vb(x[2]); b.p += x[4]; b.pq += x[5]; b.cli.add(x[1]); });
+    Pfin.forEach(x => { vb(x[2]).pf += x[4]; });
+    C.forEach(x => { const b = vb(x[2]); b.c += x[4]; b.cq += x[5]; });
+    const totP = Object.values(B).reduce((a, b) => a + Math.max(0, b.p), 0);
+    const bl = Object.keys(B).sort((a, b) => B[b].p - B[a].p || B[b].c - B[a].c);
+    $('tbSettBrand').innerHTML = `<thead class="table-light"><tr><th>Brand</th><th class="text-end">Venduto ${p.anno - 1}</th><th class="text-end">Capi</th><th class="text-end">Clienti</th><th class="text-end">Quota</th><th class="text-end">${p.anno} finora</th><th class="text-end">Δ</th><th></th></tr></thead><tbody>` +
+        bl.map(b => { const x = B[b], nome = b || '(senza brand)';
+            return `<tr><td class="fw-semibold" style="cursor:pointer" title="Filtra" onclick="$('sCerca').value='${esc(b)}'; renderSettimana();">${esc(nome)}</td>
+                <td class="text-end">${eur(x.p)}</td><td class="text-end">${Math.round(x.pq)}</td><td class="text-end">${x.cli.size}</td>
+                <td class="text-end">${totP ? (Math.max(0, x.p) / totP * 100).toFixed(1) : 0}%</td>
+                <td class="text-end">${p.fino >= 0 ? eur(x.c) : '-'}</td><td class="text-end">${p.fino >= 0 ? (x.pf > 0 ? trendTxt(Math.round((x.c - x.pf) / x.pf * 100)) : (x.c > 0 ? '<span class="badge bg-success">nuovo</span>' : '')) : ''}</td>
+                <td>${b ? `<button class="btn btn-sm btn-outline-primary py-0" title="Crea offerta per chi compra questo brand" onclick="offertaBrand('${esc(b)}','Novità brand')"><i class="fas fa-tags"></i></button>` : ''}</td></tr>`; }).join('')
+        + (bl.length ? '' : '<tr><td colspan="8" class="text-muted">Nessuna vendita in questa settimana</td></tr>') + '</tbody>';
+
+    // --- clienti ---
+    const ordStato = { DA: 0, OK: 1, NUOVO: 2 };
+    SETT.lista = Object.values(CL).filter(c => !stato || c.stato === stato).sort((a, b) => (ordStato[a.stato] - ordStato[b.stato]) || (b.p - a.p) || (b.c - a.c));
+    const badge = { DA: '<span class="badge bg-danger">da ricontattare</span>', OK: '<span class="badge bg-success">ha già ordinato</span>', NUOVO: '<span class="badge bg-info text-dark">nuovo quest\'anno</span>' };
+    $('tbSettClienti').innerHTML = `<thead class="table-light"><tr><th>Cliente</th><th class="text-end">Venduto ${p.anno - 1}</th><th class="text-end">Capi</th><th>Brand acquistati</th><th>Giorni</th><th class="text-end">${p.anno} finora</th><th>Stato</th><th></th></tr></thead><tbody>` +
+        SETT.lista.slice(0, 300).map((c, i) => {
+            const cli = c.cod ? cliente(c.cod) : null;
+            const az = cli
+                ? `<button class="btn btn-sm btn-success py-0" ${cli.tel ? '' : 'disabled'} title="Promemoria WhatsApp" onclick="event.stopPropagation(); waSett(${i})"><i class="fab fa-whatsapp"></i></button>`
+                : `<button class="btn btn-sm btn-outline-primary py-0" title="Aggiungi ai clienti ingrosso" onclick="event.stopPropagation(); apriFormCliente(null, { nome: SETT.lista[${i}].nome })"><i class="fas fa-user-plus"></i></button>`;
+            return `<tr style="cursor:pointer" onclick="apriSettCliente(${i})"><td class="fw-semibold">${esc(c.nome)}${cli ? '' : ' <small class="text-muted">(non in anagrafica)</small>'}</td>
+                <td class="text-end">${c.p ? eur(c.p) : '-'}</td><td class="text-end">${c.pq ? Math.round(c.pq) : '-'}</td>
+                <td class="small">${c.topBr.slice(0, 4).map(esc).join(', ')}</td>
+                <td class="small text-nowrap">${Array.from(c.gg).sort().map(d => GIORNI[gg(d)] + ' ' + +d.slice(8, 10)).join(', ')}</td>
+                <td class="text-end">${c.c ? eur(c.c) : '-'}</td><td>${badge[c.stato]}</td><td class="text-nowrap">${az}</td></tr>`;
+        }).join('') + (SETT.lista.length > 300 ? `<tr><td colspan="8" class="text-muted">… altri ${SETT.lista.length - 300}: usa la ricerca</td></tr>` : '')
+        + (SETT.lista.length ? '' : '<tr><td colspan="8" class="text-muted">Nessun cliente</td></tr>') + '</tbody>';
+}
+
+function apriSettCliente(i) {
+    const c = SETT.lista[i];
+    if (c.cod && cliente(c.cod)) return apriCliente(c.cod);
+    const vi = DATA.venditeAgg ? DATA.venditeAgg.nomi.findIndex(n => normNomeJS(n) === normNomeJS(c.nome)) : -1;
+    if (vi >= 0) apriVenditeNome(vi);
+}
+
+function waSett(i) {
+    const s = SETT.lista[i], c = cliente(s.cod);
+    if (!c || !c.tel) return;
+    const br = s.topBr.filter(b => b !== '(senza brand)').slice(0, 3).join(', ') || 'i nostri articoli';
+    const t = `Buongiorno ${c.referente || c.nome}, l'anno scorso in questo periodo ${c.nome} aveva riassortito ${br}. Abbiamo disponibilità e novità: vuole che le prepariamo una proposta?\n${(DATA.cfg && DATA.cfg.NOME_AZIENDA) || ''}`;
+    window.open('https://wa.me/' + telWa(c.tel) + '?text=' + encodeURIComponent(t.trim()), '_blank');
+}
+
+function csvSettimana() {
+    if (!SETT.lista.length) { toast('Nessun dato da esportare.', 'warning'); return; }
+    const p = SETT.p, f = v => (Math.round(v * 100) / 100).toFixed(2).replace('.', ',');
+    const r = [['Cliente', 'In anagrafica', `Venduto sett. ${p.anno - 1}`, 'Capi', 'Brand', `${p.anno} finora`, 'Stato']];
+    SETT.lista.forEach(c => r.push([c.nome, c.cod ? 'SI' : 'NO', f(c.p), Math.round(c.pq), c.topBr.join(', '), f(c.c), { DA: 'Da ricontattare', OK: 'Ha già ordinato', NUOVO: 'Nuovo' }[c.stato]]));
+    scaricaCsv(`settimana_${p.n}_${p.anno - 1}_vs_${p.anno}.csv`, r);
+}
+
 // ============================================================
 //  RENDER
 // ============================================================
 function renderTutto() {
     if (!DATA) return;
     // ogni sezione è indipendente: un errore in una non blocca le altre
-    [preparaBrand, preparaVendite, preparaCollega, statoGemini, renderAvvisi, renderPanoramica, preparaFiltri, renderClienti, renderOfferte, () => preparaCampagna(), renderVendite, renderCollega, renderBrand, renderRegistro, renderImpostazioniServer]
+    [preparaBrand, preparaVendite, preparaCollega, statoGemini, renderAvvisi, renderPanoramica, preparaFiltri, renderClienti, renderOfferte, () => preparaCampagna(), renderVendite, renderCollega, renderBrand, renderRegistro, renderImpostazioniServer, renderSettimana]
         .forEach(fn => { try { fn(); } catch (e) { console.error('Errore di visualizzazione:', e); } });
 }
 
@@ -2043,7 +2242,7 @@ async function impostaFoglioNote() {
 async function salvaParametri() {
     const obj = {};
     document.querySelectorAll('.s-par').forEach(i => { obj[i.getAttribute('data-k')] = i.value.trim(); });
-    try { await api('saveSettings', { settings: obj }); toast('Parametri salvati.'); await carica(true); }
+    try { await api('saveSettings', { settings: obj }); toast('Parametri salvati.'); SETT.cache = {}; await carica(true); }
     catch (e) { toast(esc(e.message), 'danger'); }
 }
 
@@ -2116,6 +2315,7 @@ function leggiLinkCollega() {
     $('sUrl').value = ls.get('oi_url') || '';
     $('sToken').value = ls.get('oi_token') || '';
     try { localStorage.removeItem('oi_cache'); } catch (e) {}   // la memoria locale ora usa IndexedDB
+    $('tabSettBtn').addEventListener('shown.bs.tab', () => caricaSettimana());   // la scheda Settimana legge i dati quando viene aperta
     leggiCacheLocale().then(d => {
         if (d && !DATA) { DATA = d; renderTutto(); $('statoDati').textContent = 'Dati dalla memoria locale, aggiornamento in corso...'; }
     });
