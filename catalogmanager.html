@@ -57,6 +57,9 @@
   .variant-chip { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border); background: #fff; font-size: 11px; cursor: pointer; font-weight: 600; text-align: center;}
   .presale-label { font-size: 10px; color: #1565c0; font-weight: 600; background: #e3f2fd; border: 1px solid #bbdefb; border-radius: 4px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
   .variant-chip.presale { background: #e3f2fd; border-color: #90caf9; color: #0d47a1; }
+  .price-old { text-decoration: line-through; color: #999; font-weight: normal; font-size: 12px; margin-right: 6px; }
+  .sale-badge { background: #e53935; color: #fff; font-size: 10px; font-weight: 700; border-radius: 4px; padding: 1px 6px; margin-left: 6px; white-space: nowrap; }
+  .sale-until { display: block; font-size: 10px; color: #e53935; font-weight: 600; margin-top: 2px; }
   .variant-chip.out { opacity: 0.4; text-decoration: line-through; cursor: not-allowed; }
   .variant-chip.in-cart { background: var(--primary); color: #fff; border-color: var(--primary); display: flex; justify-content: space-between; align-items: center; padding: 4px 6px; gap: 8px;}
 
@@ -693,7 +696,7 @@
     list.forEach(p => {
       const key = p.codiceProdotto || p.id;
       if (!map[key]) {
-        map[key] = { codiceProdotto: p.codiceProdotto, nome: p.nome, descrizione: p.descrizione, prezzo: p.prezzo, categoria: p.categoria, catalogo: p.catalogo, tipo: catKey(p.tipo), materiale: catKey(p.materiale), immagine: p.immagine, variants: [] };
+        map[key] = { codiceProdotto: p.codiceProdotto, nome: p.nome, descrizione: p.descrizione, prezzo: p.prezzo, sconto: p.sconto, scontoFino: p.scontoFino, categoria: p.categoria, catalogo: p.catalogo, tipo: catKey(p.tipo), materiale: catKey(p.materiale), immagine: p.immagine, variants: [] };
       }
       map[key].variants.push(p);
     });
@@ -710,6 +713,41 @@
   function pieceCount(item) { return item.qty * colloQty(item.product); }
   // Prevendita: ordinabile (colonna N = ORDINABILE) ma senza merce in magazzino
   function isPresale(v) { return !!(v && v.disponibile && v.prevendita); }
+
+  // ===== SCONTI (colonne O e P del foglio) =====
+  // Data di oggi come aaaa-mm-gg nel fuso del browser (serve a togliere subito gli sconti
+  // scaduti anche se la pagina mostra ancora i dati salvati dall'ultima volta)
+  function oggiISO() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  // Percentuale di sconto valida adesso (0 = nessuno sconto)
+  function scontoAttivo(p) {
+    const s = Number(p && p.sconto) || 0;
+    if (!(s > 0 && s < 100)) return 0;
+    if (p.scontoFino && oggiISO() > String(p.scontoFino)) return 0;
+    return s;
+  }
+  // Prezzo unitario IVA inclusa, già scontato se c'è una promozione attiva
+  function prezzoUnit(p) {
+    const s = scontoAttivo(p);
+    return s ? p.prezzo * (1 - s / 100) : p.prezzo;
+  }
+  function fmtPerc(s) { return Number.isInteger(s) ? String(s) : s.toFixed(1); }
+  // Prezzo per la scheda e il report: barrato + scontato + badge. Il prezzo resta quello del singolo pezzo.
+  function priceHtml(g) {
+    const base = g.prezzo / DIVISORE_IVA;
+    const s = scontoAttivo(g);
+    if (!s) return '€ ' + base.toFixed(2);
+    return '<span class="price-old">€ ' + base.toFixed(2) + '</span>€ ' + (prezzoUnit(g) / DIVISORE_IVA).toFixed(2) +
+      '<span class="sale-badge">-' + fmtPerc(s) + '%</span>';
+  }
+  function saleUntilHtml(g, inline) {
+    if (!scontoAttivo(g) || !g.scontoFino) return '';
+    const [y, m, d] = String(g.scontoFino).split('-');
+    const txt = 'Offerta fino al ' + d + '/' + m + '/' + y;
+    return inline ? ' — ' + txt : '<span class="sale-until">' + txt + '</span>';
+  }
 
   // Taglie: XXS < XS < S < M < L < XL < XXL < XXXL ...; misure numeriche in ordine crescente (anche 37,5)
   const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', 'XXXL', '3XL', '4XL', '5XL'];
@@ -825,7 +863,7 @@
             <p style="font-size:11px;color:#999;margin-bottom:2px;">${escHtml(g.catalogo || '')}${g.codiceProdotto ? ' · Cod. ' + escHtml(g.codiceProdotto) : ''}</p>
             ${g.materiale ? `<div class="mat-line">🧵 Materiale: ${escHtml(g.materiale)}</div>` : ''}
             <p>${escHtml(g.descrizione || '')}</p>
-            <div class="price">€ ${(g.prezzo / DIVISORE_IVA).toFixed(2)} <span class="iva-label">+ IVA</span>${packSize > 1 ? ` <span class="pack-label">📦 collo da ${packSize} pz</span>` : ''}${hasPresale ? ' <span class="presale-label">🕒 prevendita</span>' : ''}</div>
+            <div class="price">${priceHtml(g)} <span class="iva-label">+ IVA</span>${packSize > 1 ? ` <span class="pack-label">📦 collo da ${packSize} pz</span>` : ''}${hasPresale ? ' <span class="presale-label">🕒 prevendita</span>' : ''}${saleUntilHtml(g)}</div>
             ${renderVariantMatrix(g)}
           </div>
         </div>`;
@@ -878,14 +916,15 @@
     } else {
       itemsEl.innerHTML = items.map(i => {
         const pz = pieceCount(i);
-        const sub = (pz * i.product.prezzo) / DIVISORE_IVA;
+        const sub = (pz * prezzoUnit(i.product)) / DIVISORE_IVA;
+        const scontoNote = scontoAttivo(i.product) ? ` · sconto -${fmtPerc(scontoAttivo(i.product))}%` : '';
         const packNote = colloQty(i.product) > 1 ? ` · collo da ${colloQty(i.product)} pz` : '';
         const presaleNote = isPresale(i.product) ? ' · PREVENDITA' : '';
         return `
         <div class="cart-item">
           <div class="cart-item-info">
             <div style="font-weight:600;">${escHtml(i.product.nome)}</div>
-            <div class="cart-item-variant">${escHtml(variantLabel(i.product))}${packNote}${presaleNote} — ${pz} pz — € ${sub.toFixed(2)} <span class="iva-label">+ IVA</span></div>
+            <div class="cart-item-variant">${escHtml(variantLabel(i.product))}${packNote}${presaleNote}${scontoNote} — ${pz} pz — € ${sub.toFixed(2)} <span class="iva-label">+ IVA</span></div>
           </div>
           <div class="cart-item-controls">
             <button onclick="changeQty('${i.product.id}', -1)">-</button>
@@ -895,7 +934,7 @@
       }).join('');
     }
 
-    const total = items.reduce((s, i) => s + pieceCount(i) * i.product.prezzo, 0);
+    const total = items.reduce((s, i) => s + pieceCount(i) * prezzoUnit(i.product), 0);
     document.getElementById('cart-total').innerHTML = 'Totale: € ' + (total / DIVISORE_IVA).toFixed(2) + ' <span class="iva-label">+ IVA</span>';
   }
 
@@ -911,11 +950,12 @@
     let total = 0;
     items.forEach(i => {
       const pz = pieceCount(i);
-      const sub = (pz * i.product.prezzo) / DIVISORE_IVA;
+      const sub = (pz * prezzoUnit(i.product)) / DIVISORE_IVA;
       total += sub;
       const packNote = colloQty(i.product) > 1 ? ` [collo da ${colloQty(i.product)} pz]` : '';
       const presaleNote = isPresale(i.product) ? ' [PREVENDITA]' : '';
-      msg += `▪️ ${pz}x ${i.product.nome} (${variantLabel(i.product)})${packNote}${presaleNote} - € ${sub.toFixed(2)} + IVA\n`;
+      const scontoNote = scontoAttivo(i.product) ? ` [sconto -${fmtPerc(scontoAttivo(i.product))}%]` : '';
+      msg += `▪️ ${pz}x ${i.product.nome} (${variantLabel(i.product)})${packNote}${presaleNote}${scontoNote} - € ${sub.toFixed(2)} + IVA\n`;
     });
     msg += `\n*Totale: € ${total.toFixed(2)} + IVA*`;
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -1005,7 +1045,7 @@
           <img src="${escHtml(img)}" onerror="this.onerror=null;this.src='https://via.placeholder.com/300x400?text=Foto'">
           <div class="report-card-info">
             <h4>${escHtml(g.nome)}</h4>
-            <p><strong>Codice:</strong> ${escHtml(g.codiceProdotto || '-')} | <strong>Catalogo:</strong> ${escHtml(g.catalogo || '-')} | <strong>Prezzo:</strong> € ${(g.prezzo / DIVISORE_IVA).toFixed(2)} + IVA</p>
+            <p><strong>Codice:</strong> ${escHtml(g.codiceProdotto || '-')} | <strong>Catalogo:</strong> ${escHtml(g.catalogo || '-')} | <strong>Prezzo:</strong> ${priceHtml(g)} + IVA${saleUntilHtml(g, true)}</p>
             ${(g.tipo || g.materiale) ? `<div>${g.tipo ? `<span class="report-mat" style="background:#eee;color:#222;">${escHtml(g.tipo)}</span>` : ''}${g.materiale ? `<span class="report-mat">🧵 ${escHtml(g.materiale)}</span>` : ''}</div>` : ''}
             <div class="report-matrix-wrap">${matrixHtml}</div>
             <br>
