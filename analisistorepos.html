@@ -3462,5 +3462,666 @@ ${userPrompt}`;
 </script>
 <!-- ===================== FINE MODULO POSIZIONE CODICI ===================== -->
 
+<!-- =====================================================================
+     MODULO "ROTAZIONE MAGAZZINO"
+     Incollare TUTTO questo blocco nella dashboard AnalisiStore subito PRIMA di </body>,
+     DOPO il modulo "Posizione Codici" (ne usa le funzioni di lettura e abbinamento).
+     Fonti: ingressi nei negozi dal foglio NOTE (Elenco Note) + vendite dal foglio VENDITE della POS Web App.
+     Nessuna modifica ai file della POS Web App.
+     ===================================================================== -->
+<style>
+    #rotModal th, #rotModal td { white-space:nowrap; }
+    #rotModal .rot-desc { white-space:normal; min-width:200px; }
+    #rotModal .rot-row { cursor:pointer; }
+    #rotModal .rot-row:hover td { background:#f1f5ff; }
+    #rotModal .rot-cls { font-size:.75rem; }
+    #rotModal .rot-bar { display:flex; height:20px; border-radius:5px; overflow:hidden; min-width:220px; background:#e9ecef; }
+    #rotModal .rot-bar span { display:block; height:100%; }
+    #rotModal .rot-dot { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
+    #rotModal .nav-tabs .nav-link { font-weight:600; color:#6c757d; }
+    #rotModal .nav-tabs .nav-link.active { color:#fd7e14; }
+    #rotModal .rot-tot td { background:#fff3e6; font-weight:700; }
+</style>
+
+<div class="modal fade" id="rotModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #fd7e14, #d63384); color: white;">
+                <h5 class="modal-title fw-bold"><i class="fas fa-recycle me-2"></i>Rotazione Magazzino — Punti vendita</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Chiudi"></button>
+            </div>
+            <div class="modal-body bg-light">
+
+                <!-- Controlli -->
+                <div class="card mb-3">
+                    <div class="card-body py-3">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-lg-2 col-md-4">
+                                <label class="form-label small fw-bold text-secondary"><i class="fas fa-store me-1"></i>Negozio</label>
+                                <select id="rotStore" class="form-select"><option value="ALL">Tutta la rete</option></select>
+                            </div>
+                            <div class="col-lg-3 col-md-8">
+                                <label class="form-label small fw-bold text-secondary"><i class="fas fa-search me-1"></i>Cerca codice, descrizione o marca</label>
+                                <div class="input-group">
+                                    <input type="text" id="rotSearch" class="form-control" placeholder="Es. 9302300, jeans, marca...">
+                                    <button class="btn btn-outline-secondary" type="button" id="rotClear"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
+                            <div class="col-lg-2 col-md-4">
+                                <label class="form-label small fw-bold text-secondary">Classe</label>
+                                <select id="rotClass" class="form-select">
+                                    <option value="ALL">Tutte</option>
+                                    <option value="CRIT">Critici (ferma + lenta + negativa)</option>
+                                    <option value="FERMA">Ferma</option>
+                                    <option value="LENTA">Lenta</option>
+                                    <option value="REGOLARE">Regolare</option>
+                                    <option value="VELOCE">Veloce</option>
+                                    <option value="NUOVO">Nuovo arrivo</option>
+                                    <option value="ESAURITO">Esaurito</option>
+                                    <option value="ANOMALIA">Giacenza negativa</option>
+                                </select>
+                            </div>
+                            <div class="col-lg-2 col-md-4">
+                                <label class="form-label small fw-bold text-secondary" title="Velocità di vendita, copertura e rotazione sono calcolate su questo periodo">Velocità calcolata su</label>
+                                <select id="rotWin" class="form-select">
+                                    <option value="30">Ultimi 30 giorni</option>
+                                    <option value="60">Ultimi 60 giorni</option>
+                                    <option value="90">Ultimi 90 giorni</option>
+                                    <option value="180">Ultimi 180 giorni</option>
+                                    <option value="365">Ultimi 365 giorni</option>
+                                </select>
+                            </div>
+                            <div class="col-lg-1 col-md-4">
+                                <label class="form-label small fw-bold text-secondary" title="Vendite dei negozi contate da questa data (come in Posizione Codici)">Vendite dal</label>
+                                <input type="date" id="rotFrom" class="form-control">
+                            </div>
+                            <div class="col-lg-2 text-end">
+                                <button class="btn btn-outline-primary btn-sm mb-1" type="button" id="rotReload"><i class="fas fa-sync-alt me-1"></i>Aggiorna NOTE</button>
+                                <button class="btn btn-success btn-sm mb-1" type="button" id="rotExport"><i class="fas fa-download me-1"></i>Esporta CSV</button>
+                            </div>
+                        </div>
+                        <div class="small text-muted mt-2" id="rotStatus"></div>
+                    </div>
+                </div>
+
+                <!-- Soglie -->
+                <div class="accordion mb-3" id="rotAcc">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#rotSettings">
+                                <i class="fas fa-sliders-h me-2"></i>Soglie di classificazione
+                            </button>
+                        </h2>
+                        <div id="rotSettings" class="accordion-collapse collapse" data-bs-parent="#rotAcc">
+                            <div class="accordion-body">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-2 col-6"><label class="form-label small fw-bold">Ferma dopo (gg senza vendite)</label><input type="number" min="1" id="rotP_fermo" class="form-control form-control-sm"></div>
+                                    <div class="col-md-2 col-6"><label class="form-label small fw-bold">Nuovo arrivo se entrato da meno di (gg)</label><input type="number" min="0" id="rotP_nuovo" class="form-control form-control-sm"></div>
+                                    <div class="col-md-2 col-6"><label class="form-label small fw-bold">Veloce se copertura ≤ (gg)</label><input type="number" min="1" id="rotP_covFast" class="form-control form-control-sm"></div>
+                                    <div class="col-md-2 col-6"><label class="form-label small fw-bold">Lenta se copertura &gt; (gg)</label><input type="number" min="1" id="rotP_covSlow" class="form-control form-control-sm"></div>
+                                    <div class="col-md-2 col-6"><label class="form-label small fw-bold">Veloce se venduto ≥ (% ricevuto)</label><input type="number" min="1" max="100" id="rotP_stFast" class="form-control form-control-sm"></div>
+                                    <div class="col-md-2 col-6"><label class="form-label small fw-bold">Lenta se venduto &lt; (% ricevuto)</label><input type="number" min="0" max="100" id="rotP_stSlow" class="form-control form-control-sm"></div>
+                                    <div class="col-12 text-end"><button class="btn btn-primary btn-sm" type="button" id="rotSavePrefs"><i class="fas fa-save me-1"></i>Salva e ricalcola</button></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI -->
+                <div class="row g-2 mb-3" id="rotKpi"></div>
+
+                <ul class="nav nav-tabs" role="tablist">
+                    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#rotTabStore" type="button"><i class="fas fa-store me-1"></i>Negozi</button></li>
+                    <li class="nav-item"><button class="nav-link" id="rotTabArtBtn" data-bs-toggle="tab" data-bs-target="#rotTabArt" type="button"><i class="fas fa-tshirt me-1"></i>Articoli</button></li>
+                    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rotTabAge" type="button"><i class="fas fa-hourglass-half me-1"></i>Età giacenza</button></li>
+                    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rotTabMove" type="button"><i class="fas fa-truck me-1"></i>Trasferimenti consigliati</button></li>
+                    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#rotTabForn" type="button"><i class="fas fa-tags me-1"></i>Marche / Fornitori</button></li>
+                </ul>
+
+                <div class="tab-content bg-white p-3 border border-top-0 rounded-bottom">
+                    <div class="tab-pane fade show active" id="rotTabStore">
+                        <div class="table-responsive"><table class="table table-sm table-hover align-middle text-center mb-1" id="rotStoreTable"></table></div>
+                        <small class="text-muted">Clicca su un negozio per vederne gli articoli.</small>
+                    </div>
+                    <div class="tab-pane fade" id="rotTabArt">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                            <span class="small text-muted" id="rotArtCount"></span>
+                            <select id="rotSort" class="form-select form-select-sm" style="width:auto;">
+                                <option value="idle">Ordina: giorni senza vendite (più fermi prima)</option>
+                                <option value="val">Ordina: valore giacenza</option>
+                                <option value="cop">Ordina: copertura (più lunga prima)</option>
+                                <option value="st">Ordina: % venduto (più bassa prima)</option>
+                                <option value="vend">Ordina: venduti nel periodo</option>
+                                <option value="ageAvg">Ordina: età media giacenza</option>
+                            </select>
+                        </div>
+                        <div class="table-responsive" style="max-height:62vh;"><table class="table table-sm table-hover align-middle text-center mb-1" id="rotArtTable"></table></div>
+                        <small class="text-muted">Clicca su una riga per aprire la Posizione Codici dell'articolo (taglie, colori e movimenti).</small>
+                    </div>
+                    <div class="tab-pane fade" id="rotTabAge">
+                        <div class="table-responsive mb-4"><table class="table table-sm align-middle text-center" id="rotAgeTable"></table></div>
+                        <h6 class="fw-bold text-secondary"><i class="fas fa-exclamation-circle me-2 text-danger"></i>Articoli con la merce più vecchia in negozio (oltre 90 giorni)</h6>
+                        <div class="table-responsive" style="max-height:45vh;"><table class="table table-sm table-hover align-middle text-center" id="rotOldTable"></table></div>
+                    </div>
+                    <div class="tab-pane fade" id="rotTabMove">
+                        <div class="alert alert-secondary small py-2">Proposte di spostamento dello stesso articolo da un negozio dove è <strong>fermo o lento</strong> a un negozio dove è <strong>esaurito o veloce</strong>. La quantità copre circa i giorni della soglia "Veloce". Prima di spostare, verifica taglie e colori con il pulsante <i class="fas fa-map-marker-alt"></i>.</div>
+                        <div class="table-responsive" style="max-height:62vh;"><table class="table table-sm table-hover align-middle text-center" id="rotMoveTable"></table></div>
+                    </div>
+                    <div class="tab-pane fade" id="rotTabForn">
+                        <div class="table-responsive" style="max-height:62vh;"><table class="table table-sm table-hover align-middle text-center" id="rotFornTable"></table></div>
+                    </div>
+                </div>
+
+                <div class="small text-muted mt-3">
+                    <strong>Come si calcola:</strong> per ogni articolo e negozio, gli <em>ingressi</em> sono gli invii dal magazzino (foglio NOTE) meno i resi al magazzino; le <em>vendite</em> arrivano dal foglio VENDITE della cassa.
+                    <strong>% venduto</strong> = pezzi venduti / pezzi ricevuti. <strong>Copertura</strong> = giorni per finire la giacenza al ritmo di vendita del periodo scelto (∞ = nessuna vendita nel periodo).
+                    <strong>Rotazione annua</strong> = quante volte in un anno la giacenza media si rinnova. <strong>Età giacenza</strong> = da quanto tempo sono in negozio i pezzi rimasti, assumendo che si venda prima la merce arrivata prima.
+                    Il <strong>valore ≈</strong> usa il prezzo medio di vendita in cassa dell'articolo (vuoto se l'articolo non è mai stato venduto).
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    const ROT_DEFAULT_NOTE_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQTqBOs64MuHXcttnnLWFWs9QMCoIczq7IvOd0LrgUq3Lj9LRCy9PYamHUAoIiU-ehq42zylJD_13_0/pub?gid=863826375&single=true&output=csv';
+    const ROT_CACHE_KEY = 'note_cache_v1';           // stessa cache del modulo Posizione Codici
+    const DEF_PREFS = { win: 90, fermo: 60, nuovo: 21, covFast: 30, covSlow: 120, stFast: 70, stSlow: 30 };
+    const CLS = {
+        VELOCE:   { lbl: 'Veloce',            c: 'bg-success' },
+        REGOLARE: { lbl: 'Regolare',          c: 'bg-primary' },
+        LENTA:    { lbl: 'Lenta',             c: 'bg-warning text-dark' },
+        FERMA:    { lbl: 'Ferma',             c: 'bg-danger' },
+        NUOVO:    { lbl: 'Nuovo arrivo',      c: 'bg-info text-dark' },
+        ESAURITO: { lbl: 'Esaurito',          c: 'bg-secondary' },
+        ANOMALIA: { lbl: 'Giacenza negativa', c: 'bg-dark' }
+    };
+    const CLS_ORDER = ['FERMA', 'LENTA', 'REGOLARE', 'VELOCE', 'NUOVO', 'ESAURITO', 'ANOMALIA'];
+    const AGE = [
+        { max: 30,       lbl: '0–30 gg',     col: '#198754' },
+        { max: 60,       lbl: '31–60 gg',    col: '#20c997' },
+        { max: 90,       lbl: '61–90 gg',    col: '#ffc107' },
+        { max: 180,      lbl: '91–180 gg',   col: '#fd7e14' },
+        { max: Infinity, lbl: 'oltre 180 gg', col: '#dc3545' }
+    ];
+
+    const R = { csv: null, ts: null, notes: null, minDate: '', res: null, busy: false, timer: null };
+
+    // ---------------- utilità ----------------
+    const $ = id => document.getElementById(id);
+    const up = v => String(v == null ? '' : v).trim().toUpperCase().replace(/\s+/g, ' ');
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const eur = v => (typeof formatEur === 'function') ? formatEur(v) : '€ ' + (v || 0).toFixed(2);
+    const fq = v => { const r = Math.round((v || 0) * 10) / 10; return (Number.isInteger(r) ? r : r.toFixed(1)).toLocaleString('it-IT'); };
+    const dn = s => s ? Math.round(Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / 864e5) : null;   // giorno numerico
+    const nd = n => n == null ? '-' : moment.utc(n * 864e5).format('DD/MM/YY');
+    const fCop = v => v === Infinity ? '<span class="text-danger" title="Nessuna vendita nel periodo">∞</span>' : (v ? Math.round(v).toLocaleString('it-IT') + ' gg' : '-');
+    const fRot = v => v == null ? '-' : v.toFixed(1).replace('.', ',') + '×';
+    const badge = k => k ? `<span class="badge rot-cls ${CLS[k].c}">${CLS[k].lbl}</span>` : '';
+
+    function prefs() {
+        let p = {};
+        try { p = JSON.parse(localStorage.getItem('rotPrefs') || '{}') || {}; } catch (e) {}
+        const o = Object.assign({}, DEF_PREFS, p);
+        Object.keys(DEF_PREFS).forEach(k => { o[k] = Number(o[k]); if (!isFinite(o[k])) o[k] = DEF_PREFS[k]; });
+        return o;
+    }
+    function savePrefs(o) { try { localStorage.setItem('rotPrefs', JSON.stringify(o)); } catch (e) {} }
+
+    function fSt(v) {
+        if (v == null) return '<span class="text-muted">-</span>';
+        const P = prefs();
+        const cls = v >= P.stFast ? 'text-success fw-bold' : (v < P.stSlow ? 'text-danger fw-bold' : '');
+        return `<span class="${cls}">${Math.round(v)}%</span>`;
+    }
+    function aliases() {
+        const map = {};
+        (localStorage.getItem('pcAliases') || '').split(/\r?\n/).forEach(l => {
+            const i = l.indexOf('=');
+            if (i > 0) { const a = up(l.slice(0, i)), b = up(l.slice(i + 1)); if (a && b) map[a] = b; }
+        });
+        return map;
+    }
+    const noteUrl = () => (localStorage.getItem('pcNoteUrl') || ROT_DEFAULT_NOTE_URL).trim();
+    const status = h => { $('rotStatus').innerHTML = h; };
+
+    // ---------------- caricamento foglio NOTE ----------------
+    async function loadNotes(force) {
+        if (R.busy) return;
+        if (!window.PC_TEST) { status('<span class="text-danger">Manca il modulo "Posizione Codici": incolla questo blocco dopo di esso.</span>'); return; }
+        R.busy = true; $('rotReload').disabled = true;
+        try {
+            const url = noteUrl();
+            if (!force && !R.csv) {
+                try { const c = await localforage.getItem(ROT_CACHE_KEY); if (c && c.csv && c.url === url) { R.csv = c.csv; R.ts = c.ts; } } catch (e) {}
+            }
+            if (force || !R.csv) {
+                status('<i class="fas fa-spinner fa-spin me-1"></i>Scarico il foglio NOTE da Google Fogli...');
+                const r = await fetch(url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now());
+                if (!r.ok) throw new Error('download non riuscito (' + r.status + ')');
+                R.csv = await r.text(); R.ts = Date.now();
+                try { await localforage.setItem(ROT_CACHE_KEY, { csv: R.csv, ts: R.ts, url }); } catch (e) {}
+            }
+            const parsed = window.PC_TEST.parseNoteCsv(R.csv);
+            R.notes = parsed.rows; R.minDate = parsed.minDate;
+            if (!$('rotFrom').value) $('rotFrom').value = localStorage.getItem('pcFrom') || R.minDate;
+            compute();
+        } catch (err) {
+            status(`<span class="text-danger"><i class="fas fa-exclamation-triangle me-1"></i>Foglio NOTE non caricato: ${esc(err.message)}</span>`);
+        } finally {
+            R.busy = false; $('rotReload').disabled = false;
+        }
+    }
+
+    // ---------------- calcolo per articolo × negozio ----------------
+    function buildRec(c, store, movs, ctx, P) {
+        movs.sort((a, b) => a.n - b.n || (a.sale - b.sale));   // nello stesso giorno prima gli ingressi
+        let inv = 0, resi = 0, vend = 0, vendWin = 0, firstIn = null, lastIn = null, lastSale = null;
+        let stock = 0, area = 0, cur = ctx.W, deficit = 0;
+        const lots = [];
+        const adv = n => { const to = Math.min(Math.max(n, ctx.W), ctx.TE); if (to > cur) { area += Math.max(stock, 0) * (to - cur); cur = to; } };
+
+        movs.forEach(m => {
+            adv(m.n);
+            stock += m.delta;
+            if (m.sale) {
+                vend -= m.delta;                       // vendita = delta negativo, reso in cassa = positivo
+                if (m.n >= ctx.W) vendWin -= m.delta;
+                if (m.delta < 0) lastSale = m.n;
+            } else if (m.delta > 0) {
+                inv += m.delta; if (firstIn === null) firstIn = m.n; lastIn = m.n;
+            } else {
+                resi -= m.delta;
+            }
+            // lotti FIFO per l'età della giacenza
+            if (m.delta > 0) {
+                let q = m.delta;
+                if (deficit > 0) { const u = Math.min(deficit, q); deficit -= u; q -= u; }
+                if (q > 1e-9) lots.push({ n: m.n, q });
+            } else {
+                let q = -m.delta;
+                while (q > 1e-9 && lots.length) { const l = lots[0], u = Math.min(l.q, q); l.q -= u; q -= u; if (l.q <= 1e-9) lots.shift(); }
+                deficit += q;
+            }
+        });
+        adv(ctx.TE);
+        if (firstIn === null && lastSale === null) return null;
+
+        const ric = inv - resi;
+        const startN = Math.max(ctx.W, firstIn === null ? ctx.W : firstIn);
+        const days = Math.max(1, ctx.TE - startN);
+        const pos = stock > 0.01 ? stock : 0;
+        const vw = Math.max(vendWin, 0);
+        const vel = vw / days;
+        const avgStock = area / days;
+        const cop = pos > 0 ? (vel > 0 ? pos / vel : Infinity) : 0;
+        const rot = avgStock > 0.01 ? (vw / avgStock) * (365 / days) : null;
+        const st = ric > 0 ? Math.max(vend, 0) / ric * 100 : null;
+        const age = firstIn !== null ? ctx.T - firstIn : null;
+        const ref = Math.max(lastSale == null ? -Infinity : lastSale, lastIn == null ? -Infinity : lastIn);
+        const idle = isFinite(ref) ? ctx.T - ref : null;
+
+        const buckets = AGE.map(() => 0); let ageW = 0, lotTot = 0;
+        if (pos > 0) lots.forEach(l => { const a = ctx.T - l.n; buckets[AGE.findIndex(b => a <= b.max)] += l.q; ageW += a * l.q; lotTot += l.q; });
+        const ageAvg = lotTot > 0 ? ageW / lotTot : null;
+
+        let k;
+        if (stock < -0.01) k = 'ANOMALIA';
+        else if (pos === 0) k = vend > 0 ? 'ESAURITO' : null;
+        else if (age !== null && age < P.nuovo && !(vw > 0 && cop <= P.covFast)) k = 'NUOVO';
+        else if (idle !== null && idle >= P.fermo) k = 'FERMA';
+        else if (cop <= P.covFast || (st !== null && st >= P.stFast)) k = 'VELOCE';
+        else if (cop > P.covSlow || (st !== null && st < P.stSlow)) k = 'LENTA';
+        else k = 'REGOLARE';
+        if (!k) return null;
+
+        const pr = ctx.price[c.cod];
+        const unit = pr && pr.q > 0 ? pr.v / pr.q : null;
+        return {
+            cod: c.cod, desc: c.desc || '', forn: c.forn || '', store, k,
+            inv, resi, ric, vend, vendWin: vw, stock, pos, vel, cop, rot, st, avgStock, area, days,
+            firstIn, lastIn, lastSale, age, idle, buckets, ageAvg, unit, val: unit ? pos * unit : 0
+        };
+    }
+
+    function compute() {
+        if (!R.notes || !window.PC_TEST) return;
+        const P = prefs();
+        P.win = +$('rotWin').value || P.win;
+        const from = $('rotFrom').value || R.minDate;
+        const sales = window.PC_TEST.getSalesRows();
+        const data = window.PC_TEST.pcBuild(R.notes, sales, { aliases: aliases(), fromDate: from });
+
+        // prezzo medio di vendita per articolo (dalle vendite in cassa)
+        const price = {};
+        sales.forEach(s => {
+            if (from && s.d < from) return;
+            let cod = null;
+            if (s.ean && data.eanToCod[s.ean]) cod = data.eanToCod[s.ean];
+            else if (s.cod && data.codNorm[s.cod]) cod = data.codNorm[s.cod];
+            else if (s.cod && data.eanToCod[s.cod]) cod = data.eanToCod[s.cod];
+            if (!cod || s.qta <= 0) return;
+            const n = (typeof parseEuro === 'function') ? parseEuro(s.row[COL_NETTO]) : 0;
+            if (!n) return;
+            const o = price[cod] || (price[cod] = { v: 0, q: 0 });
+            o.v += n * s.qta; o.q += s.qta;
+        });
+
+        const T = dn(moment().format('YYYY-MM-DD'));
+        const ctx = { T, TE: T + 1, W: T + 1 - P.win, price };
+        const fromN = dn(from) || T;
+        const recs = [];
+        Object.values(data.codes).forEach(c => {
+            const byStore = {};
+            c.movs.forEach(m => {
+                let delta;
+                if (m.src === 'VENDITE') delta = m.qta;
+                else if (m.kind === 'Invio al negozio' || m.kind === 'Reso dal negozio') delta = -m.eff;
+                else return;
+                if (!delta) return;
+                (byStore[m.who] = byStore[m.who] || []).push({ n: dn(m.d) || fromN, delta, sale: m.src === 'VENDITE' ? 1 : 0 });
+            });
+            Object.keys(byStore).forEach(s => { const r = buildRec(c, s, byStore[s], ctx, P); if (r) recs.push(r); });
+        });
+
+        R.res = { recs, win: P.win, stores: Array.from(new Set(recs.map(r => r.store))).sort(), salesN: sales.length };
+
+        const sel = $('rotStore'), prev = sel.value;
+        sel.innerHTML = '<option value="ALL">Tutta la rete</option>' + R.res.stores.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+        sel.value = R.res.stores.includes(prev) ? prev : 'ALL';
+
+        let msg = `<i class="fas fa-database me-1"></i>NOTE: <strong>${R.notes.length.toLocaleString('it-IT')}</strong> movimenti` +
+            (R.ts ? ` (scaricato il ${moment(R.ts).format('DD/MM/YYYY HH:mm')})` : '') +
+            ` &nbsp;|&nbsp; Articoli × negozio analizzati: <strong>${recs.length.toLocaleString('it-IT')}</strong> &nbsp;|&nbsp; Velocità sugli ultimi <strong>${P.win}</strong> giorni`;
+        if (!sales.length) msg += ' &nbsp;<span class="text-warning fw-bold">— vendite non caricate: premi "Aggiorna Dati" nella dashboard</span>';
+        status(msg);
+        render();
+    }
+
+    // ---------------- aggregazioni ----------------
+    function agg(list, winDays) {
+        const a = { n: 0, ric: 0, vend: 0, vendWin: 0, stock: 0, area: 0, val: 0, fermiPz: 0, fermiVal: 0, buckets: AGE.map(() => 0), k: {} };
+        list.forEach(r => {
+            a.n++; a.ric += r.ric; a.vend += Math.max(r.vend, 0); a.vendWin += r.vendWin; a.stock += r.pos; a.area += r.area; a.val += r.val;
+            if (r.k === 'FERMA') { a.fermiPz += r.pos; a.fermiVal += r.val; }
+            r.buckets.forEach((q, i) => a.buckets[i] += q);
+            a.k[r.k] = (a.k[r.k] || 0) + 1;
+        });
+        const avgStock = a.area / winDays;
+        a.st = a.ric > 0 ? a.vend / a.ric * 100 : null;
+        a.vel = a.vendWin / winDays;
+        a.cop = a.stock > 0 ? (a.vel > 0 ? a.stock / a.vel : Infinity) : 0;
+        a.rot = avgStock > 0.01 ? (a.vendWin / avgStock) * (365 / winDays) : null;
+        a.old = a.buckets[3] + a.buckets[4];
+        return a;
+    }
+
+    function filtered(opts) {
+        const o = opts || {};
+        const store = $('rotStore').value, cls = $('rotClass').value;
+        const words = up($('rotSearch').value).split(' ').filter(Boolean);
+        return R.res.recs.filter(r => {
+            if (!o.allStores && store !== 'ALL' && r.store !== store) return false;
+            if (!o.allClasses) {
+                if (cls === 'CRIT' && !['FERMA', 'LENTA', 'ANOMALIA'].includes(r.k)) return false;
+                if (cls !== 'ALL' && cls !== 'CRIT' && r.k !== cls) return false;
+            }
+            if (words.length) {
+                const t = up(r.cod + ' ' + r.desc + ' ' + r.forn);
+                if (!words.every(w => t.includes(w))) return false;
+            }
+            return true;
+        });
+    }
+
+    // ---------------- rendering ----------------
+    function kpi(lbl, val, cls, sub) {
+        return `<div class="col-xl-2 col-md-4 col-6"><div class="crm-stat-box"><div class="crm-stat-lbl">${lbl}</div><div class="crm-stat-val ${cls || ''}">${val}</div>${sub ? `<div class="small text-muted">${sub}</div>` : ''}</div></div>`;
+    }
+
+    function ageBar(b) {
+        const tot = b.reduce((x, y) => x + y, 0);
+        if (!tot) return '<span class="text-muted small">-</span>';
+        return '<div class="rot-bar">' + b.map((q, i) => q > 0 ? `<span style="width:${q / tot * 100}%;background:${AGE[i].col}" title="${AGE[i].lbl}: ${fq(q)} pz (${Math.round(q / tot * 100)}%)"></span>` : '').join('') + '</div>';
+    }
+
+    function render() {
+        if (!R.res) return;
+        const list = filtered({ allClasses: true });
+        const a = agg(list, R.res.win);
+        $('rotKpi').innerHTML =
+            kpi('Giacenza nei negozi', fq(a.stock) + ' pz', 'text-primary', a.val ? '≈ ' + eur(a.val) : '') +
+            kpi('% venduto sul ricevuto', a.st == null ? '-' : Math.round(a.st) + '%', a.st != null && a.st < prefs().stSlow ? 'text-danger' : 'text-success') +
+            kpi('Rotazione annua', fRot(a.rot), 'text-dark', `venduti ${fq(a.vendWin)} pz in ${R.res.win} gg`) +
+            kpi('Copertura giacenza', fCop(a.cop), 'text-secondary', 'al ritmo attuale') +
+            kpi('Merce ferma', fq(a.fermiPz) + ' pz', 'text-danger', (a.stock ? Math.round(a.fermiPz / a.stock * 100) + '% della giacenza' : '') + (a.fermiVal ? ' · ≈ ' + eur(a.fermiVal) : '')) +
+            kpi('In negozio da oltre 90 gg', fq(a.old) + ' pz', 'text-warning', a.stock ? Math.round(a.old / a.stock * 100) + '% della giacenza' : '');
+        renderStores(); renderArticles(); renderAge(); renderMoves(); renderForn();
+    }
+
+    function renderStores() {
+        const all = filtered({ allStores: true, allClasses: true });
+        const by = {};
+        all.forEach(r => (by[r.store] = by[r.store] || []).push(r));
+        const rows = Object.keys(by).map(s => ({ s, a: agg(by[s], R.res.win) })).sort((x, y) => y.a.stock - x.a.stock);
+        const tot = agg(all, R.res.win);
+        const head = '<thead class="table-light"><tr><th class="text-start">Negozio</th><th>Ricevuti</th><th>Venduti</th><th>% venduto</th><th>Giacenza</th><th>Valore ≈</th>' +
+            `<th>Venduti ${R.res.win} gg</th><th>Copertura</th><th>Rotazione annua</th><th>Merce ferma</th><th>Età giacenza</th><th class="text-start">Articoli per classe</th></tr></thead>`;
+        const line = (lbl, a, cls, attr) => `<tr class="${cls}" ${attr || ''}><td class="text-start fw-semibold">${lbl}</td><td>${fq(a.ric)}</td><td>${fq(a.vend)}</td><td>${fSt(a.st)}</td>` +
+            `<td class="fw-bold">${fq(a.stock)}</td><td>${a.val ? eur(a.val) : '-'}</td><td>${fq(a.vendWin)}</td><td>${fCop(a.cop)}</td><td>${fRot(a.rot)}</td>` +
+            `<td class="${a.fermiPz ? 'text-danger fw-bold' : 'text-muted'}">${fq(a.fermiPz)}${a.stock ? ` <small class="fw-normal">(${Math.round(a.fermiPz / a.stock * 100)}%)</small>` : ''}</td>` +
+            `<td>${ageBar(a.buckets)}</td><td class="text-start">${CLS_ORDER.filter(k => a.k[k]).map(k => `<span class="badge rot-cls ${CLS[k].c} me-1">${CLS[k].lbl} ${a.k[k]}</span>`).join('')}</td></tr>`;
+        $('rotStoreTable').innerHTML = head + '<tbody>' +
+            rows.map(o => line(`<span class="store-link">${esc(o.s)}</span>`, o.a, 'rot-row', `data-store="${esc(o.s)}"`)).join('') +
+            (rows.length > 1 ? line('TOTALE RETE', tot, 'rot-tot') : '') + '</tbody>';
+        $('rotStoreTable').querySelectorAll('tr[data-store]').forEach(tr => tr.addEventListener('click', () => {
+            $('rotStore').value = tr.getAttribute('data-store');
+            render();
+            bootstrap.Tab.getOrCreateInstance($('rotTabArtBtn')).show();
+        }));
+    }
+
+    function sortList(list) {
+        const s = $('rotSort').value;
+        const inf = v => v === Infinity ? 1e12 : (v || 0);
+        const f = {
+            idle: (a, b) => (b.pos > 0) - (a.pos > 0) || (b.idle || 0) - (a.idle || 0),
+            val: (a, b) => b.val - a.val || b.pos - a.pos,
+            cop: (a, b) => inf(b.cop) - inf(a.cop),
+            st: (a, b) => (a.st == null ? 1e9 : a.st) - (b.st == null ? 1e9 : b.st),
+            vend: (a, b) => b.vendWin - a.vendWin,
+            ageAvg: (a, b) => (b.ageAvg || 0) - (a.ageAvg || 0)
+        }[s];
+        return list.slice().sort(f);
+    }
+
+    function renderArticles() {
+        const list = sortList(filtered());
+        const shown = list.slice(0, 500);
+        $('rotArtCount').textContent = `${list.length.toLocaleString('it-IT')} righe articolo × negozio${list.length > 500 ? ' (mostrate le prime 500: usa i filtri o esporta il CSV)' : ''}`;
+        if (!shown.length) { $('rotArtTable').innerHTML = '<tbody><tr><td class="text-muted py-3">Nessun articolo con i filtri attuali.</td></tr></tbody>'; return; }
+        let h = '<thead class="table-light" style="position:sticky;top:0;z-index:1;"><tr><th class="text-start">Codice</th><th class="text-start">Descrizione</th><th>Marca</th><th class="text-start">Negozio</th><th>Classe</th>' +
+            `<th>1° ingresso</th><th>Ult. vendita</th><th>Gg senza vendite</th><th>Ricevuti</th><th>Venduti</th><th>% venduto</th><th>Giacenza</th><th>Venduti ${R.res.win} gg</th><th>Copertura</th><th>Rotazione</th><th>Età media</th><th>Valore ≈</th><th></th></tr></thead><tbody>`;
+        shown.forEach(r => {
+            h += `<tr class="rot-row" data-cod="${esc(r.cod)}"><td class="text-start fw-bold text-primary">${esc(r.cod)}</td><td class="text-start rot-desc small">${esc(r.desc)}</td><td class="small">${esc(r.forn)}</td>` +
+                `<td class="text-start small">${esc(r.store)}</td><td>${badge(r.k)}</td><td>${nd(r.firstIn)}</td><td>${nd(r.lastSale)}</td>` +
+                `<td class="${r.k === 'FERMA' ? 'text-danger fw-bold' : ''}">${r.idle == null ? '-' : r.idle}</td><td>${fq(r.ric)}</td><td>${fq(r.vend)}</td><td>${fSt(r.st)}</td>` +
+                `<td class="fw-bold ${r.stock < 0 ? 'text-danger' : ''}">${fq(r.stock)}</td><td>${fq(r.vendWin)}</td><td>${fCop(r.cop)}</td><td>${fRot(r.rot)}</td>` +
+                `<td>${r.ageAvg == null ? '-' : Math.round(r.ageAvg) + ' gg'}</td><td>${r.val ? eur(r.val) : '-'}</td>` +
+                `<td><span class="badge text-white" style="background:#d63384;" title="Posizione Codici"><i class="fas fa-map-marker-alt"></i></span></td></tr>`;
+        });
+        $('rotArtTable').innerHTML = h + '</tbody>';
+        bindPos($('rotArtTable'));
+    }
+
+    function renderAge() {
+        const all = filtered({ allStores: true, allClasses: true });
+        const store = $('rotStore').value;
+        const by = {};
+        all.forEach(r => (by[r.store] = by[r.store] || []).push(r));
+        const stores = Object.keys(by).filter(s => store === 'ALL' || s === store).sort();
+        let h = '<thead class="table-light"><tr><th class="text-start">Negozio</th>' + AGE.map(b => `<th><span class="rot-dot" style="background:${b.col}"></span>${b.lbl}</th>`).join('') + '<th>Giacenza</th><th>Distribuzione</th></tr></thead><tbody>';
+        const tot = AGE.map(() => 0);
+        const line = (lbl, b, cls) => {
+            const t = b.reduce((x, y) => x + y, 0);
+            return `<tr class="${cls || ''}"><td class="text-start fw-semibold">${lbl}</td>` + b.map(q => `<td>${fq(q)}${t ? ` <small class="text-muted">(${Math.round(q / t * 100)}%)</small>` : ''}</td>`).join('') + `<td class="fw-bold">${fq(t)}</td><td>${ageBar(b)}</td></tr>`;
+        };
+        stores.forEach(s => { const a = agg(by[s], R.res.win); a.buckets.forEach((q, i) => tot[i] += q); h += line(esc(s), a.buckets); });
+        if (stores.length > 1) h += line('TOTALE RETE', tot, 'rot-tot');
+        $('rotAgeTable').innerHTML = h + '</tbody>';
+
+        const old = filtered({ allClasses: true }).filter(r => r.buckets[3] + r.buckets[4] > 0)
+            .sort((a, b) => (b.buckets[4] + b.buckets[3]) * (b.ageAvg || 0) - (a.buckets[4] + a.buckets[3]) * (a.ageAvg || 0)).slice(0, 100);
+        if (!old.length) { $('rotOldTable').innerHTML = '<tbody><tr><td class="text-muted py-3">Nessuna merce in negozio da oltre 90 giorni.</td></tr></tbody>'; return; }
+        $('rotOldTable').innerHTML = '<thead class="table-light" style="position:sticky;top:0;"><tr><th class="text-start">Codice</th><th class="text-start">Descrizione</th><th class="text-start">Negozio</th><th>Classe</th><th>Pz 91–180 gg</th><th>Pz oltre 180 gg</th><th>Età media</th><th>Ult. vendita</th><th>Valore ≈</th><th></th></tr></thead><tbody>' +
+            old.map(r => `<tr class="rot-row" data-cod="${esc(r.cod)}"><td class="text-start fw-bold text-primary">${esc(r.cod)}</td><td class="text-start rot-desc small">${esc(r.desc)}</td><td class="text-start small">${esc(r.store)}</td><td>${badge(r.k)}</td>` +
+                `<td>${fq(r.buckets[3])}</td><td class="text-danger fw-bold">${fq(r.buckets[4])}</td><td>${Math.round(r.ageAvg || 0)} gg</td><td>${nd(r.lastSale)}</td><td>${r.val ? eur(r.val) : '-'}</td>` +
+                `<td><span class="badge text-white" style="background:#d63384;"><i class="fas fa-map-marker-alt"></i></span></td></tr>`).join('') + '</tbody>';
+        bindPos($('rotOldTable'));
+    }
+
+    function renderMoves() {
+        const P = prefs();
+        const store = $('rotStore').value;
+        const by = {};
+        filtered({ allStores: true, allClasses: true }).forEach(r => (by[r.cod] = by[r.cod] || []).push(r));
+        const out = [];
+        Object.values(by).forEach(g => {
+            if (g.length < 2) return;
+            const donors = g.filter(r => (r.k === 'FERMA' || r.k === 'LENTA') && r.pos >= 1).map(r => ({ r, avail: Math.floor(r.pos) })).sort((a, b) => (b.r.idle || 0) - (a.r.idle || 0));
+            const recv = g.filter(r => (r.k === 'ESAURITO' || r.k === 'VELOCE') && r.vendWin > 0)
+                .map(r => ({ r, need: Math.ceil(r.vel * P.covFast) - Math.floor(r.pos) })).filter(x => x.need >= 1).sort((a, b) => b.r.vel - a.r.vel);
+            recv.forEach(rc => donors.forEach(d => {
+                if (rc.need < 1 || d.avail < 1 || d.r.store === rc.r.store) return;
+                const q = Math.min(d.avail, rc.need);
+                d.avail -= q; rc.need -= q;
+                out.push({ cod: d.r.cod, desc: d.r.desc, from: d.r, to: rc.r, q, val: q * (d.r.unit || rc.r.unit || 0) });
+            }));
+        });
+        const list = out.filter(m => store === 'ALL' || m.from.store === store || m.to.store === store).sort((a, b) => b.val - a.val || b.q - a.q);
+        if (!list.length) { $('rotMoveTable').innerHTML = '<tbody><tr><td class="text-muted py-3">Nessun trasferimento consigliato con i filtri attuali.</td></tr></tbody>'; return; }
+        $('rotMoveTable').innerHTML = '<thead class="table-light" style="position:sticky;top:0;"><tr><th class="text-start">Codice</th><th class="text-start">Descrizione</th><th class="text-start">Da (fermo/lento)</th><th>Giac. / gg senza vendite</th><th></th><th class="text-start">A (esaurito/veloce)</th><th>Giac. / venduti ' + R.res.win + ' gg</th><th>Pezzi da spostare</th><th>Valore ≈</th><th></th></tr></thead><tbody>' +
+            list.slice(0, 300).map(m => `<tr class="rot-row" data-cod="${esc(m.cod)}"><td class="text-start fw-bold text-primary">${esc(m.cod)}</td><td class="text-start rot-desc small">${esc(m.desc)}</td>` +
+                `<td class="text-start small">${esc(m.from.store)} ${badge(m.from.k)}</td><td>${fq(m.from.pos)} pz / ${m.from.idle == null ? '-' : m.from.idle + ' gg'}</td><td><i class="fas fa-arrow-right text-secondary"></i></td>` +
+                `<td class="text-start small">${esc(m.to.store)} ${badge(m.to.k)}</td><td>${fq(m.to.pos)} pz / ${fq(m.to.vendWin)} pz</td><td class="fw-bold text-primary fs-6">${m.q}</td><td>${m.val ? eur(m.val) : '-'}</td>` +
+                `<td><span class="badge text-white" style="background:#d63384;"><i class="fas fa-map-marker-alt"></i></span></td></tr>`).join('') + '</tbody>';
+        bindPos($('rotMoveTable'));
+    }
+
+    function renderForn() {
+        const by = {};
+        filtered({ allClasses: true }).forEach(r => { const f = r.forn || '(non indicato)'; (by[f] = by[f] || []).push(r); });
+        const rows = Object.keys(by).map(f => ({ f, a: agg(by[f], R.res.win), codes: new Set(by[f].map(r => r.cod)).size })).sort((x, y) => (y.a.val - x.a.val) || (y.a.stock - x.a.stock));
+        if (!rows.length) { $('rotFornTable').innerHTML = '<tbody><tr><td class="text-muted py-3">Nessun dato.</td></tr></tbody>'; return; }
+        $('rotFornTable').innerHTML = '<thead class="table-light" style="position:sticky;top:0;"><tr><th class="text-start">Marca / Fornitore</th><th>Codici</th><th>Ricevuti</th><th>Venduti</th><th>% venduto</th><th>Giacenza</th><th>Valore ≈</th>' +
+            `<th>Venduti ${R.res.win} gg</th><th>Copertura</th><th>Rotazione annua</th><th>Merce ferma</th><th>Età giacenza</th></tr></thead><tbody>` +
+            rows.map(o => `<tr class="rot-row" data-forn="${esc(o.f)}"><td class="text-start fw-semibold">${esc(o.f)}</td><td>${o.codes}</td><td>${fq(o.a.ric)}</td><td>${fq(o.a.vend)}</td><td>${fSt(o.a.st)}</td>` +
+                `<td class="fw-bold">${fq(o.a.stock)}</td><td>${o.a.val ? eur(o.a.val) : '-'}</td><td>${fq(o.a.vendWin)}</td><td>${fCop(o.a.cop)}</td><td>${fRot(o.a.rot)}</td>` +
+                `<td class="${o.a.fermiPz ? 'text-danger fw-bold' : 'text-muted'}">${fq(o.a.fermiPz)}</td><td>${ageBar(o.a.buckets)}</td></tr>`).join('') + '</tbody>';
+        $('rotFornTable').querySelectorAll('tr[data-forn]').forEach(tr => tr.addEventListener('click', () => {
+            const f = tr.getAttribute('data-forn');
+            $('rotSearch').value = f === '(non indicato)' ? '' : f;
+            render();
+            bootstrap.Tab.getOrCreateInstance($('rotTabArtBtn')).show();
+        }));
+    }
+
+    // Apre la Posizione Codici dell'articolo (chiude prima questa finestra)
+    function bindPos(tbl) {
+        tbl.querySelectorAll('tr[data-cod]').forEach(tr => tr.addEventListener('click', () => {
+            const cod = tr.getAttribute('data-cod');
+            if (typeof window.openPosizioneCodici !== 'function') return;
+            const el = $('rotModal');
+            el.addEventListener('hidden.bs.modal', () => window.openPosizioneCodici(cod), { once: true });
+            bootstrap.Modal.getInstance(el).hide();
+        }));
+    }
+
+    function exportCsv() {
+        if (!R.res) return;
+        const list = sortList(filtered());
+        if (!list.length) { alert('Nessun articolo da esportare con i filtri attuali.'); return; }
+        const n = v => v == null || v === Infinity ? '' : String(Math.round(v * 10) / 10).replace('.', ',');
+        const rows = [['Codice', 'Descrizione', 'Marca', 'Negozio', 'Classe', 'Primo_ingresso', 'Ultimo_ingresso', 'Ultima_vendita', 'Giorni_senza_vendite',
+            'Ricevuti', 'Venduti', 'Perc_venduto', 'Giacenza', 'Venduti_' + R.res.win + 'gg', 'Copertura_gg', 'Rotazione_annua', 'Eta_media_gg',
+            'Pz_0_30', 'Pz_31_60', 'Pz_61_90', 'Pz_91_180', 'Pz_oltre_180', 'Prezzo_medio', 'Valore_giacenza']];
+        list.forEach(r => rows.push([r.cod, r.desc, r.forn, r.store, CLS[r.k].lbl, nd(r.firstIn), nd(r.lastIn), nd(r.lastSale), r.idle == null ? '' : r.idle,
+            n(r.ric), n(r.vend), n(r.st), n(r.stock), n(r.vendWin), r.cop === Infinity ? 'nessuna vendita' : n(r.cop), n(r.rot), n(r.ageAvg),
+            ...r.buckets.map(n), r.unit ? r.unit.toFixed(2).replace('.', ',') : '', r.val ? r.val.toFixed(2).replace('.', ',') : '']));
+        const csv = rows.map(r => r.map(f => `"${String(f).replace(/"/g, '""')}"`).join(';')).join('\n');
+        const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Rotazione_Magazzino_${moment().format('YYYYMMDD_HHmm')}.csv`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+    }
+
+    // ---------------- collegamenti UI ----------------
+    function openRot() { bootstrap.Modal.getOrCreateInstance($('rotModal')).show(); }
+    window.openRotazioneMagazzino = openRot;
+
+    let inited = false;
+    function init() {
+        if (inited) return; inited = true;
+
+        const anchor = $('btnPosCodici') || $('btnStorico');
+        if (anchor && !$('btnRotazione')) {
+            anchor.insertAdjacentHTML('afterend', '<button id="btnRotazione" class="btn btn-light fw-bold mt-2 ms-2" style="color:#fd7e14;"><i class="fas fa-recycle me-2"></i>Rotazione Magazzino</button>');
+            $('btnRotazione').addEventListener('click', openRot);
+        }
+
+        const P = prefs();
+        ['fermo', 'nuovo', 'covFast', 'covSlow', 'stFast', 'stSlow'].forEach(k => { $('rotP_' + k).value = P[k]; });
+        $('rotWin').value = String(P.win);
+
+        $('rotModal').addEventListener('shown.bs.modal', () => { if (!R.notes) loadNotes(false); else compute(); });
+        $('rotSearch').addEventListener('input', () => { clearTimeout(R.timer); R.timer = setTimeout(render, 300); });
+        $('rotClear').addEventListener('click', () => { $('rotSearch').value = ''; render(); });
+        $('rotStore').addEventListener('change', render);
+        $('rotClass').addEventListener('change', render);
+        $('rotSort').addEventListener('change', renderArticles);
+        $('rotWin').addEventListener('change', () => { const p = prefs(); p.win = +$('rotWin').value; savePrefs(p); compute(); });
+        $('rotFrom').addEventListener('change', compute);
+        $('rotReload').addEventListener('click', () => { R.csv = null; loadNotes(true); });
+        $('rotExport').addEventListener('click', exportCsv);
+        $('rotSavePrefs').addEventListener('click', () => {
+            const p = prefs();
+            ['fermo', 'nuovo', 'covFast', 'covSlow', 'stFast', 'stSlow'].forEach(k => { const v = Number($('rotP_' + k).value); if (isFinite(v) && v >= 0) p[k] = v; });
+            savePrefs(p); compute();
+        });
+
+        // Apertura diretta da indirizzo: ...?rotazione=1 oppure ?rotazione=NOME NEGOZIO
+        const q = new URLSearchParams(window.location.search).get('rotazione');
+        if (q) {
+            let tries = 0;
+            const wait = setInterval(() => {
+                tries++;
+                if ((typeof rawData !== 'undefined' && rawData.length) || tries > 40) {
+                    clearInterval(wait);
+                    $('rotModal').addEventListener('shown.bs.modal', () => {
+                        const t = setInterval(() => {
+                            if (!R.res) return;
+                            clearInterval(t);
+                            const s = R.res.stores.find(x => x.toUpperCase().includes(q.trim().toUpperCase()));
+                            if (s) { $('rotStore').value = s; render(); }
+                        }, 300);
+                    }, { once: true });
+                    openRot();
+                }
+            }, 500);
+        }
+    }
+    document.addEventListener('DOMContentLoaded', init);
+    if (document.readyState !== 'loading') init();
+})();
+</script>
+<!-- ===================== FINE MODULO ROTAZIONE MAGAZZINO ===================== -->
+
+
 </body>
 </html>
