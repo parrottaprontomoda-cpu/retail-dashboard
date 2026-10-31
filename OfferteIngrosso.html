@@ -334,6 +334,19 @@
                         <button class="btn btn-primary" onclick="salvaCollegamento()"><i class="fas fa-save me-1"></i>Salva e prova</button>
                         <span class="small ms-2" id="sEsito"></span>
                         <hr>
+                        <h6 class="fw-bold"><i class="fas fa-store me-2"></i>Catalogo prodotti</h6>
+                        <p class="small text-muted mb-2">Nei messaggi delle offerte viene inserito il link personale del cliente al catalogo (segnaposto {CATALOGO}), già filtrato sul brand dell'offerta.</p>
+                        <label class="form-label small fw-bold">URL App web del catalogo (termina con /exec)</label>
+                        <input id="sCatApi" class="form-control mb-2" placeholder="https://script.google.com/macros/s/.../exec">
+                        <label class="form-label small fw-bold">Codice ADMIN del catalogo</label>
+                        <input id="sCatAdmin" type="password" class="form-control mb-2" placeholder="Il tuo codice nel foglio CLIENTI del catalogo">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="sCatAuto" checked>
+                            <label class="form-check-label small" for="sCatAuto">Aggiungi il link anche ai messaggi che non contengono {CATALOGO}</label>
+                        </div>
+                        <button class="btn btn-outline-primary" onclick="salvaCatalogo()"><i class="fas fa-save me-1"></i>Salva e prova</button>
+                        <span class="small ms-2" id="sCatEsito"></span>
+                        <hr>
                         <h6 class="fw-bold"><i class="fas fa-mobile-screen me-2"></i>Usa da cellulare o da un altro computer</h6>
                         <p class="small text-muted mb-2">Genera un link con QR code: inquadralo con il cellulare e il collegamento viene salvato lì, senza riscrivere URL e token.</p>
                         <button class="btn btn-outline-primary" onclick="mostraLinkDispositivo()"><i class="fas fa-qrcode me-1"></i>Collega un altro dispositivo</button>
@@ -560,26 +573,26 @@ const TUTTI_PAG = ['CONTANTI', 'BREVE', 'LUNGO'];
 
 const TIPI = {
     'Fine serie / Stock': { pagamenti: TUTTI_PAG, pagRich: 'CONTANTI', rischioMax: 'D', potMin: 0, inattivoGg: 0, sconto: 40,
-        msg: 'Buongiorno {REFERENTE}, per {CLIENTE} abbiamo riservato uno stock di fine serie con sconto del {SCONTO}%.\n{DESCRIZIONE}\n{CONDIZIONI}\nOfferta valida fino al {SCADENZA}, fino a esaurimento.\n{AZIENDA}' },
+        msg: 'Buongiorno {REFERENTE}, per {CLIENTE} abbiamo riservato uno stock di fine serie con sconto del {SCONTO}%.\n{DESCRIZIONE}\n{CONDIZIONI}\nOfferta valida fino al {SCADENZA}, fino a esaurimento.\n{CATALOGO}\n{AZIENDA}' },
     'Nuova collezione': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'B', potMin: 40, inattivoGg: 0, sconto: 0,
-        msg: 'Buongiorno {REFERENTE}, la nuova collezione è arrivata e la riserviamo in anteprima a {CLIENTE}.\n{DESCRIZIONE}\n{CONDIZIONI}\nPassi a trovarci in showroom o le inviamo il catalogo.\n{AZIENDA}' },
+        msg: 'Buongiorno {REFERENTE}, la nuova collezione è arrivata e la riserviamo in anteprima a {CLIENTE}.\n{DESCRIZIONE}\n{CONDIZIONI}\nPassi a trovarci in showroom o le inviamo il catalogo.\n{CATALOGO}\n{AZIENDA}' },
     'Sconto volume': { pagamenti: ['CONTANTI', 'BREVE'], pagRich: 'ABITUALE', rischioMax: 'B', potMin: 60, inattivoGg: 0, sconto: 10,
-        msg: 'Buongiorno {REFERENTE}, per i clienti più importanti come {CLIENTE} abbiamo uno sconto del {SCONTO}% sugli ordini di volume.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{AZIENDA}' },
+        msg: 'Buongiorno {REFERENTE}, per i clienti più importanti come {CLIENTE} abbiamo uno sconto del {SCONTO}% sugli ordini di volume.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{CATALOGO}\n{AZIENDA}' },
     'Pronto cassa': { pagamenti: ['BREVE', 'LUNGO'], pagRich: 'CONTANTI', rischioMax: 'C', potMin: 0, inattivoGg: 0, sconto: 5,
-        msg: 'Buongiorno {REFERENTE}, sul prossimo ordine di {CLIENTE} le riconosciamo un ulteriore {SCONTO}% di sconto con pagamento alla consegna.\n{DESCRIZIONE}\nValido fino al {SCADENZA}.\n{AZIENDA}' },
+        msg: 'Buongiorno {REFERENTE}, sul prossimo ordine di {CLIENTE} le riconosciamo un ulteriore {SCONTO}% di sconto con pagamento alla consegna.\n{DESCRIZIONE}\nValido fino al {SCADENZA}.\n{CATALOGO}\n{AZIENDA}' },
     'Riassortimento': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'C', potMin: 30, inattivoGg: 0, sconto: 0,
-        msg: 'Buongiorno {REFERENTE}, sono arrivati i riassortimenti di {CATEGORIA} e degli altri articoli più venduti da {CLIENTE}.\n{DESCRIZIONE}\n{CONDIZIONI}\nVuole che le prepariamo una proposta?\n{AZIENDA}' },
+        msg: 'Buongiorno {REFERENTE}, sono arrivati i riassortimenti di {CATEGORIA} e degli altri articoli più venduti da {CLIENTE}.\n{DESCRIZIONE}\n{CONDIZIONI}\nVuole che le prepariamo una proposta?\n{CATALOGO}\n{AZIENDA}' },
     'Riattivazione clienti fermi': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'B', potMin: 0, inattivoGg: 90, sconto: 10,
-        msg: 'Buongiorno {REFERENTE}, è un po\' che non ci sentiamo! Per {CLIENTE} c\'è uno sconto del {SCONTO}% sul prossimo ordine.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{AZIENDA}' },
+        msg: 'Buongiorno {REFERENTE}, è un po\' che non ci sentiamo! Per {CLIENTE} c\'è uno sconto del {SCONTO}% sul prossimo ordine.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{CATALOGO}\n{AZIENDA}' },
     'Novità brand': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'C', potMin: 0, inattivoGg: 0, sconto: 0, brandModo: 'COMPRA',
-        msg: 'Buongiorno {REFERENTE}, sono arrivate le novità {BRAND} che {CLIENTE} apprezza.\n{DESCRIZIONE}\n{CONDIZIONI}\nLe preparo una proposta?\n{AZIENDA}' },
+        msg: 'Buongiorno {REFERENTE}, sono arrivate le novità {BRAND} che {CLIENTE} apprezza.\n{DESCRIZIONE}\n{CONDIZIONI}\nLe preparo una proposta?\n{CATALOGO}\n{AZIENDA}' },
     'Recupero brand abbandonato': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'C', potMin: 0, inattivoGg: 0, sconto: 10, brandModo: 'ABBANDONATO',
-        msg: 'Buongiorno {REFERENTE}, è da un po\' che {CLIENTE} non riassortisce {BRAND}: per tornare a lavorarlo le riserviamo uno sconto del {SCONTO}%.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{AZIENDA}' },
+        msg: 'Buongiorno {REFERENTE}, è da un po\' che {CLIENTE} non riassortisce {BRAND}: per tornare a lavorarlo le riserviamo uno sconto del {SCONTO}%.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{CATALOGO}\n{AZIENDA}' },
     'Proponi un nuovo brand': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'B', potMin: 40, inattivoGg: 0, sconto: 10, brandModo: 'NON_COMPRA',
-        msg: 'Buongiorno {REFERENTE}, vorremmo far provare a {CLIENTE} il brand {BRAND}, che sta andando molto bene presso i nostri clienti: sul primo ordine sconto del {SCONTO}%.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{AZIENDA}' },
+        msg: 'Buongiorno {REFERENTE}, vorremmo far provare a {CLIENTE} il brand {BRAND}, che sta andando molto bene presso i nostri clienti: sul primo ordine sconto del {SCONTO}%.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{CATALOGO}\n{AZIENDA}' },
     'Promo personalizzata': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'C', potMin: 0, inattivoGg: 0, sconto: 0, msg: '' }
 };
-const SEGNAPOSTO = ['{CLIENTE}', '{REFERENTE}', '{OFFERTA}', '{DESCRIZIONE}', '{SCONTO}', '{SCADENZA}', '{CONDIZIONI}', '{CATEGORIA}', '{BRAND}', '{AZIENDA}'];
+const SEGNAPOSTO = ['{CLIENTE}', '{REFERENTE}', '{OFFERTA}', '{DESCRIZIONE}', '{SCONTO}', '{SCADENZA}', '{CONDIZIONI}', '{CATEGORIA}', '{BRAND}', '{CATALOGO}', '{AZIENDA}'];
 const ESITI = ['INVIATO', 'INTERESSATO', 'ORDINE', 'NESSUNA RISPOSTA', 'NON INTERESSATO'];
 const TIPI_PAG = { CO: 'Contanti', AS: 'Assegni', BO: 'Bonifici', MYPA: 'MyPOS', ALTRO: 'Non indicato' };
 const PARAMETRI = [
@@ -805,14 +818,57 @@ function condizioni(o, c) {
     return `Pagamento a ${c.giorniConc || c.giorniEff} giorni, come da nostri accordi.`;
 }
 
+// ---------- Collegamento con il catalogo prodotti ----------
+// CAT.clienti: codice cliente (questo sistema) → codice personale del catalogo
+let CAT = { pagina: '', clienti: {} };
+
+async function caricaMappaCatalogo(mostraEsito) {
+    const api = ls.get('oi_cat_api'), admin = ls.get('oi_cat_admin');
+    if (!api || !admin) { CAT = { pagina: '', clienti: {} }; return; }
+    try {
+        const r = await fetch(api + '?action=mappaclienti&c=' + encodeURIComponent(admin));
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || 'Risposta non valida');
+        CAT = { pagina: j.pagina || '', clienti: j.clienti || {} };
+        const n = Object.keys(CAT.clienti).length;
+        if (mostraEsito) $('sCatEsito').innerHTML = `<span class="text-success"><i class="fas fa-check-circle me-1"></i>${n} clienti con link al catalogo</span>`;
+        if (DATA && $('cmpOfferta') && $('cmpOfferta').value) renderCampagna();
+    } catch (e) {
+        if (mostraEsito) $('sCatEsito').innerHTML = `<span class="text-danger">${esc(e.message)}</span>`;
+    }
+}
+
+function salvaCatalogo() {
+    ls.set('oi_cat_api', $('sCatApi').value.trim());
+    ls.set('oi_cat_admin', $('sCatAdmin').value.trim());
+    ls.set('oi_cat_auto', $('sCatAuto').checked ? '1' : '0');
+    $('sCatEsito').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Prova in corso...';
+    caricaMappaCatalogo(true);
+}
+
+// Link personale del cliente al catalogo; se l'offerta riguarda un brand, il catalogo si apre già filtrato
+function linkCatalogo(o, c) {
+    const cod = CAT.clienti[String(c.codice || '').trim().toUpperCase()];
+    if (!cod || !CAT.pagina) return '';
+    let url = CAT.pagina + '?c=' + encodeURIComponent(cod) + '&condiviso=1';
+    if (o && o.brand && o.brand.length) url += '&catalogo=' + encodeURIComponent(brandPerMessaggio(o, c));
+    return url;
+}
+
 function componiMessaggio(o, c) {
+    const link = linkCatalogo(o, c);
     const rep = {
         '{CLIENTE}': c.nome, '{REFERENTE}': c.referente || c.nome, '{OFFERTA}': o.titolo,
         '{DESCRIZIONE}': o.descrizione || '', '{SCONTO}': o.sconto || 0, '{SCADENZA}': o.al ? fmtD(o.al) : 'esaurimento scorte',
         '{CONDIZIONI}': condizioni(o, c), '{CATEGORIA}': (c.topCat[0] && c.topCat[0].cat) || 'articoli', '{BRAND}': brandPerMessaggio(o, c),
-        '{AZIENDA}': (DATA.cfg && DATA.cfg.NOME_AZIENDA) || ''
+        '{AZIENDA}': (DATA.cfg && DATA.cfg.NOME_AZIENDA) || '',
+        '{CATALOGO}': link ? 'Prezzi riservati e disponibilità sul suo catalogo: ' + link : ''
     };
-    let t = o.messaggio || `Buongiorno {REFERENTE}, abbiamo un'offerta per {CLIENTE}: {OFFERTA}.\n{DESCRIZIONE}\n{CONDIZIONI}\n{AZIENDA}`;
+    let t = o.messaggio || `Buongiorno {REFERENTE}, abbiamo un'offerta per {CLIENTE}: {OFFERTA}.\n{DESCRIZIONE}\n{CONDIZIONI}\n{CATALOGO}\n{AZIENDA}`;
+    // Offerte salvate prima del collegamento: il link si aggiunge prima della firma
+    if (link && t.indexOf('{CATALOGO}') < 0 && ls.get('oi_cat_auto') !== '0') {
+        t = t.indexOf('{AZIENDA}') >= 0 ? t.replace('{AZIENDA}', '{CATALOGO}\n{AZIENDA}') : t + '\n{CATALOGO}';
+    }
     Object.keys(rep).forEach(k => { t = t.split(k).join(rep[k]); });
     return t.replace(/\n{3,}/g, '\n\n').trim();
 }
@@ -2077,6 +2133,7 @@ function renderCampagna() {
                 <a href="#" class="fw-bold text-decoration-none" onclick="apriCliente('${esc(c.codice)}');return false;">${esc(c.nome)}</a>
                 ${badgeSeg(c.segmento)} ${badgeCls(c)} ${badgeFascia(c)}
                 <span class="small text-muted">pot. ${c.potenziale}</span>
+                ${CAT.clienti[String(c.codice || '').trim().toUpperCase()] ? '<span class="badge bg-light text-success border"><i class="fas fa-store me-1"></i>catalogo</span>' : ''}
                 ${x.v.avvisi.map(a => `<span class="badge bg-warning text-dark">${esc(a)}</span>`).join(' ')}
                 <span class="badge bg-success d-none stato-inviato"><i class="fas fa-check me-1"></i>registrato</span>
                 <div class="ms-auto btn-group btn-group-sm">
@@ -2314,6 +2371,10 @@ function leggiLinkCollega() {
     try { localStorage.removeItem('oi_gemini'); } catch (e) {}   // la chiave Gemini ora sta sul server
     $('sUrl').value = ls.get('oi_url') || '';
     $('sToken').value = ls.get('oi_token') || '';
+    $('sCatApi').value = ls.get('oi_cat_api') || '';
+    $('sCatAdmin').value = ls.get('oi_cat_admin') || '';
+    $('sCatAuto').checked = ls.get('oi_cat_auto') !== '0';
+    caricaMappaCatalogo(false);
     try { localStorage.removeItem('oi_cache'); } catch (e) {}   // la memoria locale ora usa IndexedDB
     $('tabSettBtn').addEventListener('shown.bs.tab', () => caricaSettimana());   // la scheda Settimana legge i dati quando viene aperta
     leggiCacheLocale().then(d => {
