@@ -826,7 +826,7 @@ async function caricaMappaCatalogo(mostraEsito) {
     const api = ls.get('oi_cat_api'), admin = ls.get('oi_cat_admin');
     if (!api || !admin) { CAT = { pagina: '', clienti: {} }; return; }
     try {
-        const r = await fetch(api + '?action=mappaclienti&c=' + encodeURIComponent(admin));
+        const r = await fetch(api + '?action=mappaclienti&cli=' + encodeURIComponent(admin));
         const j = await r.json();
         if (!j.ok) throw new Error(j.error || 'Risposta non valida');
         CAT = { pagina: j.pagina || '', clienti: j.clienti || {} };
