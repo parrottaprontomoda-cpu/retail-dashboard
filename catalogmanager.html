@@ -431,7 +431,7 @@
     try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), products: data.products, cliente: data.cliente || null, prezzi: data.prezzi })); } catch (e) {}
   }
   function productsUrl() {
-    return API_URL + '?action=products' + (CLIENT_CODE ? '&c=' + encodeURIComponent(CLIENT_CODE) : '');
+    return API_URL + '?action=products' + (CLIENT_CODE ? '&cli=' + encodeURIComponent(CLIENT_CODE) : '');
   }
 
   // Risposta del server: chi è il cliente e se può vedere i prezzi
@@ -460,7 +460,7 @@
   }
 
   function openImport() {
-    window.open(API_URL + '?action=import&c=' + encodeURIComponent(CLIENT_CODE), '_blank');
+    window.open(API_URL + '?action=import&cli=' + encodeURIComponent(CLIENT_CODE), '_blank');
   }
   function fmtTime(ts) {
     return new Date(ts).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
@@ -1060,7 +1060,7 @@
       fetch(API_URL, {
         method: 'POST', mode: 'no-cors', keepalive: true,
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'order', c: CLIENT_CODE, ordine, righe })
+        body: JSON.stringify({ action: 'order', cli: CLIENT_CODE, ordine, righe })
       }).catch(() => {});
     } catch (e) {}
   }
@@ -1264,7 +1264,7 @@
     if (CLIENTE && CLIENTE.admin) return;   // le tue visite non contano (il server le scarta comunque)
     try { if (localStorage.getItem(TRACK_OFF_KEY) === '1') return; } catch (e) {}
     const q = new URLSearchParams({
-      action: 'view', e: evento, t: tipo, n: nome || '', c: CLIENT_CODE,
+      action: 'view', e: evento, t: tipo, n: nome || '', cli: CLIENT_CODE,
       v: getVisitorId(), m: document.body.classList.contains('shared-mode') ? 'link' : 'diretto'
     });
     try { fetch(API_URL + '?' + q.toString(), { mode: 'no-cors', keepalive: true }).catch(() => {}); } catch (e) {}
@@ -1290,7 +1290,7 @@
     const body = document.getElementById('stats-body');
     body.innerHTML = '<p>Caricamento statistiche...</p>';
     document.getElementById('stats-overlay').classList.add('show');
-    fetch(API_URL + '?action=stats&c=' + encodeURIComponent(CLIENT_CODE))
+    fetch(API_URL + '?action=stats&cli=' + encodeURIComponent(CLIENT_CODE))
       .then(r => r.json())
       .then(d => {
         if (!d || !d.ok) throw new Error((d && d.error) || 'Risposta non valida (hai aggiornato e ripubblicato l\'Apps Script?)');
