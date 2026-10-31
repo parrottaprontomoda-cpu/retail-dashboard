@@ -541,6 +541,23 @@
         <label class="form-label small fw-bold">Messaggio (verrà personalizzato per ogni cliente)</label>
         <div class="mb-1" id="oChips"></div>
         <textarea id="oMsg" class="form-control msg-area" rows="7"></textarea>
+        <hr>
+        <h6 class="fw-bold text-primary"><i class="fas fa-image me-1"></i>Immagine promozionale</h6>
+        <div class="row g-3 align-items-start">
+            <div class="col-md-5 text-center">
+                <canvas id="promoCanvas" width="1080" height="1080" class="border rounded shadow-sm" style="width:100%;max-width:300px;height:auto;"></canvas>
+            </div>
+            <div class="col-md-7 small">
+                <p class="text-muted mb-2">Si crea da sola con i colori e l'icona del tipo di offerta, lo sconto, il titolo, i brand e la scadenza, e si aggiorna mentre compili. Se vuoi, aggiungi una tua foto come sfondo (es. i capi in offerta).</p>
+                <label class="form-label fw-bold mb-1">Foto di sfondo (facoltativa)</label>
+                <input type="file" id="promoFile" accept="image/*" class="form-control form-control-sm mb-2" onchange="caricaFotoPromo(this)">
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="rimuoviFotoPromo()"><i class="fas fa-trash me-1"></i>Togli foto</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="scaricaPromoForm()"><i class="fas fa-download me-1"></i>Scarica immagine</button>
+                </div>
+                <div id="promoStato" class="text-muted mt-2"></div>
+            </div>
+        </div>
     </div>
     <div class="modal-footer">
         <button class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
@@ -816,6 +833,274 @@ function condizioni(o, c) {
     if (o.pagRich === 'CONTANTI') return 'Condizione: pagamento in contanti alla consegna.';
     if (c.classe === 'CONTANTI') return 'Pagamento in contanti alla consegna, come di consueto.';
     return `Pagamento a ${c.giorniConc || c.giorniEff} giorni, come da nostri accordi.`;
+}
+
+// ---------- Immagine promozionale dell'offerta ----------
+// Un banner 1080x1080 disegnato nel browser: colori e icona per tipo di offerta, sconto, titolo,
+// brand, scadenza e firma. La foto di sfondo facoltativa viene salvata tramite il server del
+// catalogo (cartella Drive), così è disponibile su tutti i dispositivi.
+const PROMO_TEMI = {
+    'Fine serie / Stock':          { c1: '#b71c1c', c2: '#ff7043', icona: '🏷️', etichetta: 'FINE SERIE' },
+    'Nuova collezione':            { c1: '#4a148c', c2: '#ab47bc', icona: '✨', etichetta: 'NUOVA COLLEZIONE' },
+    'Sconto volume':               { c1: '#0d47a1', c2: '#42a5f5', icona: '📦', etichetta: 'SCONTO VOLUME' },
+    'Pronto cassa':                { c1: '#1b5e20', c2: '#66bb6a', icona: '💶', etichetta: 'PRONTO CASSA' },
+    'Riassortimento':              { c1: '#004d40', c2: '#26a69a', icona: '🔄', etichetta: 'RIASSORTIMENTO' },
+    'Riattivazione clienti fermi': { c1: '#e65100', c2: '#ffb74d', icona: '👋', etichetta: 'BENTORNATO' },
+    'Novità brand':                { c1: '#1a237e', c2: '#5c6bc0', icona: '⭐', etichetta: 'NOVITÀ' },
+    'Recupero brand abbandonato':  { c1: '#bf360c', c2: '#ff8a65', icona: '🔁', etichetta: 'TI ASPETTIAMO' },
+    'Proponi un nuovo brand':      { c1: '#00695c', c2: '#4db6ac', icona: '🚀', etichetta: 'DA PROVARE' },
+    'Promo personalizzata':        { c1: '#880e4f', c2: '#f06292', icona: '🎁', etichetta: 'OFFERTA RISERVATA' }
+};
+const PROMO_FONT = "'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+const PROMO_EMOJI = "'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif";
+
+let PROMO_FOTO = {};          // id offerta → data URL della foto (null = nessuna)
+let FORM_FOTO = null;         // foto dell'offerta aperta nel modulo
+let FORM_FOTO_CAMBIO = null;  // 'nuova' | 'rimossa' | null
+let PROMO_BLOB = null;        // { id, png, jpg } immagine pronta per l'offerta della campagna
+
+function caricaImmagine(src) {
+    return new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = src; });
+}
+
+function righeTesto(ctx, testo, larghezza, maxRighe) {
+    const parole = String(testo || '').split(/\s+/).filter(Boolean), righe = [];
+    let r = '';
+    parole.forEach(p => {
+        const prova = r ? r + ' ' + p : p;
+        if (ctx.measureText(prova).width > larghezza && r) { righe.push(r); r = p; } else r = prova;
+    });
+    if (r) righe.push(r);
+    if (righe.length > maxRighe) {
+        righe.length = maxRighe;
+        let u = righe[maxRighe - 1];
+        while (u.length > 1 && ctx.measureText(u + '…').width > larghezza) u = u.slice(0, -1);
+        righe[maxRighe - 1] = u + '…';
+    }
+    return righe;
+}
+
+function rettangoloTondo(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+async function disegnaPromo(canvas, o, foto) {
+    const ctx = canvas.getContext('2d'), W = 1080, H = 1080;
+    const t = PROMO_TEMI[o.tipo] || PROMO_TEMI['Promo personalizzata'];
+    ctx.clearRect(0, 0, W, H);
+
+    // Sfondo: foto (riempie il quadrato) oppure sfumatura del tipo di offerta
+    let img = null;
+    if (foto) { try { img = await caricaImmagine(foto); } catch (e) { img = null; } }
+    if (img) {
+        const s = Math.max(W / img.width, H / img.height);
+        ctx.drawImage(img, (W - img.width * s) / 2, (H - img.height * s) / 2, img.width * s, img.height * s);
+        const g = ctx.createLinearGradient(0, H * 0.3, 0, H);
+        g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.55, 'rgba(0,0,0,0.55)'); g.addColorStop(1, 'rgba(0,0,0,0.85)');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    } else {
+        const g = ctx.createLinearGradient(0, 0, W, H);
+        g.addColorStop(0, t.c1); g.addColorStop(1, t.c2);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        [[900, 160, 260], [120, 980, 220], [1000, 900, 140]].forEach(([x, y, r]) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); });
+        ctx.fillStyle = '#ffffff';   // l'icona non deve ereditare la trasparenza dei cerchi
+        ctx.font = `230px ${PROMO_EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(t.icona, 830, 300);
+    }
+
+    // Etichetta del tipo di offerta
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.font = `bold 46px ${PROMO_FONT}`;
+    const etichetta = (img ? t.icona + '  ' : '') + t.etichetta;
+    const we = ctx.measureText(etichetta).width + 70;
+    ctx.fillStyle = img ? t.c1 : 'rgba(255,255,255,0.95)';
+    rettangoloTondo(ctx, 60, 60, Math.min(we, 960), 92, 46); ctx.fill();
+    ctx.fillStyle = img ? '#fff' : t.c1;
+    if (img) { ctx.font = `bold 46px ${PROMO_FONT}`; }
+    ctx.fillText(etichetta, 95, 108);
+
+    // Testi principali
+    ctx.fillStyle = '#fff';
+    ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 18;
+    ctx.textBaseline = 'alphabetic';
+    let y = 620;
+    const sconto = +o.sconto || 0;
+    if (sconto > 0) {
+        ctx.font = `900 280px ${PROMO_FONT}`;
+        ctx.fillText('-' + sconto + '%', 50, y);
+        y += 80;
+        ctx.font = `bold 60px ${PROMO_FONT}`;
+        righeTesto(ctx, o.titolo || o.tipo, 960, 2).forEach(r => { ctx.fillText(r, 60, y); y += 72; });
+    } else {
+        y = 480;
+        ctx.font = `900 104px ${PROMO_FONT}`;
+        righeTesto(ctx, o.titolo || o.tipo, 960, 3).forEach(r => { ctx.fillText(r, 55, y); y += 118; });
+    }
+    if (o.descrizione) {
+        ctx.font = `44px ${PROMO_FONT}`;
+        righeTesto(ctx, o.descrizione, 960, 1).forEach(r => { ctx.fillText(r, 60, y + 4); y += 56; });
+    }
+    if (o.brand && o.brand.length) {
+        ctx.font = `bold 50px ${PROMO_FONT}`;
+        righeTesto(ctx, o.brand.join(' · '), 960, 1).forEach(r => { ctx.fillText(r, 60, Math.min(y + 14, 900)); });
+    }
+    ctx.shadowBlur = 0;
+
+    // Fascia in basso: scadenza e firma
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 950, W, 130);
+    ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
+    ctx.font = `bold 40px ${PROMO_FONT}`; ctx.textAlign = 'left';
+    ctx.fillText(o.al ? 'Valida fino al ' + fmtD(o.al) : 'Fino a esaurimento scorte', 60, 1015);
+    ctx.textAlign = 'right'; ctx.font = `bold 40px ${PROMO_FONT}`;
+    const azienda = (DATA && DATA.cfg && DATA.cfg.NOME_AZIENDA) || '';
+    if (azienda) ctx.fillText(righeTesto(ctx, azienda, 440, 1)[0], W - 60, 1015);
+    ctx.textAlign = 'left';
+}
+
+function canvasBlob(canvas, tipo, qualita) {
+    return new Promise(ok => canvas.toBlob(b => ok(b), tipo, qualita));
+}
+
+// Ridimensiona la foto scelta (max 1080 px) e la comprime in JPEG
+async function caricaFotoPromo(input) {
+    const f = input.files && input.files[0];
+    if (!f) return;
+    try {
+        const url = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(f); });
+        const img = await caricaImmagine(url);
+        const s = Math.min(1, 1080 / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        FORM_FOTO = c.toDataURL('image/jpeg', 0.85);
+        FORM_FOTO_CAMBIO = 'nuova';
+        $('promoStato').textContent = 'Foto pronta: verrà salvata con "Salva offerta".';
+        disegnaPromoForm();
+    } catch (e) { toast('Impossibile leggere la foto scelta.', 'danger'); }
+}
+
+function rimuoviFotoPromo() {
+    FORM_FOTO = null; FORM_FOTO_CAMBIO = 'rimossa'; $('promoFile').value = '';
+    $('promoStato').textContent = 'Foto tolta: verrà eliminata con "Salva offerta".';
+    disegnaPromoForm();
+}
+
+let promoTimer = null;
+function disegnaPromoForm() {
+    clearTimeout(promoTimer);
+    promoTimer = setTimeout(() => { if ($('promoCanvas')) disegnaPromo($('promoCanvas'), leggiForm(), FORM_FOTO); }, 120);
+}
+
+function scaricaBlob(blob, nome) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = nome;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const nomeFilePromo = o => 'offerta_' + String(o.titolo || o.tipo || 'promo').replace(/[^\w]+/g, '_').slice(0, 40) + '.jpg';
+
+async function scaricaPromoForm() {
+    const o = leggiForm();
+    await disegnaPromo($('promoCanvas'), o, FORM_FOTO);
+    scaricaBlob(await canvasBlob($('promoCanvas'), 'image/jpeg', 0.9), nomeFilePromo(o));
+}
+
+// --- Foto salvate: memoria del browser + server del catalogo ---
+async function chiamaCatalogoPost(dati) {
+    const api = ls.get('oi_cat_api'), admin = ls.get('oi_cat_admin');
+    if (!api || !admin) throw new Error('Collega il catalogo nelle Impostazioni per salvare le foto su tutti i dispositivi.');
+    const r = await fetch(api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(Object.assign({ cli: admin }, dati)) });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'Errore del server del catalogo');
+    return j;
+}
+
+async function fotoOfferta(id) {
+    if (!id) return null;
+    if (PROMO_FOTO[id] !== undefined) return PROMO_FOTO[id];
+    let d = null;
+    try { if (window.localforage) d = await localforage.getItem('oi_promo_' + id); } catch (e) {}
+    if (d === null || d === undefined) {
+        const api = ls.get('oi_cat_api'), admin = ls.get('oi_cat_admin');
+        if (api && admin) {
+            try {
+                const j = await (await fetch(api + '?action=immagineofferta&cli=' + encodeURIComponent(admin) + '&id=' + encodeURIComponent(id))).json();
+                if (j.ok) { d = j.dataUrl || null; try { if (window.localforage) await localforage.setItem('oi_promo_' + id, d || ''); } catch (e) {} }
+            } catch (e) {}
+        }
+    }
+    PROMO_FOTO[id] = d || null;
+    return PROMO_FOTO[id];
+}
+
+async function salvaFotoOfferta(id) {
+    if (!id || !FORM_FOTO_CAMBIO) return;
+    const foto = FORM_FOTO_CAMBIO === 'nuova' ? FORM_FOTO : null;
+    PROMO_FOTO[id] = foto;
+    PROMO_BLOB = null;
+    try { if (window.localforage) await localforage.setItem('oi_promo_' + id, foto || ''); } catch (e) {}
+    try {
+        if (foto) await chiamaCatalogoPost({ action: 'salvaImmagineOfferta', id: id, dataUrl: foto });
+        else await chiamaCatalogoPost({ action: 'eliminaImmagineOfferta', id: id });
+    } catch (e) {
+        toast('Foto salvata solo su questo dispositivo: ' + esc(e.message), 'warning');
+    }
+    FORM_FOTO_CAMBIO = null;
+}
+
+// --- Campagna: immagine pronta per l'invio ---
+async function preparaPromoCampagna(o) {
+    const cv = $('cmpPromo');
+    if (!cv || !o) return;
+    const foto = await fotoOfferta(o.id);
+    if ($('cmpOfferta').value !== o.id) return;
+    await disegnaPromo(cv, o, foto);
+    const [png, jpg] = await Promise.all([canvasBlob(cv, 'image/png'), canvasBlob(cv, 'image/jpeg', 0.9)]);
+    PROMO_BLOB = { id: o.id, png: png, jpg: jpg, nome: nomeFilePromo(o) };
+}
+
+function scaricaPromoCampagna() {
+    if (PROMO_BLOB) scaricaBlob(PROMO_BLOB.jpg, PROMO_BLOB.nome);
+    else toast('Immagine in preparazione, riprova tra un attimo.', 'warning');
+}
+
+const suTelefono = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+
+// WhatsApp con immagine: dal telefono si apre la condivisione (immagine + testo),
+// dal computer l'immagine viene copiata e si apre la chat: basta premere Ctrl+V e inviare.
+function inviaConImmagine(cod) {
+    const c = cliente(cod), r = rigaCampagna(cod);
+    const testo = r.querySelector('.cmp-msg').value;
+    const o = DATA.offerte.find(x => x.id === $('cmpOfferta').value);
+    const pb = PROMO_BLOB && o && PROMO_BLOB.id === o.id ? PROMO_BLOB : null;
+    if (!pb) { toast('Immagine non ancora pronta: invio solo il testo.', 'warning'); invia(cod, 'WhatsApp'); return; }
+
+    if (suTelefono()) {
+        const file = new File([pb.jpg], pb.nome, { type: 'image/jpeg' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file], text: testo })
+                .then(() => registra([cod], 'WhatsApp').catch(e => toast('Inviato ma non registrato: ' + esc(e.message), 'warning')))
+                .catch(e => { if (e && e.name !== 'AbortError') toast('Condivisione non riuscita: ' + esc(e.message), 'danger'); });
+            toast(`Scegli WhatsApp e poi il contatto: <b>${esc(c.nome)}</b>`);
+            return;
+        }
+    }
+
+    let copiata = false;
+    try {
+        if (navigator.clipboard && window.ClipboardItem) {
+            navigator.clipboard.write([new ClipboardItem({ 'image/png': pb.png })])
+                .then(() => toast('<b>Immagine copiata.</b> Nella chat WhatsApp premi <b>Ctrl+V</b> per allegarla, poi invia.'))
+                .catch(() => { scaricaBlob(pb.jpg, pb.nome); toast('Immagine scaricata: trascinala nella chat WhatsApp.', 'warning'); });
+            copiata = true;
+        }
+    } catch (e) {}
+    if (!copiata) { scaricaBlob(pb.jpg, pb.nome); toast('Immagine scaricata: trascinala nella chat WhatsApp.', 'warning'); }
+    invia(cod, 'WhatsApp');
 }
 
 // ---------- Collegamento con il catalogo prodotti ----------
@@ -2042,6 +2327,10 @@ function apriOfferta(id, preset) {
         }
     }
     anteprimaIdonei();
+    // Immagine promozionale: foto già salvata per questa offerta (se c'è) e anteprima del banner
+    FORM_FOTO = null; FORM_FOTO_CAMBIO = null; $('promoFile').value = ''; $('promoStato').textContent = '';
+    disegnaPromoForm();
+    if (o) fotoOfferta(o.id).then(f => { if ($('oId').value === o.id && !FORM_FOTO_CAMBIO) { FORM_FOTO = f; disegnaPromoForm(); } });
     bootstrap.Modal.getOrCreateInstance($('mOfferta')).show();
 }
 
@@ -2085,10 +2374,21 @@ async function salvaOfferta() {
     const btn = $('btnSalvaOff');
     btn.disabled = true;
     try {
-        await api('saveOffer', { offer: o });
+        const risposta = await api('saveOffer', { offer: o });
         bootstrap.Modal.getInstance($('mOfferta')).hide();
         toast('Offerta salvata nel foglio OFFERTE.');
+        const cambioFoto = FORM_FOTO_CAMBIO;
         await carica(true);
+        // Foto dell'offerta: per una nuova offerta l'ID lo assegna il foglio, quindi la cerco dopo il ricaricamento
+        if (cambioFoto) {
+            let id = o.id || (risposta && (risposta.id || (risposta.offer && risposta.offer.id))) || '';
+            if (!id && DATA && DATA.offerte) {
+                const uguali = DATA.offerte.filter(x => x.titolo === o.titolo && x.tipo === o.tipo);
+                if (uguali.length) id = uguali[uguali.length - 1].id;
+            }
+            if (id) { await salvaFotoOfferta(id); if ($('cmpOfferta').value === id) renderCampagna(); }
+            else toast('Offerta salvata, ma non ho trovato il suo codice per collegare la foto: riaprila e ricarica la foto.', 'warning');
+        }
     } catch (e) { toast(esc(e.message), 'danger'); }
     finally { btn.disabled = false; }
 }
@@ -2118,7 +2418,14 @@ function vaiACampagna(id) {
 function renderCampagna() {
     const o = DATA && DATA.offerte.find(x => x.id === $('cmpOfferta').value);
     if (!o) { $('cmpLista').innerHTML = '<div class="text-muted">Crea o attiva un\'offerta per iniziare.</div>'; $('cmpInfo').innerHTML = ''; $('cmpConta').textContent = ''; $('cmpEsclusiTit').textContent = ''; $('cmpEsclusi').innerHTML = ''; return; }
-    $('cmpInfo').innerHTML = `${esc(o.tipo)} · valida fino al ${fmtD(o.al)}<br>${descriviRegole(o)}`;
+    $('cmpInfo').innerHTML = `<div class="d-flex gap-3 align-items-start">
+        <div class="text-center flex-shrink-0">
+            <canvas id="cmpPromo" width="1080" height="1080" class="border rounded shadow-sm" style="width:110px;height:110px;cursor:pointer" title="Scarica l'immagine" onclick="scaricaPromoCampagna()"></canvas>
+            <div><a href="#" class="small" onclick="scaricaPromoCampagna();return false;"><i class="fas fa-download me-1"></i>Scarica</a></div>
+        </div>
+        <div>${esc(o.tipo)} · valida fino al ${fmtD(o.al)}<br>${descriviRegole(o)}</div></div>`;
+    if (!PROMO_BLOB || PROMO_BLOB.id !== o.id) PROMO_BLOB = null;
+    preparaPromoCampagna(o);
     const val = DATA.clienti.map(c => ({ c: c, v: valuta(o, c) }));
     const idonei = val.filter(x => x.v.idoneo).sort((a, b) => b.c.potenziale - a.c.potenziale);
     const esclusi = val.filter(x => !x.v.idoneo);
@@ -2137,7 +2444,8 @@ function renderCampagna() {
                 ${x.v.avvisi.map(a => `<span class="badge bg-warning text-dark">${esc(a)}</span>`).join(' ')}
                 <span class="badge bg-success d-none stato-inviato"><i class="fas fa-check me-1"></i>registrato</span>
                 <div class="ms-auto btn-group btn-group-sm">
-                    <button class="btn btn-success" ${c.tel ? '' : 'disabled'} onclick="invia('${esc(c.codice)}','WhatsApp')"><i class="fab fa-whatsapp me-1"></i>WhatsApp</button>
+                    <button class="btn btn-success" ${c.tel ? '' : 'disabled'} onclick="inviaConImmagine('${esc(c.codice)}')" title="WhatsApp con l'immagine dell'offerta"><i class="fab fa-whatsapp me-1"></i>WhatsApp + <i class="fas fa-image"></i></button>
+                    <button class="btn btn-outline-success" ${c.tel ? '' : 'disabled'} onclick="invia('${esc(c.codice)}','WhatsApp')" title="WhatsApp solo testo"><i class="fab fa-whatsapp"></i></button>
                     <button class="btn btn-outline-primary" ${c.email ? '' : 'disabled'} onclick="invia('${esc(c.codice)}','Email')"><i class="fas fa-envelope me-1"></i>Email</button>
                     <button class="btn btn-outline-secondary" title="Riscrivi con Gemini" onclick="personalizza('${esc(c.codice)}', this)"><i class="fas fa-wand-magic-sparkles"></i></button>
                 </div>
@@ -2375,6 +2683,11 @@ function leggiLinkCollega() {
     $('sCatAdmin').value = ls.get('oi_cat_admin') || '';
     $('sCatAuto').checked = ls.get('oi_cat_auto') !== '0';
     caricaMappaCatalogo(false);
+    // L'anteprima del banner si aggiorna mentre compili l'offerta
+    ['oTitolo', 'oTipo', 'oDescr', 'oSconto', 'oAl', 'oBrand'].forEach(id => {
+        $(id).addEventListener('input', disegnaPromoForm);
+        $(id).addEventListener('change', disegnaPromoForm);
+    });
     try { localStorage.removeItem('oi_cache'); } catch (e) {}   // la memoria locale ora usa IndexedDB
     $('tabSettBtn').addEventListener('shown.bs.tab', () => caricaSettimana());   // la scheda Settimana legge i dati quando viene aperta
     leggiCacheLocale().then(d => {
