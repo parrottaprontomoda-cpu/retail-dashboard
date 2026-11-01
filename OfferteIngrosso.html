@@ -1352,8 +1352,8 @@ async function confermaPicker() {
         const o = offertaCampagna(); if (!o) return;
         const cfg = await impostazioniPromo(o.id);
         await salvaPromo(o.id, { modo: 'prodotti', prodotti: PICKER.sel.slice(), foto: cfg.foto }, false);
-        toast('Immagine aggiornata per questa offerta.');
-        preparaPromoCampagna(o);
+        toast('Immagine e link aggiornati per questa offerta.');
+        renderCampagna();
     }
 }
 
@@ -1387,7 +1387,7 @@ async function cmpModo(m) {
     const cfg = await impostazioniPromo(o.id);
     if (m === 'foto' && !cfg.foto) { $('cmpFotoFile').click(); return; }
     await salvaPromo(o.id, { modo: m, prodotti: cfg.prodotti, foto: cfg.foto }, false);
-    preparaPromoCampagna(o);
+    renderCampagna();
 }
 
 function scaricaPromoCampagna() {
@@ -1442,6 +1442,7 @@ async function caricaMappaCatalogo(mostraEsito) {
         const j = await r.json();
         if (!j.ok) throw new Error(j.error || 'Risposta non valida');
         CAT = { pagina: j.pagina || '', clienti: j.clienti || {} };
+        try { await caricaElencoProdotti(); } catch (e) {}
         const n = Object.keys(CAT.clienti).length;
         if (mostraEsito) $('sCatEsito').innerHTML = `<span class="text-success"><i class="fas fa-check-circle me-1"></i>${n} clienti con link al catalogo</span>`;
         if (DATA && $('cmpOfferta') && $('cmpOfferta').value) renderCampagna();
@@ -1459,11 +1460,44 @@ function salvaCatalogo() {
 }
 
 // Link personale del cliente al catalogo; se l'offerta riguarda un brand, il catalogo si apre già filtrato
+// Nome di un brand (come è scritto nelle vendite) → nomi dei cataloghi corrispondenti nel Catalog Manager.
+// Prima cerca il nome identico (maiuscole, spazi e simboli non contano), poi quello che lo contiene
+// (es. "LOTTO" → "LOTTO KIDS AI26").
+function cataloghiDaBrand(nome) {
+    if (!PROD_CAT) return [];
+    const cats = [...new Set(PROD_CAT.map(p => p.catalogo).filter(Boolean))];
+    const n = normNomeJS(nome);
+    if (!n) return [];
+    const esatti = cats.filter(c => normNomeJS(c) === n);
+    if (esatti.length) return esatti;
+    if (n.length < 3) return [];
+    return cats.filter(c => { const k = normNomeJS(c); return k.indexOf(n) >= 0 || (k.length >= 3 && n.indexOf(k) >= 0); });
+}
+
+// Cataloghi su cui aprire il link dell'offerta:
+// 1) quelli dei prodotti scelti per l'immagine; 2) quelli dei brand dell'offerta (prima quelli che il cliente compra)
+function cataloghiOfferta(o, c) {
+    if (!o) return [];
+    const cfg = PROMO_CFG[o.id];
+    if (cfg && cfg.modo === 'prodotti' && (cfg.prodotti || []).length && PROD_CAT) {
+        const daProdotti = [...new Set(cfg.prodotti.map(cod => { const p = PROD_CAT.find(x => x.cod === cod); return p && p.catalogo; }).filter(Boolean))];
+        if (daProdotti.length) return daProdotti;
+    }
+    const brand = (o.brand || []).slice();
+    if (!brand.length) return [];
+    if (c && c._attivi) brand.sort((a, b) => (c._attivi.indexOf(b) >= 0) - (c._attivi.indexOf(a) >= 0));
+    const out = [];
+    brand.forEach(b => cataloghiDaBrand(b).forEach(x => { if (out.indexOf(x) < 0) out.push(x); }));
+    if (out.length) return out;
+    return PROD_CAT ? [] : [brandPerMessaggio(o, c)];   // elenco cataloghi non ancora letto: uso il nome del brand
+}
+
 function linkCatalogo(o, c) {
     const cod = CAT.clienti[String(c.codice || '').trim().toUpperCase()];
     if (!cod || !CAT.pagina) return '';
     let url = CAT.pagina + '?c=' + encodeURIComponent(cod) + '&condiviso=1';
-    if (o && o.brand && o.brand.length) url += '&catalogo=' + encodeURIComponent(brandPerMessaggio(o, c));
+    const cats = cataloghiOfferta(o, c);
+    if (cats.length) url += '&catalogo=' + encodeURIComponent(cats.join('|'));
     return url;
 }
 
@@ -2769,7 +2803,16 @@ function renderCampagna() {
             </div>
         </div></div>`;
     if (!PROMO_BLOB || PROMO_BLOB.id !== o.id) PROMO_BLOB = null;
-    preparaPromoCampagna(o);
+    const cats = cataloghiOfferta(o, null);
+    $('cmpInfo').insertAdjacentHTML('beforeend', `<div class="mt-2 small ${cats.length ? 'text-success' : 'text-warning'}"><i class="fas fa-link me-1"></i>` +
+        (!catalogoCollegato() ? 'Catalogo non collegato: nessun link nei messaggi.'
+         : cats.length ? 'Il link apre il catalogo filtrato su: <b>' + esc(cats.join(', ')) + '</b>'
+         : 'Il link apre tutto il catalogo: scegli i prodotti per l\'immagine oppure indica un brand che corrisponde a un catalogo.') + '</div>');
+    // Le scelte dell'immagine (e l'elenco dei cataloghi) arrivano dal server: appena pronte rigenero i messaggi con il filtro giusto
+    const pronto = !!PROMO_CFG[o.id] && !!PROD_CAT;
+    preparaPromoCampagna(o).then(() => {
+        if (!pronto && PROMO_CFG[o.id] && $('cmpOfferta').value === o.id && cataloghiOfferta(o, null).join('|') !== cats.join('|')) renderCampagna();
+    });
     const val = DATA.clienti.map(c => ({ c: c, v: valuta(o, c) }));
     const idonei = val.filter(x => x.v.idoneo).sort((a, b) => b.c.potenziale - a.c.potenziale);
     const esclusi = val.filter(x => !x.v.idoneo);
