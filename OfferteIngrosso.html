@@ -33,6 +33,10 @@
     .score-box .big { font-size: 1.6rem; font-weight: 700; }
     .sticky-actions { position: sticky; top: 0; z-index: 5; background: #fff; padding: 10px 0; border-bottom: 1px solid #eee; }
     .row-inviato { background: #e9f7ef !important; }
+    .pp-item { cursor: pointer; background: #fff; transition: box-shadow .15s; }
+    .pp-item:hover { box-shadow: 0 2px 10px rgba(0,0,0,.15); }
+    .pp-item.sel { outline: 3px solid #2b6cb0; outline-offset: -3px; }
+    .pp-item img { width: 100%; height: 120px; object-fit: contain; background: #fff; }
 </style>
 </head>
 <body>
@@ -490,6 +494,34 @@
             <div class="col-md-3"><label class="form-label small fw-bold">Attiva</label><select id="oAttiva" class="form-select"><option value="SI">Sì</option><option value="NO">No</option></select></div>
         </div>
         <hr>
+        <h6 class="fw-bold text-primary"><i class="fas fa-image me-1"></i>Immagine promozionale da inviare con il messaggio</h6>
+        <div class="row g-3 align-items-start">
+            <div class="col-md-5 text-center">
+                <canvas id="promoCanvas" width="1080" height="1080" class="border rounded shadow-sm" style="width:100%;max-width:320px;height:auto;"></canvas>
+            </div>
+            <div class="col-md-7 small">
+                <div class="btn-group btn-group-sm w-100 mb-2" role="group">
+                    <input type="radio" class="btn-check" name="promoModo" id="pmProd" value="prodotti" onchange="cambiaModoForm(this.value)">
+                    <label class="btn btn-outline-primary" for="pmProd"><i class="fas fa-shirt me-1"></i>Prodotti</label>
+                    <input type="radio" class="btn-check" name="promoModo" id="pmFoto" value="foto" onchange="cambiaModoForm(this.value)">
+                    <label class="btn btn-outline-primary" for="pmFoto"><i class="fas fa-camera me-1"></i>Foto mia</label>
+                    <input type="radio" class="btn-check" name="promoModo" id="pmGraf" value="grafica" onchange="cambiaModoForm(this.value)">
+                    <label class="btn btn-outline-primary" for="pmGraf"><i class="fas fa-palette me-1"></i>Solo grafica</label>
+                </div>
+                <div id="pmBoxProd">
+                    <p class="text-muted mb-2">Usa le foto dei prodotti del catalogo: se non ne scegli, prende in automatico quelli dei <b>brand</b> dell'offerta. I colori si adattano alle foto.</p>
+                    <button type="button" class="btn btn-sm btn-primary mb-2" onclick="apriPickerProdotti('form')"><i class="fas fa-images me-1"></i>Scegli prodotti dal catalogo</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary mb-2" onclick="prodottiAutoForm()">Automatici</button>
+                </div>
+                <div id="pmBoxFoto" style="display:none">
+                    <p class="text-muted mb-2">Carica una tua foto o grafica (es. i capi in offerta): diventa lo sfondo e sopra vengono scritti sconto, titolo e scadenza.</p>
+                    <input type="file" id="promoFile" accept="image/*" class="form-control form-control-sm mb-2" onchange="caricaFotoPromo(this, 'form')">
+                </div>
+                <div id="promoStato" class="text-muted mb-2"></div>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="scaricaPromoForm()"><i class="fas fa-download me-1"></i>Scarica immagine</button>
+            </div>
+        </div>
+        <hr>
         <h6 class="fw-bold text-primary"><i class="fas fa-filter me-1"></i>A chi va questa offerta</h6>
         <div class="row g-3">
             <div class="col-md-6">
@@ -541,27 +573,32 @@
         <label class="form-label small fw-bold">Messaggio (verrà personalizzato per ogni cliente)</label>
         <div class="mb-1" id="oChips"></div>
         <textarea id="oMsg" class="form-control msg-area" rows="7"></textarea>
-        <hr>
-        <h6 class="fw-bold text-primary"><i class="fas fa-image me-1"></i>Immagine promozionale</h6>
-        <div class="row g-3 align-items-start">
-            <div class="col-md-5 text-center">
-                <canvas id="promoCanvas" width="1080" height="1080" class="border rounded shadow-sm" style="width:100%;max-width:300px;height:auto;"></canvas>
-            </div>
-            <div class="col-md-7 small">
-                <p class="text-muted mb-2">Si crea da sola con i colori e l'icona del tipo di offerta, lo sconto, il titolo, i brand e la scadenza, e si aggiorna mentre compili. Se vuoi, aggiungi una tua foto come sfondo (es. i capi in offerta).</p>
-                <label class="form-label fw-bold mb-1">Foto di sfondo (facoltativa)</label>
-                <input type="file" id="promoFile" accept="image/*" class="form-control form-control-sm mb-2" onchange="caricaFotoPromo(this)">
-                <div class="d-flex flex-wrap gap-2">
-                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="rimuoviFotoPromo()"><i class="fas fa-trash me-1"></i>Togli foto</button>
-                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="scaricaPromoForm()"><i class="fas fa-download me-1"></i>Scarica immagine</button>
-                </div>
-                <div id="promoStato" class="text-muted mt-2"></div>
-            </div>
-        </div>
     </div>
     <div class="modal-footer">
         <button class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
         <button class="btn btn-primary fw-bold" id="btnSalvaOff" onclick="salvaOfferta()"><i class="fas fa-save me-1"></i>Salva offerta</button>
+    </div>
+</div></div></div>
+
+
+<div class="modal fade" id="mProdPromo" tabindex="-1" style="z-index:1070"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header" style="background:#2b6cb0;color:#fff;">
+        <h5 class="modal-title fw-bold"><i class="fas fa-images me-2"></i>Scegli i prodotti per l'immagine (fino a 4)</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+        <div class="row g-2 mb-2">
+            <div class="col-md-4"><select id="ppCatalogo" class="form-select form-select-sm" onchange="renderPicker()"></select></div>
+            <div class="col-md-5"><input id="ppCerca" class="form-control form-control-sm" placeholder="Cerca per nome, codice, categoria, tipo..." oninput="renderPicker()"></div>
+            <div class="col-md-3 small text-end align-self-center" id="ppConta"></div>
+        </div>
+        <div id="ppScelti" class="small mb-2"></div>
+        <div id="ppGriglia" class="row g-2"></div>
+    </div>
+    <div class="modal-footer">
+        <button class="btn btn-outline-secondary me-auto" onclick="PICKER.sel=[];renderPicker()">Deseleziona tutti</button>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+        <button class="btn btn-primary fw-bold" onclick="confermaPicker()"><i class="fas fa-check me-1"></i>Usa questi prodotti</button>
     </div>
 </div></div></div>
 
@@ -836,9 +873,13 @@ function condizioni(o, c) {
 }
 
 // ---------- Immagine promozionale dell'offerta ----------
-// Un banner 1080x1080 disegnato nel browser: colori e icona per tipo di offerta, sconto, titolo,
-// brand, scadenza e firma. La foto di sfondo facoltativa viene salvata tramite il server del
-// catalogo (cartella Drive), così è disponibile su tutti i dispositivi.
+// Immagine 1080x1080 disegnata nel browser, in tre modalità:
+//  - PRODOTTI: foto dei prodotti del catalogo (scelte a mano o automatiche dai brand dell'offerta),
+//    con colori presi dalle foto stesse
+//  - FOTO MIA: una foto caricata come sfondo
+//  - SOLO GRAFICA: colori e icona del tipo di offerta
+// Sopra: etichetta del tipo di offerta, sconto, titolo, brand, scadenza e firma.
+// Le scelte vengono salvate tramite il server del catalogo e valgono su tutti i dispositivi.
 const PROMO_TEMI = {
     'Fine serie / Stock':          { c1: '#b71c1c', c2: '#ff7043', icona: '🏷️', etichetta: 'FINE SERIE' },
     'Nuova collezione':            { c1: '#4a148c', c2: '#ab47bc', icona: '✨', etichetta: 'NUOVA COLLEZIONE' },
@@ -854,10 +895,14 @@ const PROMO_TEMI = {
 const PROMO_FONT = "'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 const PROMO_EMOJI = "'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif";
 
-let PROMO_FOTO = {};          // id offerta → data URL della foto (null = nessuna)
-let FORM_FOTO = null;         // foto dell'offerta aperta nel modulo
-let FORM_FOTO_CAMBIO = null;  // 'nuova' | 'rimossa' | null
-let PROMO_BLOB = null;        // { id, png, jpg } immagine pronta per l'offerta della campagna
+let PROMO_CFG = {};    // id offerta → { modo, prodotti: [codici], foto: dataUrl|null }
+let FORM_PROMO = { modo: 'prodotti', prodotti: [], foto: null, cambiato: false, fotoCambiata: false };
+let PROD_CAT = null;   // prodotti del catalogo con foto (per scegliere e per la scelta automatica)
+let FOTO_PROD = {};    // codice prodotto → dataUrl della foto
+let PROMO_BLOB = null; // immagine pronta per l'offerta aperta nella Campagna
+
+const catalogoCollegato = () => !!(ls.get('oi_cat_api') && ls.get('oi_cat_admin'));
+const urlCatalogo = (azione, extra) => ls.get('oi_cat_api') + '?action=' + azione + '&cli=' + encodeURIComponent(ls.get('oi_cat_admin') || '') + (extra || '');
 
 function caricaImmagine(src) {
     return new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = src; });
@@ -886,45 +931,166 @@ function rettangoloTondo(ctx, x, y, w, h, r) {
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
 
-async function disegnaPromo(canvas, o, foto) {
+// Colore medio delle foto (escluso lo sfondo bianco/nero): dà il tono all'immagine
+function coloreDaFoto(imgs) {
+    const c = document.createElement('canvas'); c.width = c.height = 48;
+    const x = c.getContext('2d');
+    let r = 0, g = 0, b = 0, n = 0;
+    imgs.forEach(img => {
+        x.clearRect(0, 0, 48, 48); x.drawImage(img, 0, 0, 48, 48);
+        const d = x.getImageData(0, 0, 48, 48).data;
+        for (let i = 0; i < d.length; i += 4) {
+            if (d[i + 3] < 128) continue;
+            const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]);
+            if (mn > 225 || mx < 30) continue;            // bianco dello sfondo o nero
+            const peso = 1 + (mx - mn) / 40;               // i colori vivi contano di più
+            r += d[i] * peso; g += d[i + 1] * peso; b += d[i + 2] * peso; n += peso;
+        }
+    });
+    if (n < 30) return null;
+    return [r / n, g / n, b / n];
+}
+function tonalita([r, g, b], f) {   // f < 1 scurisce
+    const k = v => Math.max(0, Math.min(255, Math.round(v * f)));
+    return `rgb(${k(r)},${k(g)},${k(b)})`;
+}
+function temaDaColore(rgb, base) {
+    if (!rgb) return { c1: base.c1, c2: base.c2 };
+    const lum = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+    const f = lum > 0.55 ? 0.55 / lum : 1;             // abbastanza scuro da leggere il testo bianco
+    return { c1: tonalita(rgb, f * 0.45), c2: tonalita(rgb, f * 0.9) };
+}
+
+// Disegna le foto prodotto dentro un riquadro (1, 2, 3 o 4 foto)
+function collage(ctx, imgs, X, Y, W, H) {
+    const gap = 16, cel = [];
+    const n = imgs.length;
+    if (n === 1) cel.push([X, Y, W, H]);
+    else if (n === 2) { const w = (W - gap) / 2; cel.push([X, Y, w, H], [X + w + gap, Y, w, H]); }
+    else if (n === 3) { const w1 = (W - gap) * 0.56, w2 = W - gap - w1, h = (H - gap) / 2;
+        cel.push([X, Y, w1, H], [X + w1 + gap, Y, w2, h], [X + w1 + gap, Y + h + gap, w2, h]); }
+    else { const w = (W - gap) / 2, h = (H - gap) / 2;
+        cel.push([X, Y, w, h], [X + w + gap, Y, w, h], [X, Y + h + gap, w, h], [X + w + gap, Y + h + gap, w, h]); }
+    imgs.slice(0, 4).forEach((img, i) => {
+        const [cx, cy, cw, ch] = cel[i];
+        const s = Math.min(cw / img.width, ch / img.height);
+        const w = img.width * s, h = img.height * s;
+        ctx.drawImage(img, cx + (cw - w) / 2, cy + (ch - h) / 2, w, h);
+    });
+}
+
+// ris: { modo: 'prodotti'|'foto'|'grafica', immagini: [dataUrl], foto: dataUrl }
+async function disegnaPromo(canvas, o, ris) {
     const ctx = canvas.getContext('2d'), W = 1080, H = 1080;
     const t = PROMO_TEMI[o.tipo] || PROMO_TEMI['Promo personalizzata'];
-    ctx.clearRect(0, 0, W, H);
+    const sconto = +o.sconto || 0;
+    ris = ris || { modo: 'grafica' };
 
-    // Sfondo: foto (riempie il quadrato) oppure sfumatura del tipo di offerta
-    let img = null;
-    if (foto) { try { img = await caricaImmagine(foto); } catch (e) { img = null; } }
-    if (img) {
-        const s = Math.max(W / img.width, H / img.height);
-        ctx.drawImage(img, (W - img.width * s) / 2, (H - img.height * s) / 2, img.width * s, img.height * s);
+    let prodotti = [];
+    if (ris.modo === 'prodotti' && ris.immagini && ris.immagini.length) {
+        prodotti = (await Promise.all(ris.immagini.map(u => caricaImmagine(u).catch(() => null)))).filter(Boolean);
+    }
+    let foto = null;
+    if (ris.modo === 'foto' && ris.foto) { try { foto = await caricaImmagine(ris.foto); } catch (e) { foto = null; } }
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.shadowBlur = 0;
+
+    if (prodotti.length) {
+        // ===== Layout PRODOTTI =====
+        const tema = temaDaColore(coloreDaFoto(prodotti), t);
+        const g = ctx.createLinearGradient(0, 0, W, H);
+        g.addColorStop(0, tema.c1); g.addColorStop(1, tema.c2);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+        // Etichetta del tipo di offerta (colore del tipo: si riconosce a colpo d'occhio)
+        ctx.font = `bold 44px ${PROMO_FONT}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+        const et = t.icona + '  ' + t.etichetta;
+        ctx.fillStyle = t.c1;
+        rettangoloTondo(ctx, 50, 44, Math.min(ctx.measureText(et).width + 64, 980), 88, 44); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.fillText(et, 82, 89);
+
+        // Riquadro bianco con le foto
+        ctx.shadowColor = 'rgba(0,0,0,0.30)'; ctx.shadowBlur = 30; ctx.shadowOffsetY = 8;
+        ctx.fillStyle = '#ffffff';
+        rettangoloTondo(ctx, 50, 160, 980, 540, 36); ctx.fill();
+        ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+        ctx.save(); rettangoloTondo(ctx, 50, 160, 980, 540, 36); ctx.clip();
+        collage(ctx, prodotti, 74, 184, 932, 492);
+        ctx.restore();
+
+        // Bollino dello sconto sotto le foto, a destra (non copre i prodotti)
+        const largTesto = sconto > 0 ? 790 : 960;
+        if (sconto > 0) {
+            const bx = 935, by = 828, br = 108;
+            ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 20;
+            ctx.fillStyle = t.c1; ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.lineWidth = 8; ctx.strokeStyle = '#fff'; ctx.stroke();
+            ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.font = `bold 26px ${PROMO_FONT}`; ctx.fillText('SCONTO', bx, by - 50);
+            const testoSconto = '-' + sconto + '%';
+            let fs = 84; ctx.font = `900 ${fs}px ${PROMO_FONT}`;
+            while (ctx.measureText(testoSconto).width > br * 1.75 && fs > 40) { fs -= 4; ctx.font = `900 ${fs}px ${PROMO_FONT}`; }
+            ctx.fillText(testoSconto, bx, by + 14);
+        }
+
+        // Testi sotto le foto
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = '#fff';
+        ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 12;
+        let y = 788;
+        ctx.font = `900 64px ${PROMO_FONT}`;
+        const titolo = righeTesto(ctx, o.titolo || o.tipo, largTesto, 2);
+        titolo.forEach(r => { ctx.fillText(r, 55, y); y += 72; });
+        const riga2 = [o.descrizione, (o.brand || []).join(' · ')].filter(Boolean).join('  —  ');
+        if (riga2 && y < 930) {
+            ctx.font = `bold 38px ${PROMO_FONT}`;
+            ctx.fillText(righeTesto(ctx, riga2, largTesto, 1)[0], 58, Math.min(y + 4, 925));
+        }
+        ctx.shadowBlur = 0;
+    } else if (foto) {
+        // ===== Layout FOTO MIA =====
+        const s = Math.max(W / foto.width, H / foto.height);
+        ctx.drawImage(foto, (W - foto.width * s) / 2, (H - foto.height * s) / 2, foto.width * s, foto.height * s);
         const g = ctx.createLinearGradient(0, H * 0.3, 0, H);
         g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.55, 'rgba(0,0,0,0.55)'); g.addColorStop(1, 'rgba(0,0,0,0.85)');
         ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+        testiGrandi(ctx, o, t, true);
     } else {
+        // ===== Layout SOLO GRAFICA =====
         const g = ctx.createLinearGradient(0, 0, W, H);
         g.addColorStop(0, t.c1); g.addColorStop(1, t.c2);
         ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
         ctx.fillStyle = 'rgba(255,255,255,0.08)';
         [[900, 160, 260], [120, 980, 220], [1000, 900, 140]].forEach(([x, y, r]) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); });
-        ctx.fillStyle = '#ffffff';   // l'icona non deve ereditare la trasparenza dei cerchi
+        ctx.fillStyle = '#ffffff';
         ctx.font = `230px ${PROMO_EMOJI}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(t.icona, 830, 300);
+        testiGrandi(ctx, o, t, false);
     }
 
-    // Etichetta del tipo di offerta
+    // Fascia in basso: scadenza e firma
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 950, W, 130);
+    ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
+    ctx.font = `bold 40px ${PROMO_FONT}`; ctx.textAlign = 'left';
+    ctx.fillText(o.al ? 'Valida fino al ' + fmtD(o.al) : 'Fino a esaurimento scorte', 60, 1015);
+    ctx.textAlign = 'right';
+    const azienda = (DATA && DATA.cfg && DATA.cfg.NOME_AZIENDA) || '';
+    if (azienda) ctx.fillText(righeTesto(ctx, azienda, 440, 1)[0], W - 60, 1015);
+    ctx.textAlign = 'left';
+}
+
+// Testi per i layout "foto mia" e "solo grafica"
+function testiGrandi(ctx, o, t, conFoto) {
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.font = `bold 46px ${PROMO_FONT}`;
-    const etichetta = (img ? t.icona + '  ' : '') + t.etichetta;
-    const we = ctx.measureText(etichetta).width + 70;
-    ctx.fillStyle = img ? t.c1 : 'rgba(255,255,255,0.95)';
-    rettangoloTondo(ctx, 60, 60, Math.min(we, 960), 92, 46); ctx.fill();
-    ctx.fillStyle = img ? '#fff' : t.c1;
-    if (img) { ctx.font = `bold 46px ${PROMO_FONT}`; }
+    const etichetta = (conFoto ? t.icona + '  ' : '') + t.etichetta;
+    ctx.fillStyle = conFoto ? t.c1 : 'rgba(255,255,255,0.95)';
+    rettangoloTondo(ctx, 60, 60, Math.min(ctx.measureText(etichetta).width + 70, 960), 92, 46); ctx.fill();
+    ctx.fillStyle = conFoto ? '#fff' : t.c1;
     ctx.fillText(etichetta, 95, 108);
 
-    // Testi principali
-    ctx.fillStyle = '#fff';
-    ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 18;
+    ctx.fillStyle = '#fff'; ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 18;
     ctx.textBaseline = 'alphabetic';
     let y = 620;
     const sconto = +o.sconto || 0;
@@ -948,50 +1114,10 @@ async function disegnaPromo(canvas, o, foto) {
         righeTesto(ctx, o.brand.join(' · '), 960, 1).forEach(r => { ctx.fillText(r, 60, Math.min(y + 14, 900)); });
     }
     ctx.shadowBlur = 0;
-
-    // Fascia in basso: scadenza e firma
-    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 950, W, 130);
-    ctx.fillStyle = '#fff'; ctx.textBaseline = 'middle';
-    ctx.font = `bold 40px ${PROMO_FONT}`; ctx.textAlign = 'left';
-    ctx.fillText(o.al ? 'Valida fino al ' + fmtD(o.al) : 'Fino a esaurimento scorte', 60, 1015);
-    ctx.textAlign = 'right'; ctx.font = `bold 40px ${PROMO_FONT}`;
-    const azienda = (DATA && DATA.cfg && DATA.cfg.NOME_AZIENDA) || '';
-    if (azienda) ctx.fillText(righeTesto(ctx, azienda, 440, 1)[0], W - 60, 1015);
-    ctx.textAlign = 'left';
 }
 
 function canvasBlob(canvas, tipo, qualita) {
     return new Promise(ok => canvas.toBlob(b => ok(b), tipo, qualita));
-}
-
-// Ridimensiona la foto scelta (max 1080 px) e la comprime in JPEG
-async function caricaFotoPromo(input) {
-    const f = input.files && input.files[0];
-    if (!f) return;
-    try {
-        const url = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(f); });
-        const img = await caricaImmagine(url);
-        const s = Math.min(1, 1080 / Math.max(img.width, img.height));
-        const c = document.createElement('canvas');
-        c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        FORM_FOTO = c.toDataURL('image/jpeg', 0.85);
-        FORM_FOTO_CAMBIO = 'nuova';
-        $('promoStato').textContent = 'Foto pronta: verrà salvata con "Salva offerta".';
-        disegnaPromoForm();
-    } catch (e) { toast('Impossibile leggere la foto scelta.', 'danger'); }
-}
-
-function rimuoviFotoPromo() {
-    FORM_FOTO = null; FORM_FOTO_CAMBIO = 'rimossa'; $('promoFile').value = '';
-    $('promoStato').textContent = 'Foto tolta: verrà eliminata con "Salva offerta".';
-    disegnaPromoForm();
-}
-
-let promoTimer = null;
-function disegnaPromoForm() {
-    clearTimeout(promoTimer);
-    promoTimer = setTimeout(() => { if ($('promoCanvas')) disegnaPromo($('promoCanvas'), leggiForm(), FORM_FOTO); }, 120);
 }
 
 function scaricaBlob(blob, nome) {
@@ -1002,65 +1128,266 @@ function scaricaBlob(blob, nome) {
 }
 const nomeFilePromo = o => 'offerta_' + String(o.titolo || o.tipo || 'promo').replace(/[^\w]+/g, '_').slice(0, 40) + '.jpg';
 
+// ---------- Prodotti del catalogo ----------
+async function caricaElencoProdotti() {
+    if (PROD_CAT) return PROD_CAT;
+    if (!catalogoCollegato()) throw new Error('Collega il catalogo in Impostazioni → Catalogo prodotti.');
+    const j = await (await fetch(urlCatalogo('prodottipromo'))).json();
+    if (!j.ok) throw new Error(j.error || 'Elenco prodotti non disponibile');
+    PROD_CAT = j.prodotti || [];
+    return PROD_CAT;
+}
+
+async function fotoProdotto(cod) {
+    if (FOTO_PROD[cod] !== undefined) return FOTO_PROD[cod];
+    let d = null;
+    try { if (window.localforage) d = await localforage.getItem('oi_fp_' + cod); } catch (e) {}
+    if (!d && catalogoCollegato()) {
+        try {
+            const j = await (await fetch(urlCatalogo('fotoprodotto', '&cod=' + encodeURIComponent(cod)))).json();
+            if (j.ok && j.dataUrl) {
+                d = await rimpicciolisci(j.dataUrl, 900, 'image/jpeg', 0.88);
+                try { if (window.localforage) await localforage.setItem('oi_fp_' + cod, d); } catch (e) {}
+            }
+        } catch (e) {}
+    }
+    FOTO_PROD[cod] = d || null;
+    return FOTO_PROD[cod];
+}
+
+// Prodotti scelti in automatico: quelli dei cataloghi che hanno il nome dei brand dell'offerta
+function prodottiAutomatici(o) {
+    if (!PROD_CAT || !o.brand || !o.brand.length) return [];
+    const brand = o.brand.map(normNomeJS);
+    const out = [];
+    brand.forEach(b => PROD_CAT.forEach(p => { if (normNomeJS(p.catalogo) === b && out.length < 8) out.push(p.cod); }));
+    // uno per brand a turno, così con più brand ci sono foto di ognuno
+    const perBrand = brand.map(b => PROD_CAT.filter(p => normNomeJS(p.catalogo) === b).map(p => p.cod));
+    const misto = [];
+    for (let i = 0; misto.length < 4 && i < 4; i++) perBrand.forEach(l => { if (l[i] && misto.length < 4) misto.push(l[i]); });
+    return misto.length ? misto : out.slice(0, 4);
+}
+
+// Cosa disegnare per un'offerta, in base alle sue impostazioni
+async function risorsePromo(o, cfg) {
+    const modo = (cfg && cfg.modo) || 'prodotti';
+    if (modo === 'foto' && cfg.foto) return { modo: 'foto', foto: cfg.foto };
+    if (modo === 'prodotti') {
+        let cod = ((cfg && cfg.prodotti) || []).slice(0, 4);
+        if (!cod.length) { try { await caricaElencoProdotti(); } catch (e) {} cod = prodottiAutomatici(o); }
+        const imm = (await Promise.all(cod.map(fotoProdotto))).filter(Boolean);
+        if (imm.length) return { modo: 'prodotti', immagini: imm, codici: cod };
+    }
+    return { modo: 'grafica' };
+}
+
+// ---------- Impostazioni salvate per offerta ----------
+async function impostazioniPromo(id) {
+    if (!id) return { modo: 'prodotti', prodotti: [], foto: null };
+    if (PROMO_CFG[id]) return PROMO_CFG[id];
+    let cfg = null;
+    if (catalogoCollegato()) {
+        try {
+            const j = await (await fetch(urlCatalogo('immagineofferta', '&id=' + encodeURIComponent(id)))).json();
+            if (j.ok) {
+                const imp = j.impostazioni || {};
+                cfg = { modo: imp.modo || (j.dataUrl ? 'foto' : 'prodotti'), prodotti: imp.prodotti || [], foto: j.dataUrl || null };
+                try { if (window.localforage) await localforage.setItem('oi_promo2_' + id, cfg); } catch (e) {}
+            }
+        } catch (e) {}
+    }
+    if (!cfg) { try { if (window.localforage) cfg = await localforage.getItem('oi_promo2_' + id); } catch (e) {} }
+    PROMO_CFG[id] = cfg || { modo: 'prodotti', prodotti: [], foto: null };
+    return PROMO_CFG[id];
+}
+
+async function salvaPromo(id, cfg, fotoCambiata) {
+    PROMO_CFG[id] = { modo: cfg.modo, prodotti: cfg.prodotti || [], foto: cfg.foto || null };
+    PROMO_BLOB = null;
+    try { if (window.localforage) await localforage.setItem('oi_promo2_' + id, PROMO_CFG[id]); } catch (e) {}
+    if (!catalogoCollegato()) { toast('Immagine salvata solo su questo dispositivo: collega il catalogo nelle Impostazioni.', 'warning'); return; }
+    try {
+        const body = { action: 'salvaPromoOfferta', cli: ls.get('oi_cat_admin'), id: id,
+            impostazioni: { modo: cfg.modo, prodotti: cfg.prodotti || [] }, fotoCambiata: !!fotoCambiata, dataUrl: fotoCambiata ? cfg.foto : null };
+        const j = await (await fetch(ls.get('oi_cat_api'), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })).json();
+        if (!j.ok) throw new Error(j.error || 'errore');
+    } catch (e) { toast('Immagine salvata solo su questo dispositivo: ' + esc(e.message), 'warning'); }
+}
+
+// Riduce una foto a max N pixel (le foto dei telefoni pesano molto)
+async function rimpicciolisci(url, max, tipo, q) {
+    const img = await caricaImmagine(url);
+    const s = Math.min(1, max / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+    const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);   // le foto scontornate restano su bianco
+    x.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL(tipo || 'image/jpeg', q || 0.85);
+}
+
+async function leggiFileFoto(input) {
+    const f = input.files && input.files[0];
+    if (!f) return null;
+    const url = await new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(f); });
+    return rimpicciolisci(url, 1080, 'image/jpeg', 0.85);
+}
+
+// ---------- Modulo dell'offerta ----------
+let promoTimer = null, promoTok = 0;
+function disegnaPromoForm() {
+    clearTimeout(promoTimer);
+    promoTimer = setTimeout(async () => {
+        if (!$('promoCanvas')) return;
+        const tok = ++promoTok;
+        const o = leggiForm();
+        const ris = await risorsePromo(o, FORM_PROMO);
+        if (tok !== promoTok) return;
+        await disegnaPromo($('promoCanvas'), o, ris);
+        aggiornaStatoForm(ris, o);
+    }, 150);
+}
+
+function aggiornaStatoForm(ris, o) {
+    document.querySelectorAll('input[name="promoModo"]').forEach(r => { r.checked = r.value === FORM_PROMO.modo; });
+    $('pmBoxProd').style.display = FORM_PROMO.modo === 'prodotti' ? '' : 'none';
+    $('pmBoxFoto').style.display = FORM_PROMO.modo === 'foto' ? '' : 'none';
+    let s = '';
+    if (FORM_PROMO.modo === 'prodotti') {
+        const nomi = (ris.codici || []).map(c => { const p = (PROD_CAT || []).find(x => x.cod === c); return p ? p.nome : c; });
+        if (ris.modo === 'prodotti') s = (FORM_PROMO.prodotti.length ? 'Prodotti scelti: ' : 'Prodotti automatici: ') + nomi.join(', ');
+        else if (!catalogoCollegato()) s = '<span class="text-warning">Collega il catalogo nelle Impostazioni per usare le foto dei prodotti.</span>';
+        else s = '<span class="text-warning">Nessun prodotto: scegli dal catalogo, oppure indica nei Brand il nome di un catalogo.</span>';
+    } else if (FORM_PROMO.modo === 'foto') {
+        s = FORM_PROMO.foto ? 'Foto caricata.' : '<span class="text-warning">Scegli la foto da usare come sfondo.</span>';
+    }
+    if (FORM_PROMO.cambiato) s += ' <i>(verrà salvata con "Salva offerta")</i>';
+    $('promoStato').innerHTML = s;
+}
+
+function cambiaModoForm(m) { FORM_PROMO.modo = m; FORM_PROMO.cambiato = true; disegnaPromoForm(); }
+function prodottiAutoForm() { FORM_PROMO.prodotti = []; FORM_PROMO.modo = 'prodotti'; FORM_PROMO.cambiato = true; disegnaPromoForm(); }
+
 async function scaricaPromoForm() {
     const o = leggiForm();
-    await disegnaPromo($('promoCanvas'), o, FORM_FOTO);
+    await disegnaPromo($('promoCanvas'), o, await risorsePromo(o, FORM_PROMO));
     scaricaBlob(await canvasBlob($('promoCanvas'), 'image/jpeg', 0.9), nomeFilePromo(o));
 }
 
-// --- Foto salvate: memoria del browser + server del catalogo ---
-async function chiamaCatalogoPost(dati) {
-    const api = ls.get('oi_cat_api'), admin = ls.get('oi_cat_admin');
-    if (!api || !admin) throw new Error('Collega il catalogo nelle Impostazioni per salvare le foto su tutti i dispositivi.');
-    const r = await fetch(api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ cli: admin }, dati)) });
-    const j = await r.json();
-    if (!j.ok) throw new Error(j.error || 'Errore del server del catalogo');
-    return j;
-}
-
-async function fotoOfferta(id) {
-    if (!id) return null;
-    if (PROMO_FOTO[id] !== undefined) return PROMO_FOTO[id];
-    let d = null;
-    try { if (window.localforage) d = await localforage.getItem('oi_promo_' + id); } catch (e) {}
-    if (d === null || d === undefined) {
-        const api = ls.get('oi_cat_api'), admin = ls.get('oi_cat_admin');
-        if (api && admin) {
-            try {
-                const j = await (await fetch(api + '?action=immagineofferta&cli=' + encodeURIComponent(admin) + '&id=' + encodeURIComponent(id))).json();
-                if (j.ok) { d = j.dataUrl || null; try { if (window.localforage) await localforage.setItem('oi_promo_' + id, d || ''); } catch (e) {} }
-            } catch (e) {}
-        }
-    }
-    PROMO_FOTO[id] = d || null;
-    return PROMO_FOTO[id];
-}
-
-async function salvaFotoOfferta(id) {
-    if (!id || !FORM_FOTO_CAMBIO) return;
-    const foto = FORM_FOTO_CAMBIO === 'nuova' ? FORM_FOTO : null;
-    PROMO_FOTO[id] = foto;
-    PROMO_BLOB = null;
-    try { if (window.localforage) await localforage.setItem('oi_promo_' + id, foto || ''); } catch (e) {}
+// Foto propria (dal modulo o dalla Campagna)
+async function caricaFotoPromo(input, dove) {
     try {
-        if (foto) await chiamaCatalogoPost({ action: 'salvaImmagineOfferta', id: id, dataUrl: foto });
-        else await chiamaCatalogoPost({ action: 'eliminaImmagineOfferta', id: id });
-    } catch (e) {
-        toast('Foto salvata solo su questo dispositivo: ' + esc(e.message), 'warning');
-    }
-    FORM_FOTO_CAMBIO = null;
+        const foto = await leggiFileFoto(input);
+        input.value = '';
+        if (!foto) return;
+        if (dove === 'form') {
+            Object.assign(FORM_PROMO, { foto: foto, modo: 'foto', cambiato: true, fotoCambiata: true });
+            disegnaPromoForm();
+        } else {
+            const o = offertaCampagna(); if (!o) return;
+            const cfg = await impostazioniPromo(o.id);
+            await salvaPromo(o.id, { modo: 'foto', prodotti: cfg.prodotti, foto: foto }, true);
+            toast('Foto salvata per questa offerta.');
+            preparaPromoCampagna(o);
+        }
+    } catch (e) { toast('Impossibile leggere la foto scelta.', 'danger'); }
 }
 
-// --- Campagna: immagine pronta per l'invio ---
+// ---------- Scelta dei prodotti dal catalogo ----------
+let PICKER = { dove: 'form', sel: [] };
+
+async function apriPickerProdotti(dove) {
+    try { await caricaElencoProdotti(); }
+    catch (e) { toast(esc(e.message), 'warning'); return; }
+    let sel = [];
+    if (dove === 'form') sel = FORM_PROMO.prodotti.length ? FORM_PROMO.prodotti.slice() : prodottiAutomatici(leggiForm());
+    else { const o = offertaCampagna(); if (!o) return; const cfg = await impostazioniPromo(o.id); sel = (cfg.prodotti || []).length ? cfg.prodotti.slice() : prodottiAutomatici(o); }
+    PICKER = { dove: dove, sel: sel };
+    const cataloghi = [...new Set(PROD_CAT.map(p => p.catalogo).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
+    const o = dove === 'form' ? leggiForm() : offertaCampagna();
+    const pref = (o && o.brand || []).map(normNomeJS);
+    const preferito = cataloghi.find(c => pref.indexOf(normNomeJS(c)) >= 0) || '';
+    $('ppCatalogo').innerHTML = '<option value="">Tutti i cataloghi</option>' + cataloghi.map(c => `<option${c === preferito ? ' selected' : ''}>${esc(c)}</option>`).join('');
+    $('ppCerca').value = '';
+    renderPicker();
+    bootstrap.Modal.getOrCreateInstance($('mProdPromo')).show();
+}
+
+function renderPicker() {
+    const cat = $('ppCatalogo').value, q = normNomeJS($('ppCerca').value);
+    const lista = PROD_CAT.filter(p => (!cat || p.catalogo === cat) &&
+        (!q || normNomeJS([p.nome, p.cod, p.descrizione, p.categoria, p.tipo, p.catalogo].join(' ')).indexOf(q) >= 0));
+    $('ppConta').textContent = lista.length + ' prodotti' + (lista.length > 120 ? ' (primi 120: usa la ricerca)' : '');
+    $('ppScelti').innerHTML = PICKER.sel.length
+        ? '<b>Scelti (' + PICKER.sel.length + '/4):</b> ' + PICKER.sel.map(c => { const p = PROD_CAT.find(x => x.cod === c); return esc(p ? p.nome : c); }).join(', ')
+        : '<span class="text-muted">Clicca sulle foto per sceglierle (fino a 4). Nessuna scelta = prodotti automatici dai brand dell\'offerta.</span>';
+    $('ppGriglia').innerHTML = lista.slice(0, 120).map(p => {
+        const i = PICKER.sel.indexOf(p.cod);
+        return `<div class="col-6 col-sm-4 col-md-3 col-lg-2">
+            <div class="pp-item border rounded p-1 position-relative ${i >= 0 ? 'sel' : ''}" data-cod="${esc(p.cod)}">
+                ${i >= 0 ? `<span class="badge bg-primary position-absolute" style="top:6px;left:6px">${i + 1}</span>` : ''}
+                <img src="${esc(p.img)}" loading="lazy" alt="">
+                <div class="small fw-semibold text-truncate">${esc(p.nome)}</div>
+                <div class="text-muted text-truncate" style="font-size:11px">${esc(p.catalogo)} · ${esc(p.descrizione || p.categoria)}</div>
+            </div></div>`;
+    }).join('') || '<div class="text-muted py-3">Nessun prodotto trovato.</div>';
+}
+
+document.addEventListener('click', e => {
+    const it = e.target.closest && e.target.closest('#ppGriglia .pp-item');
+    if (!it) return;
+    const cod = it.getAttribute('data-cod'), i = PICKER.sel.indexOf(cod);
+    if (i >= 0) PICKER.sel.splice(i, 1);
+    else if (PICKER.sel.length >= 4) { toast('Puoi scegliere al massimo 4 prodotti.', 'warning'); return; }
+    else PICKER.sel.push(cod);
+    renderPicker();
+});
+
+async function confermaPicker() {
+    bootstrap.Modal.getInstance($('mProdPromo')).hide();
+    if (PICKER.dove === 'form') {
+        Object.assign(FORM_PROMO, { prodotti: PICKER.sel.slice(), modo: 'prodotti', cambiato: true });
+        disegnaPromoForm();
+    } else {
+        const o = offertaCampagna(); if (!o) return;
+        const cfg = await impostazioniPromo(o.id);
+        await salvaPromo(o.id, { modo: 'prodotti', prodotti: PICKER.sel.slice(), foto: cfg.foto }, false);
+        toast('Immagine aggiornata per questa offerta.');
+        preparaPromoCampagna(o);
+    }
+}
+
+// Seconda finestra sopra il modulo dell'offerta: sfondo scuro sotto, e il modulo resta scorrevole dopo
+document.addEventListener('shown.bs.modal', e => {
+    if (e.target.id !== 'mProdPromo') return;
+    const bd = document.querySelectorAll('.modal-backdrop');
+    if (bd.length > 1) bd[bd.length - 1].style.zIndex = 1065;
+});
+document.addEventListener('hidden.bs.modal', e => {
+    if (e.target.id === 'mProdPromo' && $('mOfferta').classList.contains('show')) document.body.classList.add('modal-open');
+});
+
+// ---------- Campagna ----------
+const offertaCampagna = () => DATA && DATA.offerte.find(x => x.id === $('cmpOfferta').value);
+
 async function preparaPromoCampagna(o) {
     const cv = $('cmpPromo');
     if (!cv || !o) return;
-    const foto = await fotoOfferta(o.id);
-    if ($('cmpOfferta').value !== o.id) return;
-    await disegnaPromo(cv, o, foto);
-    const [png, jpg] = await Promise.all([canvasBlob(cv, 'image/png'), canvasBlob(cv, 'image/jpeg', 0.9)]);
+    const cfg = await impostazioniPromo(o.id);
+    const ris = await risorsePromo(o, cfg);
+    if ($('cmpOfferta').value !== o.id || !$('cmpPromo')) return;
+    await disegnaPromo($('cmpPromo'), o, ris);
+    const [png, jpg] = await Promise.all([canvasBlob($('cmpPromo'), 'image/png'), canvasBlob($('cmpPromo'), 'image/jpeg', 0.9)]);
     PROMO_BLOB = { id: o.id, png: png, jpg: jpg, nome: nomeFilePromo(o) };
+    document.querySelectorAll('.cmp-modo').forEach(b => b.classList.toggle('active', b.getAttribute('data-m') === (cfg.modo || 'prodotti')));
+}
+
+async function cmpModo(m) {
+    const o = offertaCampagna(); if (!o) return;
+    const cfg = await impostazioniPromo(o.id);
+    if (m === 'foto' && !cfg.foto) { $('cmpFotoFile').click(); return; }
+    await salvaPromo(o.id, { modo: m, prodotti: cfg.prodotti, foto: cfg.foto }, false);
+    preparaPromoCampagna(o);
 }
 
 function scaricaPromoCampagna() {
@@ -1075,7 +1402,7 @@ const suTelefono = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) |
 function inviaConImmagine(cod) {
     const c = cliente(cod), r = rigaCampagna(cod);
     const testo = r.querySelector('.cmp-msg').value;
-    const o = DATA.offerte.find(x => x.id === $('cmpOfferta').value);
+    const o = offertaCampagna();
     const pb = PROMO_BLOB && o && PROMO_BLOB.id === o.id ? PROMO_BLOB : null;
     if (!pb) { toast('Immagine non ancora pronta: invio solo il testo.', 'warning'); invia(cod, 'WhatsApp'); return; }
 
@@ -2327,10 +2654,16 @@ function apriOfferta(id, preset) {
         }
     }
     anteprimaIdonei();
-    // Immagine promozionale: foto già salvata per questa offerta (se c'è) e anteprima del banner
-    FORM_FOTO = null; FORM_FOTO_CAMBIO = null; $('promoFile').value = ''; $('promoStato').textContent = '';
+    // Immagine promozionale: impostazioni già salvate per questa offerta (se c'è) e anteprima
+    FORM_PROMO = { modo: 'prodotti', prodotti: [], foto: null, cambiato: false, fotoCambiata: false };
+    $('promoFile').value = '';
     disegnaPromoForm();
-    if (o) fotoOfferta(o.id).then(f => { if ($('oId').value === o.id && !FORM_FOTO_CAMBIO) { FORM_FOTO = f; disegnaPromoForm(); } });
+    if (o) impostazioniPromo(o.id).then(cfg => {
+        if ($('oId').value === o.id && !FORM_PROMO.cambiato) {
+            Object.assign(FORM_PROMO, { modo: cfg.modo || 'prodotti', prodotti: (cfg.prodotti || []).slice(), foto: cfg.foto || null });
+            disegnaPromoForm();
+        }
+    });
     bootstrap.Modal.getOrCreateInstance($('mOfferta')).show();
 }
 
@@ -2377,17 +2710,17 @@ async function salvaOfferta() {
         const risposta = await api('saveOffer', { offer: o });
         bootstrap.Modal.getInstance($('mOfferta')).hide();
         toast('Offerta salvata nel foglio OFFERTE.');
-        const cambioFoto = FORM_FOTO_CAMBIO;
+        const promo = Object.assign({}, FORM_PROMO);
         await carica(true);
         // Foto dell'offerta: per una nuova offerta l'ID lo assegna il foglio, quindi la cerco dopo il ricaricamento
-        if (cambioFoto) {
+        if (promo.cambiato) {
             let id = o.id || (risposta && (risposta.id || (risposta.offer && risposta.offer.id))) || '';
             if (!id && DATA && DATA.offerte) {
                 const uguali = DATA.offerte.filter(x => x.titolo === o.titolo && x.tipo === o.tipo);
                 if (uguali.length) id = uguali[uguali.length - 1].id;
             }
-            if (id) { await salvaFotoOfferta(id); if ($('cmpOfferta').value === id) renderCampagna(); }
-            else toast('Offerta salvata, ma non ho trovato il suo codice per collegare la foto: riaprila e ricarica la foto.', 'warning');
+            if (id) { await salvaPromo(id, promo, promo.fotoCambiata); if ($('cmpOfferta').value === id) renderCampagna(); }
+            else toast('Offerta salvata, ma non ho trovato il suo codice per collegare l\'immagine: riaprila e reimpostala.', 'warning');
         }
     } catch (e) { toast(esc(e.message), 'danger'); }
     finally { btn.disabled = false; }
@@ -2418,12 +2751,23 @@ function vaiACampagna(id) {
 function renderCampagna() {
     const o = DATA && DATA.offerte.find(x => x.id === $('cmpOfferta').value);
     if (!o) { $('cmpLista').innerHTML = '<div class="text-muted">Crea o attiva un\'offerta per iniziare.</div>'; $('cmpInfo').innerHTML = ''; $('cmpConta').textContent = ''; $('cmpEsclusiTit').textContent = ''; $('cmpEsclusi').innerHTML = ''; return; }
-    $('cmpInfo').innerHTML = `<div class="d-flex gap-3 align-items-start">
-        <div class="text-center flex-shrink-0">
-            <canvas id="cmpPromo" width="1080" height="1080" class="border rounded shadow-sm" style="width:110px;height:110px;cursor:pointer" title="Scarica l'immagine" onclick="scaricaPromoCampagna()"></canvas>
-            <div><a href="#" class="small" onclick="scaricaPromoCampagna();return false;"><i class="fas fa-download me-1"></i>Scarica</a></div>
-        </div>
-        <div>${esc(o.tipo)} · valida fino al ${fmtD(o.al)}<br>${descriviRegole(o)}</div></div>`;
+    $('cmpInfo').innerHTML = `<div class="d-flex flex-wrap gap-3 align-items-start">
+        <canvas id="cmpPromo" width="1080" height="1080" class="border rounded shadow-sm flex-shrink-0" style="width:170px;height:170px"></canvas>
+        <div class="flex-grow-1" style="min-width:200px">
+            <div class="mb-2">${esc(o.tipo)} · valida fino al ${fmtD(o.al)}<br>${descriviRegole(o)}</div>
+            <div class="fw-bold text-dark mb-1"><i class="fas fa-image me-1"></i>Immagine da inviare</div>
+            <div class="btn-group btn-group-sm mb-1 flex-wrap">
+                <button class="btn btn-outline-primary cmp-modo" data-m="prodotti" onclick="cmpModo('prodotti')"><i class="fas fa-shirt me-1"></i>Prodotti</button>
+                <button class="btn btn-outline-primary cmp-modo" data-m="foto" onclick="cmpModo('foto')"><i class="fas fa-camera me-1"></i>Foto mia</button>
+                <button class="btn btn-outline-primary cmp-modo" data-m="grafica" onclick="cmpModo('grafica')"><i class="fas fa-palette me-1"></i>Solo grafica</button>
+            </div>
+            <div class="d-flex flex-wrap gap-1">
+                <button class="btn btn-sm btn-primary" onclick="apriPickerProdotti('campagna')"><i class="fas fa-images me-1"></i>Scegli prodotti</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="$('cmpFotoFile').click()"><i class="fas fa-upload me-1"></i>Carica foto</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="scaricaPromoCampagna()"><i class="fas fa-download me-1"></i>Scarica</button>
+                <input type="file" id="cmpFotoFile" accept="image/*" class="d-none" onchange="caricaFotoPromo(this, 'campagna')">
+            </div>
+        </div></div>`;
     if (!PROMO_BLOB || PROMO_BLOB.id !== o.id) PROMO_BLOB = null;
     preparaPromoCampagna(o);
     const val = DATA.clienti.map(c => ({ c: c, v: valuta(o, c) }));
