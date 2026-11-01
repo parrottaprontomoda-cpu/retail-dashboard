@@ -646,7 +646,7 @@ const TIPI = {
         msg: 'Buongiorno {REFERENTE}, vorremmo far provare a {CLIENTE} il brand {BRAND}, che sta andando molto bene presso i nostri clienti: sul primo ordine sconto del {SCONTO}%.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{CATALOGO}\n{AZIENDA}' },
     'Promo personalizzata': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'C', potMin: 0, inattivoGg: 0, sconto: 0, msg: '' }
 };
-const SEGNAPOSTO = ['{CLIENTE}', '{REFERENTE}', '{OFFERTA}', '{DESCRIZIONE}', '{SCONTO}', '{SCADENZA}', '{CONDIZIONI}', '{CATEGORIA}', '{BRAND}', '{CATALOGO}', '{AZIENDA}'];
+const SEGNAPOSTO = ['{CLIENTE}', '{REFERENTE}', '{OFFERTA}', '{DESCRIZIONE}', '{SCONTO}', '{SCADENZA}', '{CONDIZIONI}', '{CATEGORIA}', '{BRAND}', '{IMMAGINE}', '{CATALOGO}', '{AZIENDA}'];
 const ESITI = ['INVIATO', 'INTERESSATO', 'ORDINE', 'NESSUNA RISPOSTA', 'NON INTERESSATO'];
 const TIPI_PAG = { CO: 'Contanti', AS: 'Assegni', BO: 'Bonifici', MYPA: 'MyPOS', ALTRO: 'Non indicato' };
 const PARAMETRI = [
@@ -1191,7 +1191,8 @@ async function impostazioniPromo(id) {
             const j = await (await fetch(urlCatalogo('immagineofferta', '&id=' + encodeURIComponent(id)))).json();
             if (j.ok) {
                 const imp = j.impostazioni || {};
-                cfg = { modo: imp.modo || (j.dataUrl ? 'foto' : 'prodotti'), prodotti: imp.prodotti || [], foto: j.dataUrl || null };
+                cfg = { modo: imp.modo || (j.dataUrl ? 'foto' : 'prodotti'), prodotti: imp.prodotti || [], foto: j.dataUrl || null,
+                        bannerLink: j.bannerLink || '', bannerFirma: j.bannerFirma || '' };
                 try { if (window.localforage) await localforage.setItem('oi_promo2_' + id, cfg); } catch (e) {}
             }
         } catch (e) {}
@@ -1202,7 +1203,9 @@ async function impostazioniPromo(id) {
 }
 
 async function salvaPromo(id, cfg, fotoCambiata) {
-    PROMO_CFG[id] = { modo: cfg.modo, prodotti: cfg.prodotti || [], foto: cfg.foto || null };
+    const prima = PROMO_CFG[id] || {};
+    PROMO_CFG[id] = { modo: cfg.modo, prodotti: cfg.prodotti || [], foto: cfg.foto || null,
+                      bannerLink: prima.bannerLink || '', bannerFirma: prima.bannerFirma || '' };   // l'immagine su Drive si aggiorna da sola se cambia
     PROMO_BLOB = null;
     try { if (window.localforage) await localforage.setItem('oi_promo2_' + id, PROMO_CFG[id]); } catch (e) {}
     if (!catalogoCollegato()) { toast('Immagine salvata solo su questo dispositivo: collega il catalogo nelle Impostazioni.', 'warning'); return; }
@@ -1380,6 +1383,43 @@ async function preparaPromoCampagna(o) {
     const [png, jpg] = await Promise.all([canvasBlob($('cmpPromo'), 'image/png'), canvasBlob($('cmpPromo'), 'image/jpeg', 0.9)]);
     PROMO_BLOB = { id: o.id, png: png, jpg: jpg, nome: nomeFilePromo(o) };
     document.querySelectorAll('.cmp-modo').forEach(b => b.classList.toggle('active', b.getAttribute('data-m') === (cfg.modo || 'prodotti')));
+    await pubblicaBanner(o, cfg, ris);
+}
+
+// ---------- Immagine su Drive con link nel messaggio ----------
+// La "firma" riassume tutto ciò che compare nell'immagine: se non cambia, non la ricarico.
+function hashTesto(t) { let h = 5381; t = String(t || ''); for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
+function firmaBanner(o, cfg, ris) {
+    return hashTesto(JSON.stringify([o.tipo, o.titolo, o.descrizione, +o.sconto || 0, o.al || '', o.brand || [], ris.modo, ris.codici || [],
+        ris.modo === 'foto' ? hashTesto(cfg.foto) : '', (DATA && DATA.cfg && DATA.cfg.NOME_AZIENDA) || '', 'v1']));
+}
+const PUBBLICAZIONE = {};   // id offerta → firma in caricamento (evita caricamenti doppi)
+
+async function pubblicaBanner(o, cfg, ris) {
+    const stato = $('cmpLinkImg');
+    if (!catalogoCollegato()) { if (stato) stato.innerHTML = '<span class="text-warning">Collega il catalogo nelle Impostazioni per pubblicare l\'immagine su Drive.</span>'; return; }
+    const firma = firmaBanner(o, cfg, ris);
+    const mostra = () => { if ($('cmpLinkImg') && cfg.bannerLink) $('cmpLinkImg').innerHTML = '<i class="fab fa-google-drive me-1"></i>Immagine su Drive, il link è nel messaggio: <a href="' + esc(cfg.bannerLink) + '" target="_blank">apri</a>'; };
+    if (cfg.bannerLink && cfg.bannerFirma === firma) { mostra(); return; }
+    if (PUBBLICAZIONE[o.id] === firma) return;
+    PUBBLICAZIONE[o.id] = firma;
+    if (stato) stato.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Carico l\'immagine su Drive…';
+    try {
+        const body = { action: 'pubblicaBannerOfferta', cli: ls.get('oi_cat_admin'), id: o.id, titolo: o.titolo, firma: firma,
+            dataUrl: $('cmpPromo').toDataURL('image/jpeg', 0.88) };
+        const j = await (await fetch(ls.get('oi_cat_api'), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })).json();
+        if (!j.ok) throw new Error(j.error || 'errore del server');
+        const linkPrima = cfg.bannerLink;
+        cfg.bannerLink = j.link; cfg.bannerFirma = firma;
+        try { if (window.localforage) await localforage.setItem('oi_promo2_' + o.id, cfg); } catch (e) {}
+        mostra();
+        // I messaggi vanno rigenerati con il link nuovo
+        if (j.link !== linkPrima && $('cmpOfferta').value === o.id) renderCampagna();
+    } catch (e) {
+        if ($('cmpLinkImg')) $('cmpLinkImg').innerHTML = '<span class="text-danger">Immagine non caricata su Drive: ' + esc(e.message) + '</span> <a href="#" onclick="PUBBLICAZIONE[\'' + esc(o.id) + '\']=null;renderCampagna();return false;">riprova</a>';
+    } finally {
+        if (PUBBLICAZIONE[o.id] === firma) delete PUBBLICAZIONE[o.id];
+    }
 }
 
 async function cmpModo(m) {
@@ -1503,14 +1543,21 @@ function linkCatalogo(o, c) {
 
 function componiMessaggio(o, c) {
     const link = linkCatalogo(o, c);
+    const linkImg = (o && PROMO_CFG[o.id] && PROMO_CFG[o.id].bannerLink) || '';
     const rep = {
         '{CLIENTE}': c.nome, '{REFERENTE}': c.referente || c.nome, '{OFFERTA}': o.titolo,
         '{DESCRIZIONE}': o.descrizione || '', '{SCONTO}': o.sconto || 0, '{SCADENZA}': o.al ? fmtD(o.al) : 'esaurimento scorte',
         '{CONDIZIONI}': condizioni(o, c), '{CATEGORIA}': (c.topCat[0] && c.topCat[0].cat) || 'articoli', '{BRAND}': brandPerMessaggio(o, c),
         '{AZIENDA}': (DATA.cfg && DATA.cfg.NOME_AZIENDA) || '',
-        '{CATALOGO}': link ? 'Prezzi riservati e disponibilità sul suo catalogo: ' + link : ''
+        '{CATALOGO}': link ? 'Prezzi riservati e disponibilità sul suo catalogo: ' + link : '',
+        '{IMMAGINE}': linkImg ? 'Guarda l\'offerta: ' + linkImg : ''
     };
     let t = o.messaggio || `Buongiorno {REFERENTE}, abbiamo un'offerta per {CLIENTE}: {OFFERTA}.\n{DESCRIZIONE}\n{CONDIZIONI}\n{CATALOGO}\n{AZIENDA}`;
+    // Link dell'immagine promozionale: se il messaggio non ha {IMMAGINE} lo aggiungo prima del link al catalogo / della firma
+    if (linkImg && t.indexOf('{IMMAGINE}') < 0) {
+        t = t.indexOf('{CATALOGO}') >= 0 ? t.replace('{CATALOGO}', '{IMMAGINE}\n{CATALOGO}')
+          : t.indexOf('{AZIENDA}') >= 0 ? t.replace('{AZIENDA}', '{IMMAGINE}\n{AZIENDA}') : t + '\n{IMMAGINE}';
+    }
     // Offerte salvate prima del collegamento: il link si aggiunge prima della firma
     if (link && t.indexOf('{CATALOGO}') < 0 && ls.get('oi_cat_auto') !== '0') {
         t = t.indexOf('{AZIENDA}') >= 0 ? t.replace('{AZIENDA}', '{CATALOGO}\n{AZIENDA}') : t + '\n{CATALOGO}';
@@ -2801,6 +2848,7 @@ function renderCampagna() {
                 <button class="btn btn-sm btn-outline-secondary" onclick="scaricaPromoCampagna()"><i class="fas fa-download me-1"></i>Scarica</button>
                 <input type="file" id="cmpFotoFile" accept="image/*" class="d-none" onchange="caricaFotoPromo(this, 'campagna')">
             </div>
+            <div id="cmpLinkImg" class="small mt-1 text-success"></div>
         </div></div>`;
     if (!PROMO_BLOB || PROMO_BLOB.id !== o.id) PROMO_BLOB = null;
     const cats = cataloghiOfferta(o, null);
