@@ -522,6 +522,24 @@
             </div>
         </div>
         <hr>
+        <h6 class="fw-bold text-primary"><i class="fas fa-link me-1"></i>Link al catalogo nel messaggio</h6>
+        <select id="lkModo" class="form-select form-select-sm mb-2" onchange="cambiaLinkForm()">
+            <option value="auto">Automatico: cataloghi dei prodotti dell'immagine o dei brand</option>
+            <option value="cataloghi">Scelgo io i cataloghi</option>
+            <option value="personalizzato">Incollo un link</option>
+            <option value="tutto">Tutto il catalogo</option>
+            <option value="nessuno">Nessun link</option>
+        </select>
+        <div id="lkBoxCat" style="display:none">
+            <input id="lkCerca" class="form-control form-control-sm mb-1" placeholder="Cerca catalogo..." oninput="renderLinkForm()">
+            <div id="lkCataloghi" class="border rounded p-2 small mb-1" style="max-height:200px;overflow:auto"></div>
+        </div>
+        <div id="lkBoxLink" style="display:none">
+            <input id="lkLink" class="form-control form-control-sm" inputmode="url" placeholder="Incolla qui il link (es. dal tasto Condividi del catalogo)" oninput="cambiaLinkForm(true)">
+            <div class="form-text">Se è un link del catalogo, ogni cliente lo riceve con il <b>suo codice personale</b> e con gli stessi filtri (catalogo, categoria, tipo, materiale). Puoi incollare anche un link diverso, che verrà inviato così com'è.</div>
+        </div>
+        <div id="lkAnteprima" class="small mt-1"></div>
+        <hr>
         <h6 class="fw-bold text-primary"><i class="fas fa-filter me-1"></i>A chi va questa offerta</h6>
         <div class="row g-3">
             <div class="col-md-6">
@@ -896,7 +914,7 @@ const PROMO_FONT = "'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 const PROMO_EMOJI = "'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif";
 
 let PROMO_CFG = {};    // id offerta → { modo, prodotti: [codici], foto: dataUrl|null }
-let FORM_PROMO = { modo: 'prodotti', prodotti: [], foto: null, cambiato: false, fotoCambiata: false };
+let FORM_PROMO = { modo: 'prodotti', prodotti: [], foto: null, linkModo: 'auto', cataloghi: [], link: '', cambiato: false, fotoCambiata: false };
 let PROD_CAT = null;   // prodotti del catalogo con foto (per scegliere e per la scelta automatica)
 let FOTO_PROD = {};    // codice prodotto → dataUrl della foto
 let PROMO_BLOB = null; // immagine pronta per l'offerta aperta nella Campagna
@@ -1192,6 +1210,7 @@ async function impostazioniPromo(id) {
             if (j.ok) {
                 const imp = j.impostazioni || {};
                 cfg = { modo: imp.modo || (j.dataUrl ? 'foto' : 'prodotti'), prodotti: imp.prodotti || [], foto: j.dataUrl || null,
+                        linkModo: imp.linkModo || 'auto', cataloghi: imp.cataloghi || [], link: imp.link || '',
                         bannerLink: j.bannerLink || '', bannerFirma: j.bannerFirma || '' };
                 try { if (window.localforage) await localforage.setItem('oi_promo2_' + id, cfg); } catch (e) {}
             }
@@ -1203,15 +1222,19 @@ async function impostazioniPromo(id) {
 }
 
 async function salvaPromo(id, cfg, fotoCambiata) {
+    // Unisco alle impostazioni precedenti: ciò che non viene indicato (es. le scelte del link) resta com'era
     const prima = PROMO_CFG[id] || {};
-    PROMO_CFG[id] = { modo: cfg.modo, prodotti: cfg.prodotti || [], foto: cfg.foto || null,
-                      bannerLink: prima.bannerLink || '', bannerFirma: prima.bannerFirma || '' };   // l'immagine su Drive si aggiorna da sola se cambia
+    PROMO_CFG[id] = Object.assign({ modo: 'prodotti', prodotti: [], foto: null, linkModo: 'auto', cataloghi: [], link: '' }, prima,
+        { modo: cfg.modo || prima.modo || 'prodotti', prodotti: cfg.prodotti || prima.prodotti || [], foto: cfg.foto === undefined ? (prima.foto || null) : (cfg.foto || null) },
+        cfg.linkModo !== undefined ? { linkModo: cfg.linkModo, cataloghi: cfg.cataloghi || [], link: cfg.link || '' } : {});
+    cfg = PROMO_CFG[id];   // l'immagine su Drive (bannerLink) resta e si aggiorna da sola se cambia
     PROMO_BLOB = null;
     try { if (window.localforage) await localforage.setItem('oi_promo2_' + id, PROMO_CFG[id]); } catch (e) {}
     if (!catalogoCollegato()) { toast('Immagine salvata solo su questo dispositivo: collega il catalogo nelle Impostazioni.', 'warning'); return; }
     try {
         const body = { action: 'salvaPromoOfferta', cli: ls.get('oi_cat_admin'), id: id,
-            impostazioni: { modo: cfg.modo, prodotti: cfg.prodotti || [] }, fotoCambiata: !!fotoCambiata, dataUrl: fotoCambiata ? cfg.foto : null };
+            impostazioni: { modo: cfg.modo, prodotti: cfg.prodotti || [], linkModo: cfg.linkModo || 'auto', cataloghi: cfg.cataloghi || [], link: cfg.link || '' },
+            fotoCambiata: !!fotoCambiata, dataUrl: fotoCambiata ? cfg.foto : null };
         const j = await (await fetch(ls.get('oi_cat_api'), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })).json();
         if (!j.ok) throw new Error(j.error || 'errore');
     } catch (e) { toast('Immagine salvata solo su questo dispositivo: ' + esc(e.message), 'warning'); }
@@ -1266,6 +1289,7 @@ function aggiornaStatoForm(ris, o) {
     }
     if (FORM_PROMO.cambiato) s += ' <i>(verrà salvata con "Salva offerta")</i>';
     $('promoStato').innerHTML = s;
+    renderLinkForm();   // il link automatico dipende dai prodotti e dai brand
 }
 
 function cambiaModoForm(m) { FORM_PROMO.modo = m; FORM_PROMO.cambiato = true; disegnaPromoForm(); }
@@ -1516,10 +1540,13 @@ function cataloghiDaBrand(nome) {
 
 // Cataloghi su cui aprire il link dell'offerta:
 // 1) quelli dei prodotti scelti per l'immagine; 2) quelli dei brand dell'offerta (prima quelli che il cliente compra)
-function cataloghiOfferta(o, c) {
+function cataloghiOfferta(o, c, cfgForm) {
     if (!o) return [];
-    const cfg = PROMO_CFG[o.id];
-    if (cfg && cfg.modo === 'prodotti' && (cfg.prodotti || []).length && PROD_CAT) {
+    const cfg = cfgForm || PROMO_CFG[o.id] || {};
+    const lm = cfg.linkModo || 'auto';
+    if (lm === 'cataloghi') return (cfg.cataloghi || []).slice();
+    if (lm !== 'auto') return [];
+    if (cfg.modo === 'prodotti' && (cfg.prodotti || []).length && PROD_CAT) {
         const daProdotti = [...new Set(cfg.prodotti.map(cod => { const p = PROD_CAT.find(x => x.cod === cod); return p && p.catalogo; }).filter(Boolean))];
         if (daProdotti.length) return daProdotti;
     }
@@ -1532,13 +1559,97 @@ function cataloghiOfferta(o, c) {
     return PROD_CAT ? [] : [brandPerMessaggio(o, c)];   // elenco cataloghi non ancora letto: uso il nome del brand
 }
 
-function linkCatalogo(o, c) {
+// Link incollato a mano: se è una pagina del catalogo la rifaccio con il codice personale del cliente
+// (mantenendo i filtri); altrimenti la invio così com'è.
+function eLinkDelCatalogo(u) {
+    if (!CAT.pagina) return false;
+    try { const b = new URL(CAT.pagina); return u.origin === b.origin && u.pathname.replace(/\/index\.html$/, '/') === b.pathname.replace(/\/index\.html$/, '/'); }
+    catch (e) { return false; }
+}
+function linkPersonalizzato(raw, c) {
+    raw = String(raw || '').trim();
+    if (!raw) return '';
+    let u;
+    try { u = new URL(raw); } catch (e) { return raw; }
+    if (!eLinkDelCatalogo(u)) return raw;
+    const cod = c ? CAT.clienti[String(c.codice || '').trim().toUpperCase()] : '';
+    if (!cod) return '';                         // cliente senza link personale: niente link al catalogo
+    const out = new URL(CAT.pagina.split('?')[0]);
+    out.searchParams.set('c', cod);
+    out.searchParams.set('condiviso', '1');
+    ['catalogo', 'categoria', 'tipo', 'materiale'].forEach(k => { const v = u.searchParams.get(k); if (v) out.searchParams.set(k, v); });
+    return out.toString();
+}
+
+function linkCatalogo(o, c, cfgForm) {
+    const cfg = cfgForm || (o && PROMO_CFG[o.id]) || {};
+    const lm = cfg.linkModo || 'auto';
+    if (lm === 'nessuno') return '';
+    if (lm === 'personalizzato') return linkPersonalizzato(cfg.link, c);
     const cod = CAT.clienti[String(c.codice || '').trim().toUpperCase()];
     if (!cod || !CAT.pagina) return '';
     let url = CAT.pagina + '?c=' + encodeURIComponent(cod) + '&condiviso=1';
-    const cats = cataloghiOfferta(o, c);
+    const cats = cataloghiOfferta(o, c, cfg);
     if (cats.length) url += '&catalogo=' + encodeURIComponent(cats.join('|'));
     return url;
+}
+
+// Frase che spiega cosa aprirà il link (modulo e Campagna). Restituisce [testo HTML, ok]
+function descriviLink(o, cfg) {
+    cfg = cfg || {};
+    const lm = cfg.linkModo || 'auto';
+    if (!catalogoCollegato()) return ['Catalogo non collegato (Impostazioni → Catalogo prodotti): nessun link nei messaggi.', false];
+    if (lm === 'nessuno') return ['Nessun link al catalogo nei messaggi.', true];
+    if (lm === 'personalizzato') {
+        if (!cfg.link) return ['Incolla il link da inviare.', false];
+        let u = null; try { u = new URL(cfg.link); } catch (e) {}
+        if (!u) return ['Il testo incollato non sembra un link: verrà inviato così com\'è.', false];
+        if (!eLinkDelCatalogo(u)) return ['Verrà inviato questo link: <b>' + esc(cfg.link) + '</b>', true];
+        const f = ['catalogo', 'categoria', 'tipo', 'materiale'].map(k => u.searchParams.get(k) ? k + ': <b>' + esc(u.searchParams.get(k).split('|').join(' + ')) + '</b>' : '').filter(Boolean);
+        return ['Link del catalogo con il codice personale di ogni cliente' + (f.length ? ', filtrato per ' + f.join(', ') : ' (nessun filtro: tutto il catalogo)') + '.', true];
+    }
+    if (lm === 'tutto') return ['Il link apre <b>tutto il catalogo</b>.', true];
+    const cats = cataloghiOfferta(o, null, cfg);
+    if (cats.length) return ['Il link apre il catalogo filtrato su: <b>' + esc(cats.join(', ')) + '</b>', true];
+    return [lm === 'cataloghi' ? 'Spunta almeno un catalogo.' : 'Il link apre tutto il catalogo: scegli i prodotti per l\'immagine, indica un brand, oppure scegli i cataloghi qui sopra.', false];
+}
+
+// ---------- Modulo: sezione del link ----------
+function renderLinkForm() {
+    if (!$('lkModo')) return;
+    const lm = FORM_PROMO.linkModo || 'auto';
+    $('lkModo').value = lm;
+    $('lkBoxCat').style.display = lm === 'cataloghi' ? '' : 'none';
+    $('lkBoxLink').style.display = lm === 'personalizzato' ? '' : 'none';
+    if (lm === 'cataloghi') {
+        if (!PROD_CAT) $('lkCataloghi').innerHTML = catalogoCollegato() ? '<i class="fas fa-spinner fa-spin me-1"></i>Carico i cataloghi…' : 'Collega il catalogo nelle Impostazioni.';
+        else {
+            const conta = {};
+            PROD_CAT.forEach(p => { if (p.catalogo) conta[p.catalogo] = (conta[p.catalogo] || 0) + 1; });
+            const q = normNomeJS($('lkCerca').value);
+            const scelti = FORM_PROMO.cataloghi || [];
+            const nomi = Object.keys(conta).sort((a, b) => (scelti.indexOf(b) >= 0) - (scelti.indexOf(a) >= 0) || a.localeCompare(b, 'it'))
+                .filter(n => !q || normNomeJS(n).indexOf(q) >= 0 || scelti.indexOf(n) >= 0);
+            $('lkCataloghi').innerHTML = nomi.map((n, i) => `<div class="form-check">
+                <input class="form-check-input lk-cat" type="checkbox" id="lkc${i}" value="${esc(n)}" ${scelti.indexOf(n) >= 0 ? 'checked' : ''} onchange="cambiaLinkForm()">
+                <label class="form-check-label" for="lkc${i}">${esc(n)} <span class="text-muted">(${conta[n]})</span></label></div>`).join('') || '<span class="text-muted">Nessun catalogo trovato.</span>';
+        }
+    }
+    const [testo, ok] = descriviLink(leggiForm(), FORM_PROMO);
+    $('lkAnteprima').innerHTML = `<span class="${ok ? 'text-success' : 'text-warning'}"><i class="fas fa-link me-1"></i>${testo}</span>`;
+}
+
+function cambiaLinkForm(soloTesto) {
+    FORM_PROMO.linkModo = $('lkModo').value;
+    if (!soloTesto && FORM_PROMO.linkModo === 'cataloghi' && $('lkBoxCat').style.display !== 'none') {
+        // tengo anche i cataloghi scelti che la ricerca sta nascondendo
+        const visibili = Array.from(document.querySelectorAll('.lk-cat')).map(x => x.value);
+        const nascosti = (FORM_PROMO.cataloghi || []).filter(n => visibili.indexOf(n) < 0);
+        FORM_PROMO.cataloghi = nascosti.concat(Array.from(document.querySelectorAll('.lk-cat:checked')).map(x => x.value));
+    }
+    FORM_PROMO.link = $('lkLink').value.trim();
+    FORM_PROMO.cambiato = true;
+    renderLinkForm();
 }
 
 function componiMessaggio(o, c) {
@@ -2736,12 +2847,18 @@ function apriOfferta(id, preset) {
     }
     anteprimaIdonei();
     // Immagine promozionale: impostazioni già salvate per questa offerta (se c'è) e anteprima
-    FORM_PROMO = { modo: 'prodotti', prodotti: [], foto: null, cambiato: false, fotoCambiata: false };
+    FORM_PROMO = { modo: 'prodotti', prodotti: [], foto: null, linkModo: 'auto', cataloghi: [], link: '', cambiato: false, fotoCambiata: false };
+    $('lkCerca').value = ''; $('lkLink').value = '';
+    renderLinkForm();
+    caricaElencoProdotti().then(renderLinkForm).catch(() => {});
     $('promoFile').value = '';
     disegnaPromoForm();
     if (o) impostazioniPromo(o.id).then(cfg => {
         if ($('oId').value === o.id && !FORM_PROMO.cambiato) {
-            Object.assign(FORM_PROMO, { modo: cfg.modo || 'prodotti', prodotti: (cfg.prodotti || []).slice(), foto: cfg.foto || null });
+            Object.assign(FORM_PROMO, { modo: cfg.modo || 'prodotti', prodotti: (cfg.prodotti || []).slice(), foto: cfg.foto || null,
+                linkModo: cfg.linkModo || 'auto', cataloghi: (cfg.cataloghi || []).slice(), link: cfg.link || '' });
+            $('lkLink').value = FORM_PROMO.link;
+            renderLinkForm();
             disegnaPromoForm();
         }
     });
@@ -2852,10 +2969,9 @@ function renderCampagna() {
         </div></div>`;
     if (!PROMO_BLOB || PROMO_BLOB.id !== o.id) PROMO_BLOB = null;
     const cats = cataloghiOfferta(o, null);
-    $('cmpInfo').insertAdjacentHTML('beforeend', `<div class="mt-2 small ${cats.length ? 'text-success' : 'text-warning'}"><i class="fas fa-link me-1"></i>` +
-        (!catalogoCollegato() ? 'Catalogo non collegato: nessun link nei messaggi.'
-         : cats.length ? 'Il link apre il catalogo filtrato su: <b>' + esc(cats.join(', ')) + '</b>'
-         : 'Il link apre tutto il catalogo: scegli i prodotti per l\'immagine oppure indica un brand che corrisponde a un catalogo.') + '</div>');
+    const [testoLink, okLink] = descriviLink(o, PROMO_CFG[o.id] || {});
+    $('cmpInfo').insertAdjacentHTML('beforeend', `<div class="mt-2 small ${okLink ? 'text-success' : 'text-warning'}"><i class="fas fa-link me-1"></i>${testoLink}` +
+        ` <a href="#" onclick="apriOfferta('${esc(o.id)}');return false;">cambia</a></div>`);
     // Le scelte dell'immagine (e l'elenco dei cataloghi) arrivano dal server: appena pronte rigenero i messaggi con il filtro giusto
     const pronto = !!PROMO_CFG[o.id] && !!PROD_CAT;
     preparaPromoCampagna(o).then(() => {
