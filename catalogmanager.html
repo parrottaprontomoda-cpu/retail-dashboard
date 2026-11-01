@@ -384,7 +384,7 @@
     try {
       const u = new URL(window.location.href);
       if (ACTIVE_CAT && ACTIVE_CAT !== 'Tutti') u.searchParams.set('categoria', ACTIVE_CAT); else u.searchParams.delete('categoria');
-      if (ACTIVE_CATALOGS.size === 1) u.searchParams.set('catalogo', [...ACTIVE_CATALOGS][0]); else u.searchParams.delete('catalogo');
+      if (ACTIVE_CATALOGS.size) u.searchParams.set('catalogo', [...ACTIVE_CATALOGS].join('|')); else u.searchParams.delete('catalogo');
       if (ACTIVE_TIPO) u.searchParams.set('tipo', ACTIVE_TIPO); else u.searchParams.delete('tipo');
       if (ACTIVE_MAT) u.searchParams.set('materiale', ACTIVE_MAT); else u.searchParams.delete('materiale');
       if (u.href !== window.location.href) history.pushState(null, '', u);
@@ -396,9 +396,16 @@
     ACTIVE_CATALOGS.clear();
     // Catalogo dal link (anche dai messaggi di Offerte Ingrosso): maiuscole/minuscole non contano,
     // e se il nome non esiste nel catalogo si vede tutto invece di una pagina vuota
-    const wantedCat = p.get('catalogo');
-    const foundCat = wantedCat ? [...new Set(PRODUCTS.map(x => x.catalogo).filter(Boolean))].find(c => norm(c) === norm(wantedCat)) : null;
-    if (foundCat) ACTIVE_CATALOGS.add(foundCat);
+    // Uno o più cataloghi separati da | (es. dai messaggi delle offerte). Se il nome non è identico
+    // cerca il catalogo che lo contiene (es. "LOTTO" → "LOTTO KIDS AI26").
+    const nomiCat = [...new Set(PRODUCTS.map(x => x.catalogo).filter(Boolean))];
+    const soloLettere = v => norm(v).replace(/[^a-z0-9]/g, '');
+    String(p.get('catalogo') || '').split('|').map(s => s.trim()).filter(Boolean).forEach(w => {
+      const k = soloLettere(w);
+      let trovati = nomiCat.filter(c => soloLettere(c) === k);
+      if (!trovati.length && k.length >= 3) trovati = nomiCat.filter(c => { const x = soloLettere(c); return x.indexOf(k) >= 0 || (x.length >= 3 && k.indexOf(x) >= 0); });
+      trovati.forEach(c => ACTIVE_CATALOGS.add(c));
+    });
     const wanted = p.get('categoria');
     const found = wanted ? [...new Set(PRODUCTS.map(x => catKey(x.categoria)))].find(c => norm(c) === norm(wanted)) : null;
     ACTIVE_CAT = found || 'Tutti';
@@ -610,6 +617,12 @@
     const base1 = PRODUCTS.filter(inCatalog);
     const base2 = base1.filter(inCategory);
     fillSelect('f-catalogo', 'Tutti i cataloghi', countBy(PRODUCTS, 'catalogo'), activeCatalog);
+    if (ACTIVE_CATALOGS.size > 1) {   // più cataloghi insieme (link di un'offerta con più brand)
+      const sel = document.getElementById('f-catalogo');
+      sel.insertAdjacentHTML('afterbegin', `<option value="__multi" selected>${escHtml([...ACTIVE_CATALOGS].join(' + '))}</option>`);
+      sel.value = '__multi';
+      sel.classList.add('on');
+    }
     fillSelect('f-categoria', 'Tutte le categorie', countBy(base1, 'categoria'), ACTIVE_CAT === 'Tutti' ? '' : ACTIVE_CAT);
     fillSelect('f-tipo', 'Tutti i tipi', countBy(base2.filter(p => !ACTIVE_MAT || norm(p.materiale) === norm(ACTIVE_MAT)), 'tipo'), ACTIVE_TIPO);
     fillSelect('f-materiale', 'Tutti i materiali', countBy(base2.filter(p => !ACTIVE_TIPO || norm(p.tipo) === norm(ACTIVE_TIPO)), 'materiale'), ACTIVE_MAT);
@@ -623,7 +636,7 @@
     sel.addEventListener('change', () => {
       const field = sel.dataset.field;
       const val = sel.value;
-      if (field === 'catalogo') { ACTIVE_CATALOGS.clear(); if (val) ACTIVE_CATALOGS.add(val); }
+      if (field === 'catalogo') { if (val === '__multi') return; ACTIVE_CATALOGS.clear(); if (val) ACTIVE_CATALOGS.add(val); }
       else if (field === 'categoria') ACTIVE_CAT = val || 'Tutti';
       else if (field === 'tipo') ACTIVE_TIPO = val;
       else if (field === 'materiale') ACTIVE_MAT = val;
@@ -651,7 +664,7 @@
   function buildCurrentLink() {
     const baseUrl = window.location.href.split('#')[0].split('?')[0];
     const params = [];
-    if (ACTIVE_CATALOGS.size === 1) params.push('catalogo=' + encodeURIComponent([...ACTIVE_CATALOGS][0]));
+    if (ACTIVE_CATALOGS.size) params.push('catalogo=' + encodeURIComponent([...ACTIVE_CATALOGS].join('|')));
     if (ACTIVE_CAT !== 'Tutti') params.push('categoria=' + encodeURIComponent(ACTIVE_CAT));
     if (ACTIVE_TIPO) params.push('tipo=' + encodeURIComponent(ACTIVE_TIPO));
     if (ACTIVE_MAT) params.push('materiale=' + encodeURIComponent(ACTIVE_MAT));
@@ -661,7 +674,7 @@
 
   function currentSelectionName() {
     const parts = [];
-    if (ACTIVE_CATALOGS.size === 1) parts.push([...ACTIVE_CATALOGS][0]);
+    if (ACTIVE_CATALOGS.size) parts.push([...ACTIVE_CATALOGS].join(' + '));
     if (ACTIVE_CAT !== 'Tutti') parts.push(ACTIVE_CAT);
     if (ACTIVE_TIPO) parts.push(ACTIVE_TIPO);
     if (ACTIVE_MAT) parts.push(ACTIVE_MAT);
