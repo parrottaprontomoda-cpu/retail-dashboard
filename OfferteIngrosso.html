@@ -588,8 +588,13 @@
         </div>
         <div class="alert alert-info small py-2 mt-3 mb-0" id="oAnteprima"></div>
         <hr>
-        <label class="form-label small fw-bold">Messaggio (verrà personalizzato per ogni cliente)</label>
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+            <label class="form-label small fw-bold mb-0 me-auto">Messaggio (verrà personalizzato per ogni cliente)</label>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="emoticonNelMessaggio()">✨ Aggiungi emoticon</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="modelloConEmoticon()">↺ Modello con emoticon</button>
+        </div>
         <div class="mb-1" id="oChips"></div>
+        <div class="mb-1" id="oEmoji" style="font-size:1.25rem;line-height:1.8"></div>
         <textarea id="oMsg" class="form-control msg-area" rows="7"></textarea>
     </div>
     <div class="modal-footer">
@@ -645,23 +650,23 @@ const TUTTI_PAG = ['CONTANTI', 'BREVE', 'LUNGO'];
 
 const TIPI = {
     'Fine serie / Stock': { pagamenti: TUTTI_PAG, pagRich: 'CONTANTI', rischioMax: 'D', potMin: 0, inattivoGg: 0, sconto: 40,
-        msg: 'Buongiorno {REFERENTE}, per {CLIENTE} abbiamo riservato uno stock di fine serie con sconto del {SCONTO}%.\n{DESCRIZIONE}\n{CONDIZIONI}\nOfferta valida fino al {SCADENZA}, fino a esaurimento.\n{CATALOGO}\n{AZIENDA}' },
+        msg: "🏷️ Buongiorno {REFERENTE}! Per {CLIENTE} abbiamo riservato uno *stock di fine serie* con *sconto del {SCONTO}%* 🔥\n👉 {DESCRIZIONE}\n💳 {CONDIZIONI}\n⏰ Offerta valida fino al {SCADENZA}, fino a esaurimento.\n{IMMAGINE}\n{CATALOGO}\n🤝 {AZIENDA}" },
     'Nuova collezione': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'B', potMin: 40, inattivoGg: 0, sconto: 0,
-        msg: 'Buongiorno {REFERENTE}, la nuova collezione è arrivata e la riserviamo in anteprima a {CLIENTE}.\n{DESCRIZIONE}\n{CONDIZIONI}\nPassi a trovarci in showroom o le inviamo il catalogo.\n{CATALOGO}\n{AZIENDA}' },
+        msg: "✨ Buongiorno {REFERENTE}! La *nuova collezione* è arrivata e la riserviamo in anteprima a {CLIENTE} 🎉\n👉 {DESCRIZIONE}\n💳 {CONDIZIONI}\n🏬 Passi a trovarci in showroom o le inviamo il catalogo 😊\n{IMMAGINE}\n{CATALOGO}\n🤝 {AZIENDA}" },
     'Sconto volume': { pagamenti: ['CONTANTI', 'BREVE'], pagRich: 'ABITUALE', rischioMax: 'B', potMin: 60, inattivoGg: 0, sconto: 10,
-        msg: 'Buongiorno {REFERENTE}, per i clienti più importanti come {CLIENTE} abbiamo uno sconto del {SCONTO}% sugli ordini di volume.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{CATALOGO}\n{AZIENDA}' },
+        msg: "📦 Buongiorno {REFERENTE}! Per i clienti più importanti come {CLIENTE} abbiamo uno *sconto del {SCONTO}%* sugli ordini di volume 🔥\n👉 {DESCRIZIONE}\n💳 {CONDIZIONI}\n⏰ Valido fino al {SCADENZA}.\n{IMMAGINE}\n{CATALOGO}\n🤝 {AZIENDA}" },
     'Pronto cassa': { pagamenti: ['BREVE', 'LUNGO'], pagRich: 'CONTANTI', rischioMax: 'C', potMin: 0, inattivoGg: 0, sconto: 5,
-        msg: 'Buongiorno {REFERENTE}, sul prossimo ordine di {CLIENTE} le riconosciamo un ulteriore {SCONTO}% di sconto con pagamento alla consegna.\n{DESCRIZIONE}\nValido fino al {SCADENZA}.\n{CATALOGO}\n{AZIENDA}' },
+        msg: "💶 Buongiorno {REFERENTE}! Sul prossimo ordine di {CLIENTE} le riconosciamo un *ulteriore {SCONTO}% di sconto* con pagamento alla consegna ✅\n👉 {DESCRIZIONE}\n⏰ Valido fino al {SCADENZA}.\n{IMMAGINE}\n{CATALOGO}\n🤝 {AZIENDA}" },
     'Riassortimento': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'C', potMin: 30, inattivoGg: 0, sconto: 0,
-        msg: 'Buongiorno {REFERENTE}, sono arrivati i riassortimenti di {CATEGORIA} e degli altri articoli più venduti da {CLIENTE}.\n{DESCRIZIONE}\n{CONDIZIONI}\nVuole che le prepariamo una proposta?\n{CATALOGO}\n{AZIENDA}' },
+        msg: "🔄 Buongiorno {REFERENTE}! Sono arrivati i *riassortimenti* di {CATEGORIA} e degli altri articoli più venduti da {CLIENTE} 📦\n👉 {DESCRIZIONE}\n💳 {CONDIZIONI}\n📲 Vuole che le prepariamo una proposta? 😊\n{IMMAGINE}\n{CATALOGO}\n🤝 {AZIENDA}" },
     'Riattivazione clienti fermi': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'B', potMin: 0, inattivoGg: 90, sconto: 10,
-        msg: 'Buongiorno {REFERENTE}, è un po\' che non ci sentiamo! Per {CLIENTE} c\'è uno sconto del {SCONTO}% sul prossimo ordine.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{CATALOGO}\n{AZIENDA}' },
+        msg: "👋 Buongiorno {REFERENTE}, è un po' che non ci sentiamo! Per {CLIENTE} c'è uno *sconto del {SCONTO}%* sul prossimo ordine 🎁\n👉 {DESCRIZIONE}\n💳 {CONDIZIONI}\n⏰ Valido fino al {SCADENZA}.\n{IMMAGINE}\n{CATALOGO}\n🤝 {AZIENDA}" },
     'Novità brand': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'C', potMin: 0, inattivoGg: 0, sconto: 0, brandModo: 'COMPRA',
-        msg: 'Buongiorno {REFERENTE}, sono arrivate le novità {BRAND} che {CLIENTE} apprezza.\n{DESCRIZIONE}\n{CONDIZIONI}\nLe preparo una proposta?\n{CATALOGO}\n{AZIENDA}' },
+        msg: "⭐ Buongiorno {REFERENTE}! Sono arrivate le *novità {BRAND}* che {CLIENTE} apprezza ✨\n👉 {DESCRIZIONE}\n💳 {CONDIZIONI}\n📲 Le preparo una proposta? 😊\n{IMMAGINE}\n{CATALOGO}\n🤝 {AZIENDA}" },
     'Recupero brand abbandonato': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'C', potMin: 0, inattivoGg: 0, sconto: 10, brandModo: 'ABBANDONATO',
-        msg: 'Buongiorno {REFERENTE}, è da un po\' che {CLIENTE} non riassortisce {BRAND}: per tornare a lavorarlo le riserviamo uno sconto del {SCONTO}%.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{CATALOGO}\n{AZIENDA}' },
+        msg: "🔁 Buongiorno {REFERENTE}! È da un po' che {CLIENTE} non riassortisce *{BRAND}*: per tornare a lavorarlo le riserviamo uno *sconto del {SCONTO}%* 🎁\n👉 {DESCRIZIONE}\n💳 {CONDIZIONI}\n⏰ Valido fino al {SCADENZA}.\n{IMMAGINE}\n{CATALOGO}\n🤝 {AZIENDA}" },
     'Proponi un nuovo brand': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'B', potMin: 40, inattivoGg: 0, sconto: 10, brandModo: 'NON_COMPRA',
-        msg: 'Buongiorno {REFERENTE}, vorremmo far provare a {CLIENTE} il brand {BRAND}, che sta andando molto bene presso i nostri clienti: sul primo ordine sconto del {SCONTO}%.\n{DESCRIZIONE}\n{CONDIZIONI}\nValido fino al {SCADENZA}.\n{CATALOGO}\n{AZIENDA}' },
+        msg: "🚀 Buongiorno {REFERENTE}! Vorremmo far provare a {CLIENTE} il brand *{BRAND}*, che sta andando molto bene presso i nostri clienti: sul primo ordine *sconto del {SCONTO}%* 🔥\n👉 {DESCRIZIONE}\n💳 {CONDIZIONI}\n⏰ Valido fino al {SCADENZA}.\n{IMMAGINE}\n{CATALOGO}\n🤝 {AZIENDA}" },
     'Promo personalizzata': { pagamenti: TUTTI_PAG, pagRich: 'ABITUALE', rischioMax: 'C', potMin: 0, inattivoGg: 0, sconto: 0, msg: '' }
 };
 const SEGNAPOSTO = ['{CLIENTE}', '{REFERENTE}', '{OFFERTA}', '{DESCRIZIONE}', '{SCONTO}', '{SCADENZA}', '{CONDIZIONI}', '{CATEGORIA}', '{BRAND}', '{IMMAGINE}', '{CATALOGO}', '{AZIENDA}'];
@@ -1415,7 +1420,7 @@ async function preparaPromoCampagna(o) {
 function hashTesto(t) { let h = 5381; t = String(t || ''); for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); }
 function firmaBanner(o, cfg, ris) {
     return hashTesto(JSON.stringify([o.tipo, o.titolo, o.descrizione, +o.sconto || 0, o.al || '', o.brand || [], ris.modo, ris.codici || [],
-        ris.modo === 'foto' ? hashTesto(cfg.foto) : '', (DATA && DATA.cfg && DATA.cfg.NOME_AZIENDA) || '', 'v1']));
+        ris.modo === 'foto' ? hashTesto(cfg.foto) : '', (DATA && DATA.cfg && DATA.cfg.NOME_AZIENDA) || '', 'v2']));   // v2: nuovo formato del link (anteprima in WhatsApp)
 }
 const PUBBLICAZIONE = {};   // id offerta → firma in caricamento (evita caricamenti doppi)
 
@@ -1463,35 +1468,48 @@ const suTelefono = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) |
 
 // WhatsApp con immagine: dal telefono si apre la condivisione (immagine + testo),
 // dal computer l'immagine viene copiata e si apre la chat: basta premere Ctrl+V e inviare.
+// WhatsApp + immagine: copia l'immagine e apre DIRETTAMENTE la chat del cliente con il testo pronto.
+// (WhatsApp permette di aprire la chat di un numero solo con il testo: l'immagine si incolla nella chat.)
+// Telefono: tieni premuto sul campo di scrittura → Incolla. Computer: Ctrl+V.
 function inviaConImmagine(cod) {
+    const o = offertaCampagna();
+    const pb = PROMO_BLOB && o && PROMO_BLOB.id === o.id ? PROMO_BLOB : null;
+    if (!pb) { toast('Immagine non ancora pronta: invio solo il testo.', 'warning'); invia(cod, 'WhatsApp'); return; }
+    const telefono = suTelefono();
+    let avviata = false;
+    try {
+        if (navigator.clipboard && window.ClipboardItem) {
+            // la copia parte subito (durante il tocco), la chat si apre subito dopo
+            navigator.clipboard.write([new ClipboardItem({ 'image/png': pb.png })])
+                .then(() => toast(telefono
+                    ? '<b>Immagine copiata.</b> Nella chat <b>tieni premuto</b> sul campo di scrittura → <b>Incolla</b>, poi invia.'
+                    : '<b>Immagine copiata.</b> Nella chat WhatsApp premi <b>Ctrl+V</b> per allegarla, poi invia.'))
+                .catch(() => toast(telefono
+                    ? 'Non sono riuscito a copiare l\'immagine: usa il pulsante <i class="fas fa-share-nodes"></i> Condividi.'
+                    : 'Copia non riuscita: usa "Scarica" e trascina l\'immagine nella chat.', 'warning'));
+            avviata = true;
+        }
+    } catch (e) {}
+    if (!avviata) {
+        if (telefono) toast('Questo telefono non permette di copiare immagini: usa il pulsante <i class="fas fa-share-nodes"></i> Condividi.', 'warning');
+        else { scaricaBlob(pb.jpg, pb.nome); toast('Immagine scaricata: trascinala nella chat WhatsApp.', 'warning'); }
+    }
+    invia(cod, 'WhatsApp');   // apre la chat del cliente con il testo e registra l'invio
+}
+
+// Alternativa da telefono: condivisione di sistema (immagine + testo), poi scegli WhatsApp e il contatto
+function condividiImmagine(cod) {
     const c = cliente(cod), r = rigaCampagna(cod);
     const testo = r.querySelector('.cmp-msg').value;
     const o = offertaCampagna();
     const pb = PROMO_BLOB && o && PROMO_BLOB.id === o.id ? PROMO_BLOB : null;
-    if (!pb) { toast('Immagine non ancora pronta: invio solo il testo.', 'warning'); invia(cod, 'WhatsApp'); return; }
-
-    if (suTelefono()) {
-        const file = new File([pb.jpg], pb.nome, { type: 'image/jpeg' });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            navigator.share({ files: [file], text: testo })
-                .then(() => registra([cod], 'WhatsApp').catch(e => toast('Inviato ma non registrato: ' + esc(e.message), 'warning')))
-                .catch(e => { if (e && e.name !== 'AbortError') toast('Condivisione non riuscita: ' + esc(e.message), 'danger'); });
-            toast(`Scegli WhatsApp e poi il contatto: <b>${esc(c.nome)}</b>`);
-            return;
-        }
-    }
-
-    let copiata = false;
-    try {
-        if (navigator.clipboard && window.ClipboardItem) {
-            navigator.clipboard.write([new ClipboardItem({ 'image/png': pb.png })])
-                .then(() => toast('<b>Immagine copiata.</b> Nella chat WhatsApp premi <b>Ctrl+V</b> per allegarla, poi invia.'))
-                .catch(() => { scaricaBlob(pb.jpg, pb.nome); toast('Immagine scaricata: trascinala nella chat WhatsApp.', 'warning'); });
-            copiata = true;
-        }
-    } catch (e) {}
-    if (!copiata) { scaricaBlob(pb.jpg, pb.nome); toast('Immagine scaricata: trascinala nella chat WhatsApp.', 'warning'); }
-    invia(cod, 'WhatsApp');
+    if (!pb) { toast('Immagine non ancora pronta, riprova tra un attimo.', 'warning'); return; }
+    const file = new File([pb.jpg], pb.nome, { type: 'image/jpeg' });
+    if (!(navigator.canShare && navigator.canShare({ files: [file] }))) { toast('Condivisione non disponibile su questo dispositivo.', 'warning'); return; }
+    navigator.share({ files: [file], text: testo })
+        .then(() => registra([cod], 'WhatsApp').catch(e => toast('Inviato ma non registrato: ' + esc(e.message), 'warning')))
+        .catch(e => { if (e && e.name !== 'AbortError') toast('Condivisione non riuscita: ' + esc(e.message), 'danger'); });
+    toast(`Scegli WhatsApp e poi il contatto: <b>${esc(c.nome)}</b>`);
 }
 
 // ---------- Collegamento con il catalogo prodotti ----------
@@ -1660,8 +1678,8 @@ function componiMessaggio(o, c) {
         '{DESCRIZIONE}': o.descrizione || '', '{SCONTO}': o.sconto || 0, '{SCADENZA}': o.al ? fmtD(o.al) : 'esaurimento scorte',
         '{CONDIZIONI}': condizioni(o, c), '{CATEGORIA}': (c.topCat[0] && c.topCat[0].cat) || 'articoli', '{BRAND}': brandPerMessaggio(o, c),
         '{AZIENDA}': (DATA.cfg && DATA.cfg.NOME_AZIENDA) || '',
-        '{CATALOGO}': link ? 'Prezzi riservati e disponibilità sul suo catalogo: ' + link : '',
-        '{IMMAGINE}': linkImg ? 'Guarda l\'offerta: ' + linkImg : ''
+        '{CATALOGO}': link ? '🛍️ Prezzi riservati e disponibilità sul suo catalogo: ' + link : '',
+        '{IMMAGINE}': linkImg ? '🖼️ Guarda l\'offerta: ' + linkImg : ''
     };
     let t = o.messaggio || `Buongiorno {REFERENTE}, abbiamo un'offerta per {CLIENTE}: {OFFERTA}.\n{DESCRIZIONE}\n{CONDIZIONI}\n{CATALOGO}\n{AZIENDA}`;
     // Link dell'immagine promozionale: se il messaggio non ha {IMMAGINE} lo aggiungo prima del link al catalogo / della firma
@@ -1674,6 +1692,8 @@ function componiMessaggio(o, c) {
         t = t.indexOf('{AZIENDA}') >= 0 ? t.replace('{AZIENDA}', '{CATALOGO}\n{AZIENDA}') : t + '\n{CATALOGO}';
     }
     Object.keys(rep).forEach(k => { t = t.split(k).join(rep[k]); });
+    // Righe rimaste con la sola emoticon (es. descrizione vuota) vengono tolte
+    t = t.split('\n').filter(l => !l.trim() || l.replace(/[\p{Extended_Pictographic}\uFE0F\u200D*_~\s:.,;\-–—]/gu, '') !== '').join('\n');
     return t.replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -2833,6 +2853,8 @@ function apriOfferta(id, preset) {
     if (!DATA) { toast('Collegati prima ai Fogli Google.', 'warning'); return; }
     $('oTipo').innerHTML = Object.keys(TIPI).map(t => `<option>${t}</option>`).join('');
     $('oChips').innerHTML = SEGNAPOSTO.map(s => `<span class="badge bg-light text-dark border chip me-1" onclick="inserisci('${s}')">${s}</span>`).join('');
+    $('oEmoji').innerHTML = EMOJI_RAPIDE.map(e => `<span class="chip me-1" style="cursor:pointer" title="Inserisci" onclick="inserisci('${e}')">${e}</span>`).join('') +
+        ' <span class="small text-muted">tocca per inserire · <b>*testo*</b> = grassetto su WhatsApp</span>';
     const o = id ? DATA.offerte.find(x => x.id === id) : null;
     $('moTitolo').textContent = o ? 'Modifica offerta' : 'Nuova offerta';
     if (o) scriviForm(o);
@@ -2878,6 +2900,43 @@ function applicaTipo(forza) {
     if (eraPreset) $('oMsg').value = t.msg;
     if (forza || !$('oTitolo').value) $('oTitolo').value = $('oTipo').value;
     anteprimaIdonei();
+}
+
+// ---------- Emoticon nei messaggi ----------
+const EMOJI_RAPIDE = ['🔥', '⭐', '✨', '🎁', '🎉', '🏷️', '🛍️', '👗', '👕', '👖', '🧥', '🧦', '🩲', '👶', '🧵', '📦', '🚚', '⏰', '✅', '💳', '💶', '📲', '👉', '😊', '👋', '🤝', '❤️'];
+const EMOJI_RE = /\p{Extended_Pictographic}/u;
+
+// Aggiunge un'emoticon all'inizio delle righe che non ne hanno, in base a cosa contengono
+function aggiungiEmoticon(t, tipo) {
+    const icona = (PROMO_TEMI[tipo] || PROMO_TEMI['Promo personalizzata']).icona;
+    let prima = true;
+    return String(t || '').split('\n').map(l => {
+        const x = l.trim();
+        if (!x) return l;
+        const eraPrima = prima; prima = false;
+        if (/^\{(IMMAGINE|CATALOGO)\}$/.test(x) || EMOJI_RE.test(Array.from(x).slice(0, 2).join(''))) return l;
+        let e;
+        if (eraPrima) e = icona;
+        else if (/\{SCONTO\}|sconto/i.test(x)) e = '🔥';
+        else if (/^\{DESCRIZIONE\}$/.test(x)) e = '👉';
+        else if (/\{CONDIZIONI\}|pagament/i.test(x)) e = '💳';
+        else if (/\{SCADENZA\}|valid|scaden/i.test(x)) e = '⏰';
+        else if (/^\{AZIENDA\}$/.test(x)) e = '🤝';
+        else if (/showroom|catalogo|proposta|chiam|scriv|contatt/i.test(x)) e = '📲';
+        else e = '✅';
+        return e + ' ' + x + (/\?$/.test(x) && !EMOJI_RE.test(x) ? ' 😊' : '');
+    }).join('\n');
+}
+function emoticonNelMessaggio() {
+    const ta = $('oMsg');
+    if (!ta.value.trim()) { modelloConEmoticon(); return; }
+    ta.value = aggiungiEmoticon(ta.value, $('oTipo').value);
+    if (ta.value.indexOf('{IMMAGINE}') < 0) ta.value = ta.value.replace('{CATALOGO}', '{IMMAGINE}\n{CATALOGO}');
+}
+function modelloConEmoticon() {
+    const t = TIPI[$('oTipo').value];
+    if (t && t.msg) $('oMsg').value = t.msg;
+    else $('oMsg').value = aggiungiEmoticon("Buongiorno {REFERENTE}, abbiamo un'offerta per {CLIENTE}: *{OFFERTA}*\n{DESCRIZIONE}\n{CONDIZIONI}\n{IMMAGINE}\n{CATALOGO}\n{AZIENDA}", $('oTipo').value);
 }
 
 function inserisci(s) {
@@ -2995,7 +3054,8 @@ function renderCampagna() {
                 ${x.v.avvisi.map(a => `<span class="badge bg-warning text-dark">${esc(a)}</span>`).join(' ')}
                 <span class="badge bg-success d-none stato-inviato"><i class="fas fa-check me-1"></i>registrato</span>
                 <div class="ms-auto btn-group btn-group-sm">
-                    <button class="btn btn-success" ${c.tel ? '' : 'disabled'} onclick="inviaConImmagine('${esc(c.codice)}')" title="WhatsApp con l'immagine dell'offerta"><i class="fab fa-whatsapp me-1"></i>WhatsApp + <i class="fas fa-image"></i></button>
+                    <button class="btn btn-success" ${c.tel ? '' : 'disabled'} onclick="inviaConImmagine('${esc(c.codice)}')" title="Apre la chat del cliente e copia l'immagine da incollare"><i class="fab fa-whatsapp me-1"></i>WhatsApp + <i class="fas fa-image"></i></button>
+                    ${suTelefono() ? `<button class="btn btn-outline-success" ${c.tel ? '' : 'disabled'} onclick="condividiImmagine('${esc(c.codice)}')" title="Condividi immagine e testo (scegli tu WhatsApp e il contatto)"><i class="fas fa-share-nodes"></i></button>` : ''}
                     <button class="btn btn-outline-success" ${c.tel ? '' : 'disabled'} onclick="invia('${esc(c.codice)}','WhatsApp')" title="WhatsApp solo testo"><i class="fab fa-whatsapp"></i></button>
                     <button class="btn btn-outline-primary" ${c.email ? '' : 'disabled'} onclick="invia('${esc(c.codice)}','Email')"><i class="fas fa-envelope me-1"></i>Email</button>
                     <button class="btn btn-outline-secondary" title="Riscrivi con Gemini" onclick="personalizza('${esc(c.codice)}', this)"><i class="fas fa-wand-magic-sparkles"></i></button>
@@ -3064,7 +3124,7 @@ async function personalizza(cod, btn) {
     if (DATA && !DATA.geminiAttivo) { toast('Imposta la chiave Gemini nelle Impostazioni.', 'warning'); return; }
     const c = cliente(cod), r = rigaCampagna(cod), ta = r.querySelector('.cmp-msg');
     const o = DATA.offerte.find(x => x.id === $('cmpOfferta').value);
-    const prompt = `Sei il commerciale di un'azienda di abbigliamento all'ingrosso in Italia. Riscrivi questo messaggio WhatsApp per il cliente, mantenendo TUTTI i dati dell'offerta (sconto, scadenza, condizioni di pagamento) senza inventarne di nuovi. Tono cordiale e professionale, massimo 6 righe, niente markdown, niente emoji eccessive. Rispondi solo con il testo del messaggio.
+    const prompt = `Sei il commerciale di un'azienda di abbigliamento all'ingrosso in Italia. Riscrivi questo messaggio WhatsApp per il cliente, mantenendo TUTTI i dati dell'offerta (sconto, scadenza, condizioni di pagamento) senza inventarne di nuovi. Tono cordiale e professionale, massimo 7 righe, con 3-5 emoji pertinenti (come nel messaggio originale). Niente markdown, tranne l'*asterisco* per il grassetto di WhatsApp. Lascia i link esattamente come sono. Rispondi solo con il testo del messaggio.
 
 Profilo cliente: ${c.nome} (${c.citta}); segmento "${SEG[c.segmento].lbl}"; categorie preferite: ${c.topCat.map(t => t.cat).join(', ') || 'n.d.'}; brand preferiti: ${c._attivi.slice(0, 3).join(', ') || 'n.d.'}; trend acquisti ${c.trend === null ? 'n.d.' : c.trend + '%'}; ultimo acquisto ${c.giorniDaUltimo === null ? 'mai' : c.giorniDaUltimo + ' giorni fa'}.
 Offerta: ${o.titolo} – ${o.descrizione}.
