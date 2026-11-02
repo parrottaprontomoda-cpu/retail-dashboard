@@ -173,6 +173,15 @@
                     <button class="btn btn-sm btn-success" onclick="registraSelezionati()"><i class="fas fa-check me-1"></i>Registra selezionati come inviati</button>
                     <button class="btn btn-sm btn-outline-primary" onclick="esportaCampagna()"><i class="fas fa-download me-1"></i>CSV selezionati</button>
                 </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                    <div class="input-group input-group-sm" style="max-width:420px">
+                        <span class="input-group-text"><i class="fas fa-user-plus"></i></span>
+                        <input id="cmpAggiungi" class="form-control" list="dlCmpClienti" placeholder="Aggiungi un cliente non in lista (cerca per nome)…" onkeydown="if(event.key==='Enter'){aggiungiDaRicerca();}">
+                        <button class="btn btn-outline-primary" onclick="aggiungiDaRicerca()">Aggiungi</button>
+                    </div>
+                    <datalist id="dlCmpClienti"></datalist>
+                    <button class="btn btn-sm btn-primary" onclick="nuovoClienteCampagna()"><i class="fas fa-user-plus me-1"></i>Nuovo cliente</button>
+                </div>
                 <div id="cmpLista" class="mt-2"></div>
                 <details class="mt-3"><summary class="small text-muted" id="cmpEsclusiTit"></summary><div id="cmpEsclusi" class="small mt-2"></div></details>
             </div></div>
@@ -1681,7 +1690,8 @@ function componiMessaggio(o, c) {
         '{CATALOGO}': link ? '🛍️ Prezzi riservati e disponibilità sul suo catalogo: ' + link : '',
         '{IMMAGINE}': linkImg ? '🖼️ Guarda l\'offerta: ' + linkImg : ''
     };
-    let t = o.messaggio || `Buongiorno {REFERENTE}, abbiamo un'offerta per {CLIENTE}: {OFFERTA}.\n{DESCRIZIONE}\n{CONDIZIONI}\n{CATALOGO}\n{AZIENDA}`;
+    let t = o.messaggio || (TIPI[o.tipo] && TIPI[o.tipo].msg) ||
+        `🎁 Buongiorno {REFERENTE}! Abbiamo un'offerta per {CLIENTE}: *{OFFERTA}*\n👉 {DESCRIZIONE}\n💳 {CONDIZIONI}\n{IMMAGINE}\n{CATALOGO}\n🤝 {AZIENDA}`;
     // Link dell'immagine promozionale: se il messaggio non ha {IMMAGINE} lo aggiungo prima del link al catalogo / della firma
     if (linkImg && t.indexOf('{IMMAGINE}') < 0) {
         t = t.indexOf('{CATALOGO}') >= 0 ? t.replace('{CATALOGO}', '{IMMAGINE}\n{CATALOGO}')
@@ -1691,6 +1701,8 @@ function componiMessaggio(o, c) {
     if (link && t.indexOf('{CATALOGO}') < 0 && ls.get('oi_cat_auto') !== '0') {
         t = t.indexOf('{AZIENDA}') >= 0 ? t.replace('{AZIENDA}', '{CATALOGO}\n{AZIENDA}') : t + '\n{CATALOGO}';
     }
+    // Righe fatte solo di un segnaposto vuoto (es. cliente senza link al catalogo): le tolgo del tutto
+    t = t.split('\n').filter(l => { const k = l.trim(); return !(k in rep) || rep[k] !== ''; }).join('\n');
     Object.keys(rep).forEach(k => { t = t.split(k).join(rep[k]); });
     // Righe rimaste con la sola emoticon (es. descrizione vuota) vengono tolte
     t = t.split('\n').filter(l => !l.trim() || l.replace(/[\p{Extended_Pictographic}\uFE0F\u200D*_~\s:.,;\-–—]/gu, '') !== '').join('\n');
@@ -2742,6 +2754,8 @@ function aggiornaClasseForm() {
     $('fcClasse').innerHTML = `Classe di partenza: <b>${CLS[k].lbl}</b>`;
 }
 
+document.addEventListener('hidden.bs.modal', e => { if (e.target.id === 'mFormCliente') setTimeout(() => { if (!$('mFormCliente').classList.contains('show')) NUOVO_PER_CAMPAGNA = null; }, 0); });
+
 function apriFormCliente(cod, preset) {
     if (!DATA) { toast('Collegati prima ai Fogli Google.', 'warning'); return; }
     const c = cod ? cliente(cod) : null;
@@ -2770,6 +2784,7 @@ function apriFormCliente(cod, preset) {
 
 async function salvaCliente() {
     const nuovo = $('fcNuovo').value === '1';
+    const perCampagna = NUOVO_PER_CAMPAGNA;   // letto subito: la finestra chiudendosi lo azzera
     const cli = {
         codice: $('fcCodice').value.trim(), nome: $('fcNome').value.trim(), piva: $('fcPiva').value.trim().toUpperCase(),
         referente: $('fcReferente').value.trim(), tel: $('fcTel').value.trim(), email: $('fcEmail').value.trim(),
@@ -2790,7 +2805,21 @@ async function salvaCliente() {
         bootstrap.Modal.getInstance($('mFormCliente')).hide();
         toast(nuovo ? `Cliente ${esc(r.codice)} aggiunto.` : 'Cliente aggiornato.');
         await carica(true);
-        apriCliente(r.codice);
+        NUOVO_PER_CAMPAGNA = null;
+        if (nuovo && perCampagna) {
+            // creato dalla Campagna: lo aggiungo all'offerta e torno alla lista
+            const l = clientiAggiunti(perCampagna);
+            if (l.indexOf(r.codice) < 0) l.unshift(r.codice);
+            salvaAggiunti(perCampagna, l);
+            if ($('cmpOfferta').value === perCampagna) renderCampagna();
+        } else {
+            apriCliente(r.codice);
+        }
+        // nuovo cliente o telefono cambiato: lo porto nel catalogo con il suo link personale
+        if (nuovo || cli.tel) {
+            await sincronizzaClientiCatalogo(nuovo);
+            if ($('cmpOfferta').value) renderCampagna();
+        }
     } catch (e) { toast(esc(e.message), 'danger'); }
     finally { btn.disabled = false; }
 }
@@ -3037,20 +3066,35 @@ function renderCampagna() {
         if (!pronto && PROMO_CFG[o.id] && $('cmpOfferta').value === o.id && cataloghiOfferta(o, null).join('|') !== cats.join('|')) renderCampagna();
     });
     const val = DATA.clienti.map(c => ({ c: c, v: valuta(o, c) }));
+    const extra = clientiAggiunti(o.id);
     const idonei = val.filter(x => x.v.idoneo).sort((a, b) => b.c.potenziale - a.c.potenziale);
-    const esclusi = val.filter(x => !x.v.idoneo);
-    $('cmpConta').textContent = `${idonei.length} destinatari idonei`;
-    $('cmpLista').innerHTML = idonei.map(x => {
-        const c = x.c;
-        const sel = !x.v.avvisi.some(a => a.startsWith('offerta già') || a.startsWith('contattato') || a === 'nessun contatto');
-        const msg = componiMessaggio(o, c);
-        return `<div class="border rounded p-2 mb-2 cmp-riga" data-cod="${esc(c.codice)}">
+    const manuali = val.filter(x => !x.v.idoneo && extra.indexOf(x.c.codice) >= 0).sort((a, b) => extra.indexOf(a.c.codice) - extra.indexOf(b.c.codice));   // ultimi aggiunti in cima
+    const esclusi = val.filter(x => !x.v.idoneo && extra.indexOf(x.c.codice) < 0);
+    $('cmpConta').textContent = `${idonei.length} destinatari idonei` + (manuali.length ? ` + ${manuali.length} aggiunti a mano` : '');
+    $('cmpLista').innerHTML = (manuali.map(x => rigaCampagnaHtml(o, x, true)).join('') + idonei.map(x => rigaCampagnaHtml(o, x, false)).join(''))
+        || '<div class="text-muted py-3">Nessun cliente soddisfa le regole di questa offerta: puoi aggiungerne a mano qui sopra o dall\'elenco degli esclusi.</div>';
+    $('cmpEsclusiTit').textContent = `Clienti esclusi (${esclusi.length}) e motivo — puoi aggiungerli alla campagna`;
+    $('cmpEsclusi').innerHTML = esclusi.map(x => `<div class="d-flex align-items-center gap-2 py-1 border-bottom">
+        <button class="btn btn-sm btn-outline-primary py-0" onclick="aggiungiAllaCampagna('${esc(x.c.codice)}')"><i class="fas fa-plus me-1"></i>Aggiungi</button>
+        <span><b>${esc(x.c.nome)}</b>: ${x.v.motivi.map(esc).join(', ')}</span></div>`).join('');
+    // nomi per la ricerca "Aggiungi un cliente"
+    $('dlCmpClienti').innerHTML = DATA.clienti.filter(c => !val.find(x => x.c === c && x.v.idoneo) && extra.indexOf(c.codice) < 0)
+        .map(c => `<option value="${esc(c.nome)}">`).join('');
+}
+
+function rigaCampagnaHtml(o, x, manuale) {
+    const c = x.c;
+    const sel = manuale || !x.v.avvisi.some(a => a.startsWith('offerta già') || a.startsWith('contattato') || a === 'nessun contatto');
+    const msg = componiMessaggio(o, c);
+    return `<div class="border rounded p-2 mb-2 cmp-riga${manuale ? ' border-primary' : ''}" data-cod="${esc(c.codice)}">
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <input type="checkbox" class="form-check-input cmp-sel m-0" ${sel ? 'checked' : ''}>
                 <a href="#" class="fw-bold text-decoration-none" onclick="apriCliente('${esc(c.codice)}');return false;">${esc(c.nome)}</a>
+                ${manuale ? `<span class="badge bg-primary">aggiunto a mano</span> <a href="#" class="small text-danger" onclick="togliDallaCampagna('${esc(c.codice)}');return false;">togli</a>` : ''}
                 ${badgeSeg(c.segmento)} ${badgeCls(c)} ${badgeFascia(c)}
                 <span class="small text-muted">pot. ${c.potenziale}</span>
-                ${CAT.clienti[String(c.codice || '').trim().toUpperCase()] ? '<span class="badge bg-light text-success border"><i class="fas fa-store me-1"></i>catalogo</span>' : ''}
+                ${CAT.clienti[String(c.codice || '').trim().toUpperCase()] ? '<span class="badge bg-light text-success border"><i class="fas fa-store me-1"></i>catalogo</span>' : '<span class="badge bg-light text-muted border" title="Senza codice del catalogo: il messaggio non avrà il link"><i class="fas fa-store-slash me-1"></i>no catalogo</span>'}
+                ${manuale ? x.v.motivi.map(m => `<span class="badge bg-secondary">fuori regole: ${esc(m)}</span>`).join(' ') : ''}
                 ${x.v.avvisi.map(a => `<span class="badge bg-warning text-dark">${esc(a)}</span>`).join(' ')}
                 <span class="badge bg-success d-none stato-inviato"><i class="fas fa-check me-1"></i>registrato</span>
                 <div class="ms-auto btn-group btn-group-sm">
@@ -3061,12 +3105,68 @@ function renderCampagna() {
                     <button class="btn btn-outline-secondary" title="Riscrivi con Gemini" onclick="personalizza('${esc(c.codice)}', this)"><i class="fas fa-wand-magic-sparkles"></i></button>
                 </div>
             </div>
-            <details class="mt-1"><summary class="small text-muted">Messaggio</summary>
+            ${!c.tel ? `<div class="small text-danger mt-1">Manca il telefono: <a href="#" onclick="apriFormCliente('${esc(c.codice)}');return false;">aggiungilo nella scheda cliente</a></div>` : ''}
+            <details class="mt-1"${manuale ? ' open' : ''}><summary class="small text-muted">Messaggio</summary>
                 <textarea class="form-control msg-area mt-1 cmp-msg" rows="6">${esc(msg)}</textarea></details>
         </div>`;
-    }).join('') || '<div class="text-muted py-3">Nessun cliente soddisfa le regole di questa offerta.</div>';
-    $('cmpEsclusiTit').textContent = `Clienti esclusi (${esclusi.length}) e motivo`;
-    $('cmpEsclusi').innerHTML = esclusi.map(x => `<div><b>${esc(x.c.nome)}</b>: ${x.v.motivi.map(esc).join(', ')}</div>`).join('');
+}
+
+// ---------- Clienti aggiunti a mano alla campagna (per offerta, ricordati in questo browser) ----------
+function leggiAggiunti() { try { return JSON.parse(localStorage.getItem('oi_cmp_extra') || '{}'); } catch (e) { return {}; } }
+function clientiAggiunti(id) { return leggiAggiunti()[id] || []; }
+function salvaAggiunti(id, lista) {
+    const t = leggiAggiunti(); t[id] = lista;
+    try { localStorage.setItem('oi_cmp_extra', JSON.stringify(t)); } catch (e) {}
+}
+function aggiungiAllaCampagna(cod) {
+    const id = $('cmpOfferta').value; if (!id) return;
+    const l = clientiAggiunti(id);
+    if (l.indexOf(cod) < 0) l.unshift(cod);
+    salvaAggiunti(id, l);
+    renderCampagna();
+    const c = cliente(cod);
+    toast(`<b>${esc(c ? c.nome : cod)}</b> aggiunto alla campagna.`);
+    setTimeout(() => { const r = rigaCampagna(cod); if (r) r.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
+}
+function togliDallaCampagna(cod) {
+    const id = $('cmpOfferta').value; if (!id) return;
+    salvaAggiunti(id, clientiAggiunti(id).filter(x => x !== cod));
+    renderCampagna();
+}
+function aggiungiDaRicerca() {
+    const q = ($('cmpAggiungi').value || '').trim();
+    if (!q) return;
+    const n = normNomeJS(q);
+    const c = DATA.clienti.find(x => x.nome === q) || DATA.clienti.find(x => normNomeJS(x.nome) === n)
+        || DATA.clienti.find(x => normNomeJS(x.nome).indexOf(n) >= 0 || String(x.codice).toUpperCase() === q.toUpperCase());
+    if (!c) {
+        if (confirm(`"${q}" non è tra i clienti. Vuoi crearlo come nuovo cliente?`)) nuovoClienteCampagna(q);
+        return;
+    }
+    $('cmpAggiungi').value = '';
+    if (rigaCampagna(c.codice)) { toast(`<b>${esc(c.nome)}</b> è già nella lista.`); rigaCampagna(c.codice).scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    aggiungiAllaCampagna(c.codice);
+}
+
+// Nuovo cliente dalla Campagna: dopo il salvataggio viene aggiunto alla campagna e riceve il codice del catalogo
+let NUOVO_PER_CAMPAGNA = null;
+function nuovoClienteCampagna(nome) {
+    NUOVO_PER_CAMPAGNA = $('cmpOfferta').value || null;
+    apriFormCliente(null, nome ? { nome: nome } : undefined);
+}
+
+// Porta i clienti nuovi nel catalogo (foglio CLIENTI) e crea il loro codice personale
+async function sincronizzaClientiCatalogo(mostra) {
+    if (!catalogoCollegato()) return;
+    try {
+        if (mostra) toast('<i class="fas fa-spinner fa-spin me-1"></i>Creo il link del catalogo per il nuovo cliente…');
+        const j = await (await fetch(urlCatalogo('sincronizzaclienti'))).json();
+        if (!j.ok) throw new Error(j.error || 'errore');
+        await caricaMappaCatalogo(false);
+        if (mostra) toast(j.aggiunti || j.nuoviCodici ? 'Cliente collegato al catalogo: il suo link personale è pronto.' : 'Catalogo già aggiornato.');
+    } catch (e) {
+        toast('Cliente salvato, ma non collegato al catalogo: ' + esc(e.message) + '. Riprova da Impostazioni → Catalogo prodotti → Salva e prova.', 'warning');
+    }
 }
 
 function rigaCampagna(cod) { return Array.from(document.querySelectorAll('.cmp-riga')).find(r => r.getAttribute('data-cod') === cod); }
