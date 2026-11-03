@@ -396,7 +396,7 @@
                 <label class="form-label fw-bold text-secondary">Filtra Card / CF:</label>
                 <div class="input-group">
                     <span class="input-group-text"><i class="fas fa-id-card"></i></span>
-                    <input type="text" id="filterCard" class="form-control form-control-lg" placeholder="N° Card o CF..." oninput="debounceUpdate()">
+                    <input type="text" id="filterCard" class="form-control form-control-lg" placeholder="N° Card o CF..." oninput="debounceUpdate()" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
                     <button class="btn btn-outline-secondary" type="button" onclick="clearCardFilter()" title="Azzera Filtro Card">
                         <i class="fas fa-times"></i>
                     </button>
@@ -689,6 +689,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
 4. Azioni Top Clienti: Suggerisci un'azione di up-selling o una coccola riservata per i top clienti del segmento.`;
 
     document.getElementById('urlVenditeInput').value = localStorage.getItem('urlVendite') || DEFAULT_VENDITE_URL;
+    // Se sul dispositivo il link DBCLI è stato salvato vuoto, usa quello predefinito
     document.getElementById('urlClientiInput').value = localStorage.getItem('urlClienti') || DEFAULT_CLIENTI_URL;
     document.getElementById('geminiApiKeyInput').value = localStorage.getItem('geminiApiKey') || "";
     document.getElementById('aiPromptInput').value = localStorage.getItem('aiPrompt') || DEFAULT_AI_PROMPT;
@@ -896,7 +897,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
             const ts = new Date().getTime();
             const [salesCsv, clientsCsv] = await Promise.all([
                 fetch(vUrl + "&_t=" + ts).then(r => r.ok ? r.text() : ""),
-                cUrl ? fetch(cUrl + "&_t=" + ts).then(r => r.ok ? r.text() : "") : Promise.resolve("")
+                cUrl ? fetch(cUrl + "&_t=" + ts).then(r => r.ok ? r.text() : "").catch(() => "") : Promise.resolve("")
             ]);
 
             if (!salesCsv) throw new Error("Download del foglio Vendite non riuscito.");
@@ -914,6 +915,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
                 await saveCache(salesCsv, clientsCsv || cached.clientsCsv);
                 statusEl.innerHTML = `<span class="text-success"><i class="fas fa-check-circle me-1"></i>Aggiornamento veloce ${moment().format('HH:mm')}: nessuna nuova riga (${rawData.length.toLocaleString('it-IT')} righe totali)</span>`;
                 if (clientsCsv) updateDashboard();
+                if (!clientsCsv && !cached.clientsCsv) warnClients();
                 setRefreshButton(false);
                 return;
             }
@@ -926,6 +928,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
                 await saveCache(salesCsv, clientsCsv || cached.clientsCsv);
                 processCsvData(salesCsv, clientsCsv || cached.clientsCsv, document.getElementById('btnRefresh'), false);
                 updateCacheStatus(Date.now(), false);
+                if (!clientsCsv && !cached.clientsCsv) warnClients();
                 return;
             }
 
@@ -950,6 +953,7 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
 
             await saveCache(salesCsv, clientsCsv || cached.clientsCsv);
             statusEl.innerHTML = `<span class="text-success"><i class="fas fa-bolt me-1"></i>Aggiornamento veloce ${moment().format('HH:mm')}: <strong>+${newRows.length.toLocaleString('it-IT')}</strong> nuove righe (${rawData.length.toLocaleString('it-IT')} totali)</span>`;
+            if (!clientsCsv && !cached.clientsCsv) warnClients();
             setRefreshButton(false);
 
         } catch (err) {
@@ -1661,6 +1665,8 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
                 console.log("🎯 Dati trovati in cache locale. Caricamento veloce avviato.");
                 processCsvData(cached.salesCsv, cached.clientsCsv, document.getElementById('btnRefresh'), true);
                 updateCacheStatus(cached.ts, true);
+                // Cache salvata senza anagrafiche clienti (es. download DBCLI fallito): le riscarica da sola
+                if (!cached.clientsCsv) refreshClientsOnly();
                 return;
             } else {
                 console.log("⚠️ Cache assente, scaduta o link modificati. Necessario download da rete.");
@@ -1680,16 +1686,23 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
         }
 
         let p1 = fetch(vUrl + "&_t=" + new Date().getTime()).then(r => r.ok ? r.text() : "");
-        let p2 = cUrl ? fetch(cUrl + "&_t=" + new Date().getTime()).then(r => r.ok ? r.text() : "") : Promise.resolve("");
+        let p2 = cUrl ? fetch(cUrl + "&_t=" + new Date().getTime()).then(r => r.ok ? r.text() : "").catch(() => "") : Promise.resolve("");
 
         Promise.all([p1, p2]).then(async results => {
             let salesCsv = results[0];
             let clientsCsv = results[1];
 
+            // Se il DBCLI non si scarica, non cancellare i clienti già in memoria
+            if (!clientsCsv) {
+                const old = await loadCache();
+                if (old && old.clientsCsv) clientsCsv = old.clientsCsv;
+            }
+
             if (salesCsv) await saveCache(salesCsv, clientsCsv);
 
             processCsvData(salesCsv, clientsCsv, document.getElementById('btnRefresh'), false);
             if (salesCsv) updateCacheStatus(Date.now(), false);
+            if (salesCsv && !clientsCsv) warnClients();
 
         }).catch(err => {
             alert("Errore di connessione. Dettaglio: " + err.message);
@@ -1736,6 +1749,30 @@ Struttura la tua risposta esplicitamente in questi 4 punti:
             if (cardVal) { clientDict[cardVal] = obj; clientDictNorm[normKey(cardVal)] = obj; }
             if (cfVal)   { clientDict[cfVal] = obj;   clientDictNorm[normKey(cfVal)] = obj; }
         });
+    }
+
+    // Avviso visibile quando le anagrafiche clienti (DBCLI) non sono disponibili
+    function warnClients() {
+        const el = document.getElementById('cacheStatus');
+        if (el.querySelector('.warn-clienti')) return;
+        el.insertAdjacentHTML('beforeend',
+            '<br><span class="text-warning warn-clienti"><i class="fas fa-user-slash me-1"></i>Anagrafiche clienti (DBCLI) non caricate: controlla il link in "Collegamento Sorgenti Dati".</span>');
+    }
+
+    // Scarica solo il foglio DBCLI e aggiorna anagrafiche e cache (senza ricaricare le vendite)
+    async function refreshClientsOnly() {
+        const cUrl = document.getElementById('urlClientiInput').value.trim();
+        if (!cUrl) { warnClients(); return; }
+        try {
+            const csv = await fetch(cUrl + (cUrl.includes('?') ? '&' : '?') + '_t=' + Date.now()).then(r => r.ok ? r.text() : '');
+            if (!csv) { warnClients(); return; }
+            Papa.parse(csv, { header: true, skipEmptyLines: true, complete: res => buildClientDict(res) });
+            const cached = await loadCache();
+            if (cached && cached.salesCsv) await saveCache(cached.salesCsv, csv);
+            if (rawData.length) updateDashboard();
+        } catch (e) {
+            warnClients();
+        }
     }
 
     function getClientInfo(key) {
