@@ -37,8 +37,16 @@
         #packingListBody h5 { font-size: 0.95rem; }
         .packing-item { margin-bottom: 12px !important; padding-bottom: 8px !important; }
 
+        /* Riassortimento */
+        .rs-sub { font-size: 0.68rem; color: #6c757d; white-space: nowrap; }
+        .rs-ord { font-size: 0.95rem; }
+        /* Inventario reale */
+        .inv-input { width: 70px; margin: 2px auto; }
+        .inv-input.changed { border-color: #fd7e14; background: #fff4e6; }
+        .inv-diff { font-size: 0.72rem; min-height: 1em; }
+
         /* ========================================================= */
-        /* FIX STAMPA MULTI-PAGINA MODAL PACKING LIST                */
+        /* STAMPA MULTI-PAGINA DEL MODAL APERTO (packing / riassort.) */
         /* ========================================================= */
         @media print {
             @page { size: A4; margin: 15mm; }
@@ -51,25 +59,17 @@
 
             body.modal-open { overflow: visible !important; height: auto !important; }
 
-            /* Nasconde l'eventuale sfondo scuro del modal */
             .modal-backdrop { display: none !important; }
 
-            /* Rimuove DAVVERO dal flusso tutto ciò che non è il modal
-               (navbar, filtri, grafici, tabella dashboard). visibility:hidden
-               nasconde solo visivamente ma lascia lo spazio occupato: è questo
-               che generava le pagine bianche prima dei dati. display:none
-               invece elimina del tutto lo spazio. */
-            body > *:not(#packingListModal) {
+            /* Elimina dal flusso tutto ciò che non è il modal aperto */
+            body > *:not(.modal.show) {
                 display: none !important;
             }
 
-            /* Forza il modal a comportarsi come un normale blocco in flusso,
-               non più fisso/scrollabile: questo è ciò che permette al
-               contenuto di spezzarsi correttamente su più pagine */
-            #packingListModal,
-            #packingListModal .modal-dialog,
-            #packingListModal .modal-content,
-            #packingListModal .modal-body {
+            .modal.show,
+            .modal.show .modal-dialog,
+            .modal.show .modal-content,
+            .modal.show .modal-body {
                 position: static !important;
                 display: block !important;
                 overflow: visible !important;
@@ -86,10 +86,9 @@
 
             .modal-header, .modal-footer, .d-print-none { display: none !important; }
 
-            /* Font ancora più compatti in stampa nativa */
-            #packingListBody { font-size: 8pt !important; }
-            #packingListBody h2 { font-size: 13pt !important; }
-            #packingListBody h5 { font-size: 8.5pt !important; }
+            #packingListBody, #restockBody { font-size: 8pt !important; }
+            #packingListBody h2, #restockBody h2 { font-size: 13pt !important; }
+            #packingListBody h5, #restockBody h5 { font-size: 8.5pt !important; }
             .matrix-table th, .matrix-table td { padding: 2px 4px !important; font-size: 8pt !important; }
 
             .matrix-table th { background-color: #e9ecef !important; -webkit-print-color-adjust: exact; color-adjust: exact; }
@@ -245,7 +244,6 @@
                             </div>
                             <div class="col-md-2">
                                 <label class="fw-bold small text-primary">Cerca ID o Cliente</label>
-                                <!-- La classe select2-searchable attiva l'autocompletamento -->
                                 <select id="filter-idril" class="form-select select2-searchable"><option value="ALL">Tutti gli ID</option></select>
                             </div>
                             <div class="col-md-2">
@@ -258,11 +256,17 @@
                             </div>
                         </div>
                         <div class="row g-2 mt-2">
-                            <div class="col-md-6">
+                            <div class="col-md-3">
                                 <button id="applyFiltersBtn" class="btn btn-secondary w-100"><i class="fas fa-filter"></i> Applica Filtri alla Dashboard</button>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-3">
                                 <button id="btnPackingList" class="btn btn-success w-100"><i class="fas fa-boxes"></i> Genera Packing List da ID Selezionato</button>
+                            </div>
+                            <div class="col-md-3">
+                                <button id="btnRiassortimento" class="btn btn-primary w-100"><i class="fas fa-truck-loading"></i> Genera Riassortimento Fornitore</button>
+                            </div>
+                            <div class="col-md-3">
+                                <button id="btnInventario" class="btn btn-warning w-100"><i class="fas fa-clipboard-check"></i> Inventario Reale Articolo</button>
                             </div>
                         </div>
                     </div>
@@ -327,13 +331,91 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body p-4" id="packingListBody">
-                <!-- Contenuto generato dinamicamente -->
             </div>
             <div class="modal-footer d-print-none">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
                 <button type="button" class="btn btn-success" id="btnExportExcel"><i class="fas fa-file-excel me-2"></i> Esporta Excel</button>
                 <button type="button" class="btn btn-danger" id="btnExportPdf"><i class="fas fa-file-pdf me-2"></i> Esporta PDF</button>
                 <button type="button" class="btn btn-primary" onclick="window.print()"><i class="fas fa-print me-2"></i> Stampa in PDF / Carta</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Riassortimento -->
+<div class="modal fade" id="restockModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-fullscreen-lg-down">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white d-print-none">
+                <h5 class="modal-title"><i class="fas fa-truck-loading me-2"></i> Riassortimento Fornitore</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="bg-light border-bottom px-4 py-3 d-print-none">
+                <div class="row g-2 align-items-end">
+                    <div class="col-6 col-md-2">
+                        <label class="small fw-bold">Giorni di vendita</label>
+                        <input type="number" id="rs-giorni" class="form-control form-control-sm" min="1">
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="small fw-bold">Copertura (giorni)</label>
+                        <input type="number" id="rs-copertura" class="form-control form-control-sm" min="1" value="30">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <label class="small fw-bold">Scorta minima per variante venduta</label>
+                        <input type="number" id="rs-smin" class="form-control form-control-sm" min="0" value="1">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="rs-solo" checked>
+                            <label class="form-check-label small" for="rs-solo">Solo articoli da riordinare</label>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-2">
+                        <button id="rs-ricalcola" class="btn btn-sm btn-primary w-100"><i class="fas fa-calculator me-1"></i> Ricalcola</button>
+                    </div>
+                </div>
+                <div class="small text-muted mt-2">
+                    Per ogni colore/misura: <strong>fabbisogno</strong> = venduto ÷ giorni di vendita × copertura (arrotondato in su, minimo la scorta minima se la variante ha venduto);
+                    <strong>da ordinare</strong> = fabbisogno − giacenza attuale. Giacenza = saldo di tutto lo storico, oppure la giacenza reale se l'hai inserita in "Inventario Reale".
+                </div>
+            </div>
+            <div class="modal-body p-4" id="restockBody"></div>
+            <div class="modal-footer d-print-none">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                <button type="button" class="btn btn-success" id="rs-excel"><i class="fas fa-file-excel me-2"></i> Esporta Excel</button>
+                <button type="button" class="btn btn-primary" onclick="window.print()"><i class="fas fa-print me-2"></i> Stampa</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Inventario Reale -->
+<div class="modal fade" id="inventarioModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-fullscreen-lg-down">
+        <div class="modal-content">
+            <div class="modal-header bg-warning d-print-none">
+                <h5 class="modal-title"><i class="fas fa-clipboard-check me-2"></i> Inventario Reale e Rettifiche</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="bg-light border-bottom px-4 py-3">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-9">
+                        <label class="small fw-bold">Articolo (codice) — puoi anche digitare un codice</label>
+                        <select id="inv-cod" class="form-select"></select>
+                    </div>
+                    <div class="col-md-3">
+                        <button id="inv-load" class="btn btn-dark w-100"><i class="fas fa-download me-1"></i> Carica giacenze</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-body p-4" id="invBody">
+                <p class="text-muted mb-0">Seleziona un articolo e premi "Carica giacenze".</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                <button type="button" class="btn btn-warning" id="inv-genera"><i class="fas fa-magic me-2"></i> Genera righe rettifica</button>
+                <button type="button" class="btn btn-outline-primary" id="inv-copia" disabled><i class="fas fa-copy me-2"></i> Copia righe per Elenco Note</button>
+                <button type="button" class="btn btn-success" id="inv-excel" disabled><i class="fas fa-file-excel me-2"></i> Esporta righe Excel</button>
             </div>
         </div>
     </div>
@@ -361,19 +443,129 @@
     
     const PUNTI_VENDITA = ['PEPLO', 'PARROTTA POINT CHIARAVALLE', 'PARROTTA PRONTO MODA', 'CARAMELLO', 'TIKO'];
 
+    // ---- CONFIGURAZIONE RIGHE DI RETTIFICA (per Elenco Note) ----
+    // Destinazione scritta nella colonna CLI delle righe di rettifica: serve anche
+    // a escluderle dal calcolo delle vendite nel riassortimento.
+    const RETTIFICA_DESTINAZIONE = 'RETTIFICA INVENTARIO';
+    // Colonne copiate dall'ultimo movimento esistente della stessa variante.
+    // Tutte le altre colonne restano vuote (tranne data, quantità, ID, colore, misura, TOT).
+    const RETTIFICA_COLONNE_DA_COPIARE = ['COD', 'DESCRIZIONE', 'forn', 'OPER', 'PREZZO'];
+
     const sizePriority = {
         'XXXS': 1, 'XXS': 2, 'XS': 3, 'S': 4, 'M': 5, 'L': 6, 'XL': 7, 'XXL': 8, '2XL': 8, '3XL': 9, '4XL': 10, 'TU': 99, 'UNICA': 99
     };
 
     let globalData = [];
     let globalCols = [];
+    let globalColIds = {};    // titolo colonna -> lettera (A, B, ...)
+    let globalColTypes = {};  // titolo colonna -> tipo gviz (string, number, ...)
+    let COL = { qta: '', idril: '', misura: '', colore: '', data: '' };
     let charts = {};
-    let currentPackingData = null; // dati dell'ultima Packing List generata, riusati dall'export Excel
+    let currentPackingData = null;
+    let currentRestock = null;
+    let currentInvent = null;
+    // Giacenze reali inserite nell'inventario (sessione): "COD||COLORE||MISURA" -> qta
+    let realStockOverrides = {};
 
     // Parametri URL: ?codice=9302300  (opzionali: &anno=2026 oppure &anno=tutti, &mese=09)
     const urlParams = new URLSearchParams(window.location.search);
     const paramCodice = (urlParams.get('codice') || '').trim();
 
+    // ================= UTILITÀ =================
+    function esc(s) {
+        return String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    }
+    function round3(n) { return Math.round(n * 1000) / 1000; }
+    function pad2(n) { return String(n).padStart(2, '0'); }
+
+    function gvizLit(v) {
+        v = String(v);
+        return v.includes("'") ? '"' + v.replace(/"/g, '') + '"' : "'" + v + "'";
+    }
+
+    function parseDataIt(s) {
+        let m = String(s || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null;
+    }
+
+    // Query JSONP generica sul foglio NOTE (usata per giacenze su tutto lo storico)
+    let gvizCounter = 0;
+    function gvizQuery(tq) {
+        return new Promise((resolve, reject) => {
+            const cb = 'gvizCb_' + (++gvizCounter) + '_' + Date.now();
+            const script = document.createElement('script');
+            const cleanup = () => { try { delete window[cb]; } catch (e) { window[cb] = undefined; } script.remove(); };
+            window[cb] = function (resp) {
+                cleanup();
+                if (!resp || resp.status === 'error' || !resp.table) {
+                    let msg = (resp && resp.errors && resp.errors[0] && (resp.errors[0].detailed_message || resp.errors[0].message)) || 'Errore nella query';
+                    reject(new Error(msg));
+                } else resolve(resp);
+            };
+            script.src = `https://docs.google.com/spreadsheets/d/${sheetID}/gviz/tq?tqx=out:json;responseHandler:${cb}&sheet=${encodeURIComponent(sheetName)}&headers=1&tq=${encodeURIComponent(tq)}`;
+            script.onerror = () => { cleanup(); reject(new Error('Errore di rete')); };
+            document.body.appendChild(script);
+        });
+    }
+
+    function gvizRowsToObjects(resp) {
+        const cols = resp.table.cols.map((c, i) => c && c.label ? c.label : 'Colonna_' + i);
+        return resp.table.rows.map(r => {
+            let o = {};
+            (r.c || []).forEach((cell, i) => {
+                o[cols[i]] = (cell && cell.f !== undefined && cell.f !== null) ? cell.f : (cell && cell.v !== null && cell.v !== undefined ? cell.v : '');
+            });
+            return o;
+        });
+    }
+
+    function resolveColumns() {
+        const pick = (name, idx) => globalCols.includes(name) ? name : (globalCols[idx] || '');
+        COL.qta = pick(NOME_COLONNA_QTA_MAGAZZINO, 13);
+        COL.idril = pick(NOME_COLONNA_ID_RILEVAMENTO, 16);
+        COL.misura = pick(NOME_COLONNA_MISURA, 18);
+        COL.colore = pick(NOME_COLONNA_COLORE, 19);
+        COL.data = Object.keys(globalColIds).find(l => globalColIds[l] === COLONNA_DATA) || 'DATA';
+    }
+
+    function normalizeRow(row) {
+        let qta = parseFloat(String(row[COL.qta] ?? '').replace(',', '.')) || 0;
+        let cliente = String(row['CLI'] || row['MAG'] || 'Sconosciuto').toUpperCase();
+        let isPV = PUNTI_VENDITA.some(pv => cliente.includes(pv));
+        return {
+            ...row,
+            _TipoDestinazione: isPV ? 'Punto Vendita Diretto' : 'Cliente Esterno',
+            _qta_num: qta,
+            _tot_num: parseEuro(row['TOT']),
+            _id_ril: String(row[COL.idril] ?? '').trim(),
+            _misura: String(row[COL.misura] ?? '').trim(),
+            _colore: String(row[COL.colore] ?? '').trim(),
+            _cliente: cliente
+        };
+    }
+
+    function isRettifica(r) {
+        return r._cliente.includes('RETTIFICA') || r._id_ril.toUpperCase().startsWith('RETT-');
+    }
+
+    function selectCols(labels) {
+        let ids = [];
+        labels.forEach(l => { if (l && globalColIds[l] && !ids.includes(globalColIds[l])) ids.push(globalColIds[l]); });
+        return ids.join(', ');
+    }
+
+    function downloadWorkbook(workbook, nomeFile) {
+        return workbook.xlsx.writeBuffer().then(buffer => {
+            const blob = new Blob([buffer], { type: 'application/octet-stream' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = nomeFile;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        });
+    }
+
+    // ================= CARICAMENTO =================
     document.getElementById('btnLoadData').addEventListener('click', function() {
         let y = document.getElementById('select-year').value;
         let m = document.getElementById('select-month').value;
@@ -398,7 +590,6 @@
         document.body.appendChild(script);
     });
 
-    // Avvio automatico se l'indirizzo contiene ?codice=...
     if (paramCodice) {
         const pa = urlParams.get('anno');
         const pm = urlParams.get('mese');
@@ -416,14 +607,14 @@
         }
         
         globalCols = response.table.cols.map((c, i) => c && c.label ? c.label : 'Colonna_' + i);
-        
-        let parsedData = response.table.rows.map(r => {
-            let rowObj = {};
-            r.c.forEach((cell, i) => {
-                rowObj[globalCols[i]] = (cell && cell.f !== undefined && cell.f !== null) ? cell.f : (cell && cell.v !== null ? cell.v : '');
-            });
-            return rowObj;
+        globalColIds = {}; globalColTypes = {};
+        response.table.cols.forEach((c, i) => {
+            globalColIds[globalCols[i]] = c.id;
+            globalColTypes[globalCols[i]] = c.type;
         });
+        resolveColumns();
+
+        let parsedData = gvizRowsToObjects(response);
 
         if(parsedData.length === 0) {
             document.getElementById('loading').innerHTML = `<h5 class="text-warning mt-4">Nessuna operazione trovata in questo periodo.</h5>
@@ -459,44 +650,19 @@
         globalData = [];
         let fornSet = new Set(), operSet = new Set();
         let idRilMap = {}; 
-        
-        let nomeColonnaN = globalCols.length >= 14 ? globalCols[13] : '';
-        let nomeColonnaQ = globalCols.length >= 17 ? globalCols[16] : '';
-        let nomeColonnaS = globalCols.length >= 19 ? globalCols[18] : '';
-        let nomeColonnaT = globalCols.length >= 20 ? globalCols[19] : '';
 
         data.forEach(row => {
-            let qtaRaw = row[NOME_COLONNA_QTA_MAGAZZINO] !== undefined ? row[NOME_COLONNA_QTA_MAGAZZINO] : row[nomeColonnaN];
-            let idRil = row[NOME_COLONNA_ID_RILEVAMENTO] !== undefined ? row[NOME_COLONNA_ID_RILEVAMENTO] : (row[nomeColonnaQ] || '');
-            let misura = row[NOME_COLONNA_MISURA] !== undefined ? row[NOME_COLONNA_MISURA] : (row[nomeColonnaS] || '');
-            let colore = row[NOME_COLONNA_COLORE] !== undefined ? row[NOME_COLONNA_COLORE] : (row[nomeColonnaT] || '');
-            
-            let qta = parseFloat(String(qtaRaw).replace(',', '.')) || 0;
-            let tot = parseEuro(row['TOT']);
-            
-            let cliente = String(row['CLI'] || row['MAG'] || 'Sconosciuto').toUpperCase();
-            let isPV = PUNTI_VENDITA.some(pv => cliente.includes(pv));
-            
-            let processedRow = {
-                ...row,
-                _TipoDestinazione: isPV ? 'Punto Vendita Diretto' : 'Cliente Esterno',
-                _qta_num: qta,
-                _tot_num: tot,
-                _id_ril: String(idRil).trim(),
-                _misura: String(misura).trim(),
-                _colore: String(colore).trim()
-            };
+            let processedRow = normalizeRow(row);
             globalData.push(processedRow);
 
             if(row['forn']) fornSet.add(row['forn']);
             if(row['OPER']) operSet.add(row['OPER']);
             
             if(processedRow._id_ril !== '') {
-                idRilMap[processedRow._id_ril] = cliente;
+                idRilMap[processedRow._id_ril] = processedRow._cliente;
             }
         });
         
-        // Popolamento Dinamico dei Select per Select2
         let fornSelect = $('#filter-forn');
         fornSelect.empty().append('<option value="ALL">Tutti</option>');
         [...fornSet].sort().forEach(f => fornSelect.append(new Option(f, f)));
@@ -518,19 +684,13 @@
         });
 
         sortedIds.forEach(id => {
-            let clienteAssegnato = idRilMap[id];
-            idSelect.append(new Option(`${id} - ${clienteAssegnato}`, id));
+            idSelect.append(new Option(`${id} - ${idRilMap[id]}`, id));
         });
 
-        // Inizializzazione Autocompletamento Select2
         $('.select2-searchable').select2({
             theme: 'bootstrap-5',
             width: '100%',
-            language: {
-                noResults: function () {
-                    return "Nessun risultato";
-                }
-            }
+            language: { noResults: function () { return "Nessun risultato"; } }
         });
 
         document.getElementById('status-indicator').innerHTML = `<i class="fas fa-check-circle text-success me-1"></i> Sincronizzazione completata`;
@@ -539,7 +699,6 @@
         document.getElementById('loading').style.display = 'none';
         document.getElementById('dashboardContent').style.display = 'block';
 
-        // Se l'indirizzo contiene ?codice=..., applica subito il filtro prodotto
         if (paramCodice) {
             document.getElementById('filter-ean').value = paramCodice;
             document.getElementById('applyFiltersBtn').click();
@@ -561,14 +720,13 @@
             let mIdRil = (fIdRil === 'ALL') || (row['_id_ril'] === fIdRil);
             let mArt = (fArt === '') || (String(row['DESCRIZIONE']).toLowerCase().includes(fArt));
             let mEan = (fEan === '') || (String(row['COD']).toLowerCase().includes(fEan));
-            
             return mTipo && mForn && mOper && mIdRil && mArt && mEan;
         });
         
         updateDashboard(filtered);
     });
 
-    // GENERATORE PACKING LIST
+    // ================= PACKING LIST =================
     document.getElementById('btnPackingList').addEventListener('click', function() {
         let idRil = document.getElementById('filter-idril').value;
         if(idRil === 'ALL') {
@@ -661,14 +819,10 @@
         });
 
         document.getElementById('packingListBody').innerHTML = html;
-
         currentPackingData = { idRil, dataRil, operRil, clienteRil, grouped };
-
-        let packingModal = new bootstrap.Modal(document.getElementById('packingListModal'));
-        packingModal.show();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('packingListModal')).show();
     });
 
-    // ESPORTAZIONE PACKING LIST IN PDF (html2pdf.js)
     document.getElementById('btnExportPdf').addEventListener('click', function() {
         let element = document.getElementById('packingListBody');
         let idRil = document.getElementById('filter-idril').value;
@@ -680,15 +834,11 @@
         btn.disabled = true;
 
         let opt = {
-            margin:       [10, 8, 10, 8], // top, left, bottom, right (mm)
+            margin:       [10, 8, 10, 8],
             filename:     nomeFile,
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            // 'avoid-all' rispetta la regola CSS page-break-inside:avoid già impostata
-            // su .packing-item: un prodotto che non entra viene spostato per intero
-            // alla pagina successiva, ma più prodotti piccoli restano impacchettati
-            // sulla stessa pagina invece di sprecare un foglio per ciascuno.
             pagebreak:    { mode: ['avoid-all', 'css'] }
         };
 
@@ -703,7 +853,6 @@
         });
     });
 
-    // ESPORTAZIONE PACKING LIST IN EXCEL (ExcelJS) - matrice Colore (righe) x Misura (colonne), colorata
     document.getElementById('btnExportExcel').addEventListener('click', async function() {
         if (!currentPackingData) {
             alert("Genera prima una Packing List.");
@@ -720,149 +869,29 @@
             const workbook = new ExcelJS.Workbook();
             const sheet = workbook.addWorksheet('Packing List');
 
-            const COLOR_TITLE_BG = 'FF2C3E50';   // blu scuro intestazione prodotto
-            const COLOR_HEADER_BG = 'FFE9ECEF';  // grigio intestazione colonne
-            const COLOR_LABEL_BG = 'FFF8F9FA';   // grigio chiaro colonna colore / riga totali
-            const COLOR_POS = 'FF008000';        // verde valori positivi
-            const COLOR_NEG = 'FFFF0000';         // rosso valori negativi
-            const COLOR_ZERO = 'FFBBBBBB';        // grigio valori a zero
-            const thinBorder = { style: 'thin', color: { argb: 'FFB0B0B0' } };
-            const fullBorder = { top: thinBorder, left: thinBorder, bottom: thinBorder, right: thinBorder };
-
-            // --- Intestazione generale del documento ---
             sheet.mergeCells('A1:F1');
             sheet.getCell('A1').value = 'PACKING LIST';
             sheet.getCell('A1').font = { bold: true, size: 16 };
-
-            sheet.getCell('A2').value = 'ID Rilevamento:';
-            sheet.getCell('B2').value = idRil;
-            sheet.getCell('A3').value = 'Cliente:';
-            sheet.getCell('B3').value = clienteRil;
-            sheet.getCell('A4').value = 'Data:';
-            sheet.getCell('B4').value = String(dataRil).split(' ')[0];
-            sheet.getCell('A5').value = 'Operatore:';
-            sheet.getCell('B5').value = operRil;
+            sheet.getCell('A2').value = 'ID Rilevamento:'; sheet.getCell('B2').value = idRil;
+            sheet.getCell('A3').value = 'Cliente:'; sheet.getCell('B3').value = clienteRil;
+            sheet.getCell('A4').value = 'Data:'; sheet.getCell('B4').value = String(dataRil).split(' ')[0];
+            sheet.getCell('A5').value = 'Operatore:'; sheet.getCell('B5').value = operRil;
             ['A2', 'A3', 'A4', 'A5'].forEach(c => sheet.getCell(c).font = { bold: true });
 
             let currentRow = 7;
-
             Object.keys(grouped).sort().forEach(ean => {
                 let item = grouped[ean];
                 let sortedColors = [...item.colors].sort((a, b) => String(a).localeCompare(String(b)));
                 let sortedSizes = [...item.sizes].sort(sortSizes);
-                let nCols = sortedSizes.length + 2; // colonna colore + misure + totale
-
-                // Titolo prodotto (riga unita, sfondo blu scuro, testo bianco) + Totale in colonna a destra
-                let titleRowIdx = currentRow;
-                sheet.mergeCells(titleRowIdx, 1, titleRowIdx, Math.max(nCols - 1, 1));
-                let titleCell = sheet.getCell(titleRowIdx, 1);
-                titleCell.value = `${ean} - ${item.desc}`;
-                titleCell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
-                titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_TITLE_BG } };
-                titleCell.alignment = { vertical: 'middle' };
-
-                let titleTotCell = sheet.getCell(titleRowIdx, nCols);
-                titleTotCell.value = `Tot: ${item.tot} pz.`;
-                titleTotCell.font = { bold: true, size: 12, color: { argb: item.tot < 0 ? 'FFFFC0C0' : 'FFC0FFC0' } };
-                titleTotCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_TITLE_BG } };
-                titleTotCell.alignment = { horizontal: 'right', vertical: 'middle' };
-                currentRow++;
-
-                // Riga intestazione: Colore \ Misura | misura1 | misura2 | ... | TOT
-                let headerRowIdx = currentRow;
-                let headerRow = sheet.getRow(headerRowIdx);
-                headerRow.getCell(1).value = 'Colore \\ Misura';
-                sortedSizes.forEach((s, i) => { headerRow.getCell(2 + i).value = s; });
-                headerRow.getCell(nCols).value = 'TOT';
-                for (let c = 1; c <= nCols; c++) {
-                    let cell = headerRow.getCell(c);
-                    cell.font = { bold: true };
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_HEADER_BG } };
-                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                    cell.border = fullBorder;
-                }
-                headerRow.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
-                currentRow++;
-
-                // Righe colore (una per colore, misure in orizzontale)
-                sortedColors.forEach(c => {
-                    let rowIdx = currentRow;
-                    let row = sheet.getRow(rowIdx);
-                    row.getCell(1).value = c;
-                    row.getCell(1).font = { bold: true };
-                    row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_LABEL_BG } };
-                    row.getCell(1).alignment = { horizontal: 'left', vertical: 'middle' };
-                    row.getCell(1).border = fullBorder;
-
-                    let rowTot = 0;
-                    sortedSizes.forEach((s, i) => {
-                        let v = item.matrix[c][s] || 0;
-                        rowTot += v;
-                        let cell = row.getCell(2 + i);
-                        cell.value = v !== 0 ? v : '-';
-                        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                        cell.border = fullBorder;
-                        cell.font = { bold: v !== 0, color: { argb: v > 0 ? COLOR_POS : (v < 0 ? COLOR_NEG : COLOR_ZERO) } };
-                    });
-
-                    let totCell = row.getCell(nCols);
-                    totCell.value = rowTot !== 0 ? rowTot : '-';
-                    totCell.font = { bold: true, color: { argb: rowTot > 0 ? COLOR_POS : (rowTot < 0 ? COLOR_NEG : COLOR_ZERO) } };
-                    totCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_LABEL_BG } };
-                    totCell.alignment = { horizontal: 'center', vertical: 'middle' };
-                    totCell.border = fullBorder;
-
-                    currentRow++;
-                });
-
-                // Riga totale per misura (somma colonne)
-                let footRowIdx = currentRow;
-                let footRow = sheet.getRow(footRowIdx);
-                footRow.getCell(1).value = 'TOT. MISURA';
-                footRow.getCell(1).font = { bold: true };
-                footRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_HEADER_BG } };
-                footRow.getCell(1).border = fullBorder;
-
-                let grandTot = 0;
-                sortedSizes.forEach((s, i) => {
-                    let colTot = 0;
-                    sortedColors.forEach(c => colTot += (item.matrix[c][s] || 0));
-                    grandTot += colTot;
-                    let cell = footRow.getCell(2 + i);
-                    cell.value = colTot !== 0 ? colTot : '-';
-                    cell.font = { bold: true, color: { argb: colTot > 0 ? COLOR_POS : (colTot < 0 ? COLOR_NEG : COLOR_ZERO) } };
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_HEADER_BG } };
-                    cell.alignment = { horizontal: 'center', vertical: 'middle' };
-                    cell.border = fullBorder;
-                });
-                let gtCell = footRow.getCell(nCols);
-                gtCell.value = grandTot !== 0 ? grandTot : '-';
-                gtCell.font = { bold: true, color: { argb: grandTot > 0 ? COLOR_POS : (grandTot < 0 ? COLOR_NEG : COLOR_ZERO) } };
-                gtCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COLOR_HEADER_BG } };
-                gtCell.alignment = { horizontal: 'center', vertical: 'middle' };
-                gtCell.border = fullBorder;
-
-                currentRow += 2; // riga vuota di separazione tra un prodotto e l'altro
+                currentRow = addMatrixBlock(sheet, currentRow, `${ean} - ${item.desc}`, `Tot: ${item.tot} pz.`,
+                    sortedColors, sortedSizes, (c, s) => item.matrix[c][s] || 0);
             });
 
-            // Larghezza colonne: colonna colore più larga, colonne misura strette, tutte fino alla più larga usata
             let maxCols = Math.max(...Object.values(grouped).map(it => it.sizes.size + 2), 5);
             sheet.getColumn(1).width = 22;
-            for (let c = 2; c <= maxCols; c++) {
-                sheet.getColumn(c).width = 10;
-            }
+            for (let c = 2; c <= maxCols; c++) sheet.getColumn(c).width = 10;
 
-            let nomeFile = `PackingList_${idRil !== 'ALL' ? idRil : 'export'}.xlsx`;
-            const buffer = await workbook.xlsx.writeBuffer();
-            const blob = new Blob([buffer], { type: 'application/octet-stream' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = nomeFile;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            await downloadWorkbook(workbook, `PackingList_${idRil !== 'ALL' ? idRil : 'export'}.xlsx`);
         } catch (err) {
             console.error(err);
             alert('Errore durante la generazione del file Excel.');
@@ -872,6 +901,546 @@
         }
     });
 
+    // Blocco matrice Colore x Misura colorato (usato da Packing List e Riassortimento)
+    function addMatrixBlock(sheet, startRow, title, totLabel, colors, sizes, valueFn) {
+        const COLOR_TITLE_BG = 'FF2C3E50', COLOR_HEADER_BG = 'FFE9ECEF', COLOR_LABEL_BG = 'FFF8F9FA';
+        const COLOR_POS = 'FF008000', COLOR_NEG = 'FFFF0000', COLOR_ZERO = 'FFBBBBBB';
+        const thin = { style: 'thin', color: { argb: 'FFB0B0B0' } };
+        const border = { top: thin, left: thin, bottom: thin, right: thin };
+        const fill = argb => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+        const colorOf = v => v > 0 ? COLOR_POS : (v < 0 ? COLOR_NEG : COLOR_ZERO);
+        let nCols = sizes.length + 2;
+        let r = startRow;
+
+        sheet.mergeCells(r, 1, r, Math.max(nCols - 1, 1));
+        let tc = sheet.getCell(r, 1);
+        tc.value = title;
+        tc.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 12 };
+        tc.fill = fill(COLOR_TITLE_BG);
+        let ttc = sheet.getCell(r, nCols);
+        ttc.value = totLabel;
+        ttc.font = { bold: true, size: 12, color: { argb: 'FFC0FFC0' } };
+        ttc.fill = fill(COLOR_TITLE_BG);
+        ttc.alignment = { horizontal: 'right' };
+        r++;
+
+        let hr = sheet.getRow(r);
+        hr.getCell(1).value = 'Colore \\ Misura';
+        sizes.forEach((s, i) => hr.getCell(2 + i).value = s);
+        hr.getCell(nCols).value = 'TOT';
+        for (let c = 1; c <= nCols; c++) {
+            let cell = hr.getCell(c);
+            cell.font = { bold: true }; cell.fill = fill(COLOR_HEADER_BG);
+            cell.alignment = { horizontal: c === 1 ? 'left' : 'center' }; cell.border = border;
+        }
+        r++;
+
+        colors.forEach(col => {
+            let row = sheet.getRow(r);
+            row.getCell(1).value = col;
+            row.getCell(1).font = { bold: true }; row.getCell(1).fill = fill(COLOR_LABEL_BG); row.getCell(1).border = border;
+            let rowTot = 0;
+            sizes.forEach((s, i) => {
+                let v = valueFn(col, s); rowTot += v;
+                let cell = row.getCell(2 + i);
+                cell.value = v !== 0 ? v : '-';
+                cell.alignment = { horizontal: 'center' }; cell.border = border;
+                cell.font = { bold: v !== 0, color: { argb: colorOf(v) } };
+            });
+            let tcell = row.getCell(nCols);
+            tcell.value = rowTot !== 0 ? rowTot : '-';
+            tcell.font = { bold: true, color: { argb: colorOf(rowTot) } };
+            tcell.fill = fill(COLOR_LABEL_BG); tcell.alignment = { horizontal: 'center' }; tcell.border = border;
+            r++;
+        });
+
+        let fr = sheet.getRow(r);
+        fr.getCell(1).value = 'TOT. MISURA';
+        fr.getCell(1).font = { bold: true }; fr.getCell(1).fill = fill(COLOR_HEADER_BG); fr.getCell(1).border = border;
+        let grand = 0;
+        sizes.forEach((s, i) => {
+            let colTot = 0;
+            colors.forEach(col => colTot += valueFn(col, s));
+            grand += colTot;
+            let cell = fr.getCell(2 + i);
+            cell.value = colTot !== 0 ? colTot : '-';
+            cell.font = { bold: true, color: { argb: colorOf(colTot) } };
+            cell.fill = fill(COLOR_HEADER_BG); cell.alignment = { horizontal: 'center' }; cell.border = border;
+        });
+        let gc = fr.getCell(nCols);
+        gc.value = grand !== 0 ? grand : '-';
+        gc.font = { bold: true, color: { argb: colorOf(grand) } };
+        gc.fill = fill(COLOR_HEADER_BG); gc.alignment = { horizontal: 'center' }; gc.border = border;
+
+        return r + 2;
+    }
+
+    // ================= RIASSORTIMENTO =================
+    function periodDays() {
+        const y = document.getElementById('select-year').value;
+        const m = document.getElementById('select-month').value;
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        let start, end;
+        if (y && m) { start = new Date(+y, +m - 1, 1); end = new Date(+y, +m, 0); }
+        else if (y) { start = new Date(+y, 0, 1); end = new Date(+y, 11, 31); }
+        else {
+            let min = null;
+            globalData.forEach(r => { let d = parseDataIt(r[COL.data] || r['DATA']); if (d && (!min || d < min)) min = d; });
+            start = min || today; end = today;
+        }
+        if (end > today) end = today;
+        return Math.max(1, Math.round((end - start) / 86400000) + 1);
+    }
+
+    function rsGetItem(map, r) {
+        const cod = String(r['COD'] || 'N/D');
+        if (!map[cod]) map[cod] = { cod, desc: r['DESCRIZIONE'] || 'N/D', prezzo: 0, colors: new Set(), sizes: new Set(), cells: {} };
+        const it = map[cod];
+        if (!it.prezzo) { let p = Math.abs(parseEuro(r['PREZZO'])); if (p) it.prezzo = p; }
+        return it;
+    }
+    function rsGetCell(it, c, s) {
+        it.colors.add(c); it.sizes.add(s);
+        const k = c + '||' + s;
+        if (!it.cells[k]) it.cells[k] = { c, s, v: 0, g: 0, ovr: false };
+        return it.cells[k];
+    }
+
+    document.getElementById('btnRiassortimento').addEventListener('click', async function() {
+        const forn = document.getElementById('filter-forn').value;
+        if (!forn || forn === 'ALL') {
+            alert("Seleziona prima un Fornitore nel filtro 'Fornitore'.");
+            return;
+        }
+        if (!globalColIds['forn'] || !globalColIds['COD']) {
+            alert("Nel foglio NOTE non trovo le colonne 'forn' o 'COD'.");
+            return;
+        }
+        const fTipo = document.getElementById('filter-tipo').value;
+
+        let btn = this, originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Calcolo giacenze...';
+        btn.disabled = true;
+
+        try {
+            // Giacenza: saldo di TUTTO lo storico del fornitore (non solo il periodo caricato)
+            const cols = selectCols(['COD', 'DESCRIZIONE', 'PREZZO', 'forn', 'CLI', 'MAG', COL.qta, COL.idril, COL.misura, COL.colore]);
+            const resp = await gvizQuery(`SELECT ${cols} WHERE ${globalColIds['forn']} = ${gvizLit(forn)}`);
+            const stockRows = gvizRowsToObjects(resp).map(normalizeRow);
+
+            const items = {};
+            stockRows.forEach(r => {
+                const it = rsGetItem(items, r);
+                rsGetCell(it, r._colore || 'N/D', r._misura || 'N/D').g += r._qta_num;
+            });
+
+            // Vendite: uscite (movimenti negativi) del periodo caricato, escluse le rettifiche
+            globalData.forEach(r => {
+                if (r['forn'] !== forn || r._qta_num >= 0 || isRettifica(r)) return;
+                if (fTipo !== 'ALL' && r._TipoDestinazione !== fTipo) return;
+                const it = rsGetItem(items, r);
+                rsGetCell(it, r._colore || 'N/D', r._misura || 'N/D').v += -r._qta_num;
+            });
+
+            // Giacenze reali inserite nell'inventario
+            Object.entries(realStockOverrides).forEach(([k, val]) => {
+                const [cod, c, s] = k.split('||');
+                if (!items[cod]) return;
+                const ce = rsGetCell(items[cod], c, s);
+                ce.g = val; ce.ovr = true;
+            });
+
+            Object.values(items).forEach(it => Object.values(it.cells).forEach(ce => { ce.g = round3(ce.g); ce.v = round3(ce.v); }));
+
+            currentRestock = { forn, fTipo, items, giorniDefault: periodDays(), visible: [] };
+            document.getElementById('rs-giorni').value = currentRestock.giorniDefault;
+            renderRestock();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('restockModal')).show();
+        } catch (err) {
+            console.error(err);
+            alert('Errore durante il calcolo del riassortimento: ' + err.message);
+        } finally {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+        }
+    });
+
+    function renderRestock() {
+        const R = currentRestock; if (!R) return;
+        const giorni = Math.max(1, parseInt(document.getElementById('rs-giorni').value) || R.giorniDefault);
+        const cop = Math.max(1, parseInt(document.getElementById('rs-copertura').value) || 30);
+        const smin = Math.max(0, parseInt(document.getElementById('rs-smin').value) || 0);
+        const solo = document.getElementById('rs-solo').checked;
+        R.params = { giorni, cop, smin };
+        R.visible = [];
+
+        let totOrd = 0, totVal = 0, body = '';
+        Object.keys(R.items).sort().forEach(cod => {
+            const it = R.items[cod];
+            let itOrd = 0, itV = 0;
+            Object.values(it.cells).forEach(ce => {
+                ce.fab = ce.v > 0 ? Math.max(Math.ceil(ce.v / giorni * cop), smin) : 0;
+                ce.ord = Math.max(0, Math.ceil(ce.fab - Math.max(ce.g, 0)));
+                itOrd += ce.ord; itV += ce.v;
+            });
+            if (itV <= 0) return;
+            if (solo && itOrd === 0) return;
+            R.visible.push(cod);
+            totOrd += itOrd; totVal += itOrd * it.prezzo;
+
+            const colors = [...it.colors].sort((a, b) => String(a).localeCompare(String(b)));
+            const sizes = [...it.sizes].sort(sortSizes);
+            body += `<div class="packing-item">
+                <h5 class="bg-light p-2 border border-bottom-0 mb-0"><strong>${esc(cod)}</strong> - ${esc(it.desc)}
+                    <span class="float-end">Venduto: ${round3(itV)} pz · <span class="text-primary">Da ordinare: ${itOrd} pz</span>
+                    <button class="btn btn-sm btn-outline-warning ms-2 py-0 d-print-none rs-inv" data-cod="${esc(cod)}" title="Correggi giacenza reale"><i class="fas fa-clipboard-check"></i></button></span></h5>
+                <table class="table table-bordered table-sm matrix-table border-top-0 mb-0"><thead class="table-secondary"><tr>
+                <th class="color-col text-start ps-2">Colore \\ Misura</th>`;
+            sizes.forEach(s => body += `<th>${esc(s)}</th>`);
+            body += `<th class="tot-col">TOT</th></tr></thead><tbody>`;
+            colors.forEach(c => {
+                let rowOrd = 0;
+                body += `<tr><td class="color-col text-start ps-2">${esc(c)}</td>`;
+                sizes.forEach(s => {
+                    const ce = it.cells[c + '||' + s];
+                    if (!ce) { body += `<td style="color:#ccc">-</td>`; return; }
+                    rowOrd += ce.ord;
+                    body += `<td><div class="rs-ord fw-bold ${ce.ord > 0 ? 'text-primary' : 'text-muted'}">${ce.ord > 0 ? ce.ord : '-'}</div>
+                        <div class="rs-sub">v ${ce.v} · g <span class="${ce.g < 0 ? 'text-danger fw-bold' : ''}">${ce.g}</span>${ce.ovr ? ' <i class="fas fa-check-circle text-success" title="Giacenza reale da inventario"></i>' : ''}</div></td>`;
+                });
+                body += `<td class="tot-col ${rowOrd > 0 ? 'text-primary' : ''}">${rowOrd > 0 ? rowOrd : '-'}</td></tr>`;
+            });
+            body += `<tr class="table-light"><th class="color-col text-start ps-2">TOT. MISURA</th>`;
+            let gt = 0;
+            sizes.forEach(s => {
+                let t = 0; colors.forEach(c => { const ce = it.cells[c + '||' + s]; if (ce) t += ce.ord; });
+                gt += t;
+                body += `<th class="${t > 0 ? 'text-primary' : ''}">${t > 0 ? t : '-'}</th>`;
+            });
+            body += `<th class="tot-col text-primary">${gt > 0 ? gt : '-'}</th></tr></tbody></table></div>`;
+        });
+
+        let oggi = new Date();
+        let header = `<div class="row border-bottom pb-3 mb-4">
+            <div class="col-7">
+                <h2 class="mb-0 text-uppercase fw-bold">RIASSORTIMENTO</h2>
+                <h5 class="text-secondary mt-1">Fornitore: <strong>${esc(R.forn)}</strong></h5>
+                <div class="small text-muted">Vendite: ${giorni} giorni${R.fTipo !== 'ALL' ? ' · ' + esc(R.fTipo) : ''} · Copertura ${cop} gg · Scorta min. ${smin}</div>
+            </div>
+            <div class="col-5 text-end">
+                <p class="mb-1"><strong>Data:</strong> ${pad2(oggi.getDate())}/${pad2(oggi.getMonth() + 1)}/${oggi.getFullYear()}</p>
+                <p class="mb-1"><strong>Articoli:</strong> ${R.visible.length}</p>
+                <p class="mb-1 fs-5"><strong>Pezzi da ordinare:</strong> <span class="text-primary fw-bold">${totOrd}</span></p>
+                <p class="mb-0 small text-muted">Valore indicativo (PREZZO note): € ${totVal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            </div></div>
+            <p class="small text-muted d-print-none">In ogni casella: <strong>numero grande</strong> = pezzi da ordinare · <strong>v</strong> = venduto nel periodo · <strong>g</strong> = giacenza attuale (<span class="text-danger">rossa se negativa</span>, <i class="fas fa-check-circle text-success"></i> = giacenza reale da inventario).</p>`;
+
+        document.getElementById('restockBody').innerHTML = header + (body || '<p class="text-muted">Nessun articolo da riordinare con questi parametri.</p>');
+    }
+
+    document.getElementById('rs-ricalcola').addEventListener('click', renderRestock);
+    document.getElementById('rs-solo').addEventListener('change', renderRestock);
+
+    // Dal riassortimento si apre direttamente l'inventario dell'articolo
+    $('#restockBody').on('click', '.rs-inv', function() {
+        const cod = $(this).data('cod').toString();
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('restockModal')).hide();
+        openInventario(cod);
+    });
+
+    document.getElementById('rs-excel').addEventListener('click', async function() {
+        const R = currentRestock;
+        if (!R || !R.visible.length) { alert('Nessun articolo da esportare.'); return; }
+        let btn = this, originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Generazione...'; btn.disabled = true;
+        try {
+            const wb = new ExcelJS.Workbook();
+            const sh = wb.addWorksheet('Ordine');
+            sh.mergeCells('A1:F1');
+            sh.getCell('A1').value = 'RIASSORTIMENTO - ' + R.forn;
+            sh.getCell('A1').font = { bold: true, size: 16 };
+            sh.getCell('A2').value = 'Giorni vendita:'; sh.getCell('B2').value = R.params.giorni;
+            sh.getCell('A3').value = 'Copertura gg:'; sh.getCell('B3').value = R.params.cop;
+            sh.getCell('A4').value = 'Scorta minima:'; sh.getCell('B4').value = R.params.smin;
+            ['A2', 'A3', 'A4'].forEach(c => sh.getCell(c).font = { bold: true });
+
+            let row = 6, maxCols = 5;
+            const det = wb.addWorksheet('Dettaglio');
+            det.addRow(['Codice', 'Descrizione', 'Colore', 'Misura', 'Venduto', 'Giacenza', 'Giacenza reale', 'Fabbisogno', 'Da ordinare', 'Prezzo', 'Valore']);
+            det.getRow(1).font = { bold: true };
+
+            R.visible.forEach(cod => {
+                const it = R.items[cod];
+                const colors = [...it.colors].sort((a, b) => String(a).localeCompare(String(b)));
+                const sizes = [...it.sizes].sort(sortSizes);
+                maxCols = Math.max(maxCols, sizes.length + 2);
+                let itOrd = Object.values(it.cells).reduce((a, ce) => a + ce.ord, 0);
+                row = addMatrixBlock(sh, row, `${cod} - ${it.desc}`, `Ordine: ${itOrd} pz.`, colors, sizes,
+                    (c, s) => (it.cells[c + '||' + s] || { ord: 0 }).ord);
+                colors.forEach(c => sizes.forEach(s => {
+                    const ce = it.cells[c + '||' + s]; if (!ce) return;
+                    det.addRow([cod, it.desc, c, s, ce.v, ce.g, ce.ovr ? 'SI' : '', ce.fab, ce.ord, it.prezzo, round3(ce.ord * it.prezzo)]);
+                }));
+            });
+            sh.getColumn(1).width = 22;
+            for (let c = 2; c <= maxCols; c++) sh.getColumn(c).width = 10;
+            [14, 34, 16, 10, 10, 10, 14, 11, 12, 10, 12].forEach((w, i) => det.getColumn(i + 1).width = w);
+
+            await downloadWorkbook(wb, `Riassortimento_${R.forn.replace(/[^\w-]+/g, '_')}.xlsx`);
+        } catch (err) {
+            console.error(err); alert('Errore durante la generazione del file Excel.');
+        } finally { btn.innerHTML = originalHtml; btn.disabled = false; }
+    });
+
+    // ================= INVENTARIO REALE + RETTIFICHE =================
+    function invCandidates() {
+        const fForn = document.getElementById('filter-forn').value;
+        const fArt = document.getElementById('filter-art').value.toLowerCase();
+        const fEan = document.getElementById('filter-ean').value.toLowerCase();
+        const map = {};
+        globalData.forEach(r => {
+            if (fForn !== 'ALL' && r['forn'] !== fForn) return;
+            if (fArt && !String(r['DESCRIZIONE']).toLowerCase().includes(fArt)) return;
+            if (fEan && !String(r['COD']).toLowerCase().includes(fEan)) return;
+            const cod = String(r['COD'] || '');
+            if (cod) map[cod] = r['DESCRIZIONE'] || '';
+        });
+        return map;
+    }
+
+    let invSelectReady = false;
+    function openInventario(preselect) {
+        const sel = $('#inv-cod');
+        if (!invSelectReady) {
+            sel.select2({ theme: 'bootstrap-5', width: '100%', tags: true, dropdownParent: $('#inventarioModal'),
+                language: { noResults: () => "Nessun risultato" } });
+            invSelectReady = true;
+        }
+        const cands = invCandidates();
+        sel.empty();
+        Object.keys(cands).sort().forEach(cod => sel.append(new Option(`${cod} - ${cands[cod]}`, cod)));
+        if (preselect && !cands[preselect]) sel.append(new Option(preselect, preselect));
+        const codes = Object.keys(cands);
+        const target = preselect || (codes.length === 1 ? codes[0] : null);
+        if (target) sel.val(target);
+        sel.trigger('change');
+
+        document.getElementById('invBody').innerHTML = '<p class="text-muted mb-0">Seleziona un articolo e premi "Carica giacenze".</p>';
+        document.getElementById('inv-copia').disabled = true;
+        document.getElementById('inv-excel').disabled = true;
+        currentInvent = null;
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('inventarioModal')).show();
+        if (target) loadInventario(target);
+    }
+
+    document.getElementById('btnInventario').addEventListener('click', () => openInventario(null));
+    document.getElementById('inv-load').addEventListener('click', () => {
+        const cod = String($('#inv-cod').val() || '').trim();
+        if (!cod) { alert('Seleziona o digita un codice articolo.'); return; }
+        loadInventario(cod);
+    });
+
+    async function loadInventario(cod) {
+        if (!globalColIds['COD']) { alert("Nel foglio NOTE non trovo la colonna 'COD'."); return; }
+        const body = document.getElementById('invBody');
+        body.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-warning"></div><p class="mt-2 text-muted">Calcolo giacenze su tutto lo storico...</p></div>';
+        document.getElementById('inv-copia').disabled = true;
+        document.getElementById('inv-excel').disabled = true;
+        try {
+            let lit = gvizLit(cod);
+            if (globalColTypes['COD'] === 'number') {
+                const n = Number(String(cod).replace(/\D/g, ''));
+                if (!isNaN(n)) lit = n;
+            }
+            const resp = await gvizQuery(`SELECT * WHERE ${globalColIds['COD']} = ${lit}`);
+            const rows = gvizRowsToObjects(resp).map(normalizeRow);
+            if (!rows.length) { body.innerHTML = `<p class="text-danger">Nessun movimento trovato per il codice <strong>${esc(cod)}</strong>.</p>`; return; }
+
+            const I = { cod, desc: rows[0]['DESCRIZIONE'] || 'N/D', colors: [], sizes: [], sys: {}, tpl: {}, tplAny: rows[rows.length - 1], real: {}, rows: [] };
+            rows.forEach(r => {
+                const c = r._colore || 'N/D', s = r._misura || 'N/D', k = c + '||' + s;
+                if (!I.colors.includes(c)) I.colors.push(c);
+                if (!I.sizes.includes(s)) I.sizes.push(s);
+                I.sys[k] = (I.sys[k] || 0) + r._qta_num;
+                I.tpl[k] = r; // resta l'ultimo movimento della variante
+            });
+            Object.keys(I.sys).forEach(k => I.sys[k] = round3(I.sys[k]));
+            I.colors.sort((a, b) => String(a).localeCompare(String(b)));
+            I.sizes.sort(sortSizes);
+            // ripropone eventuali giacenze reali già inserite in questa sessione
+            Object.entries(realStockOverrides).forEach(([k, v]) => {
+                const [cc, c, s] = k.split('||');
+                if (cc === cod) I.real[c + '||' + s] = v;
+            });
+            currentInvent = I;
+            renderInvGrid();
+        } catch (err) {
+            console.error(err);
+            body.innerHTML = `<p class="text-danger">Errore: ${esc(err.message)}</p>`;
+        }
+    }
+
+    function renderInvGrid() {
+        const I = currentInvent; if (!I) return;
+        let html = `<h5 class="mb-1"><strong>${esc(I.cod)}</strong> - ${esc(I.desc)}</h5>
+            <p class="small text-muted">"Sist." = giacenza contabile calcolata su <strong>tutto lo storico</strong> di Elenco Note. Inserisci la quantità contata solo nelle caselle da correggere; lascia vuote le altre.</p>
+            <div class="table-responsive"><table class="table table-bordered table-sm matrix-table" style="width:max-content;min-width:60%"><thead class="table-dark"><tr>
+            <th class="color-col text-white">Colore \\ Misura</th>`;
+        I.sizes.forEach(s => html += `<th>${esc(s)}</th>`);
+        html += `<th class="bg-secondary">TOT sist.</th><th class="bg-secondary">TOT reale</th></tr></thead><tbody>`;
+        I.colors.forEach(c => {
+            html += `<tr><td class="color-col">${esc(c)}</td>`;
+            I.sizes.forEach(s => {
+                const k = c + '||' + s, g = I.sys[k] || 0, real = I.real[k];
+                html += `<td><div class="small text-muted">sist. <b class="${g < 0 ? 'text-danger' : ''}">${g}</b></div>
+                    <input type="number" step="1" class="form-control form-control-sm text-center inv-input" data-k="${encodeURIComponent(k)}" value="${real !== undefined ? real : ''}" placeholder="${g}">
+                    <div class="inv-diff" data-k="${encodeURIComponent(k)}"></div></td>`;
+            });
+            html += `<td class="tot-col inv-rsys" data-c="${encodeURIComponent(c)}"></td><td class="tot-col inv-rreal" data-c="${encodeURIComponent(c)}"></td></tr>`;
+        });
+        html += `</tbody></table></div>
+            <div class="row g-2 align-items-end mt-1 mb-2" style="max-width:600px">
+                <div class="col-5"><label class="small fw-bold">Nuovo colore</label><input id="inv-new-col" class="form-control form-control-sm" placeholder="Es. BLU"></div>
+                <div class="col-4"><label class="small fw-bold">Nuova misura</label><input id="inv-new-size" class="form-control form-control-sm" placeholder="Es. XL"></div>
+                <div class="col-3"><button id="inv-add" class="btn btn-sm btn-outline-dark w-100"><i class="fas fa-plus"></i> Aggiungi</button></div>
+            </div>
+            <div class="small text-muted mb-3">Usa "Aggiungi" se trovi in magazzino un colore o una misura che non risulta mai movimentato.</div>
+            <div id="invRows"></div>`;
+        document.getElementById('invBody').innerHTML = html;
+        updateInvDiffs();
+    }
+
+    function updateInvDiffs() {
+        const I = currentInvent; if (!I) return;
+        document.querySelectorAll('#invBody .inv-diff').forEach(el => {
+            const k = decodeURIComponent(el.dataset.k), real = I.real[k], g = I.sys[k] || 0;
+            const input = el.parentElement.querySelector('.inv-input');
+            if (real === undefined) { el.innerHTML = ''; input.classList.remove('changed'); return; }
+            const d = round3(real - g);
+            input.classList.toggle('changed', d !== 0);
+            el.innerHTML = d === 0 ? '<span class="text-muted">ok</span>' : `<span class="fw-bold ${d > 0 ? 'text-success' : 'text-danger'}">${d > 0 ? '+' : ''}${d}</span>`;
+        });
+        I.colors.forEach(c => {
+            let ts = 0, tr = 0;
+            I.sizes.forEach(s => { const k = c + '||' + s, g = I.sys[k] || 0; ts += g; tr += (I.real[k] !== undefined ? I.real[k] : g); });
+            const ce = encodeURIComponent(c);
+            const a = document.querySelector(`#invBody .inv-rsys[data-c="${ce}"]`), b = document.querySelector(`#invBody .inv-rreal[data-c="${ce}"]`);
+            if (a) a.textContent = round3(ts);
+            if (b) { b.textContent = round3(tr); b.className = 'tot-col inv-rreal ' + (round3(tr) !== round3(ts) ? 'text-warning' : ''); b.dataset.c = ce; }
+        });
+    }
+
+    $('#invBody').on('input', '.inv-input', function() {
+        const k = decodeURIComponent(this.dataset.k);
+        if (this.value === '') delete currentInvent.real[k];
+        else currentInvent.real[k] = parseFloat(this.value.replace(',', '.')) || 0;
+        updateInvDiffs();
+    });
+
+    $('#invBody').on('click', '#inv-add', function() {
+        const I = currentInvent; if (!I) return;
+        const c = $('#inv-new-col').val().trim().toUpperCase(), s = $('#inv-new-size').val().trim().toUpperCase();
+        if (!c && !s) return;
+        if (c && !I.colors.includes(c)) { I.colors.push(c); I.colors.sort((a, b) => String(a).localeCompare(String(b))); }
+        if (s && !I.sizes.includes(s)) { I.sizes.push(s); I.sizes.sort(sortSizes); }
+        renderInvGrid();
+    });
+
+    function buildCorrectionRow(tpl, I, c, s, diff, idRett, dataStr) {
+        const row = {};
+        globalCols.forEach(h => row[h] = '');
+        const set = (h, v) => { if (h && Object.prototype.hasOwnProperty.call(row, h)) row[h] = v; };
+        if (tpl) RETTIFICA_COLONNE_DA_COPIARE.forEach(h => set(h, tpl[h] ?? ''));
+        set('COD', I.cod);
+        set('DESCRIZIONE', I.desc);
+        set(COL.data, dataStr); set('DATA', dataStr);
+        if (globalCols.includes('CLI')) set('CLI', RETTIFICA_DESTINAZIONE); else set('MAG', RETTIFICA_DESTINAZIONE);
+        set(COL.qta, diff);
+        set(COL.idril, idRett);
+        set(COL.colore, c === 'N/D' ? '' : c);
+        set(COL.misura, s === 'N/D' ? '' : s);
+        const prezzo = tpl ? Math.abs(parseEuro(tpl['PREZZO'])) : 0;
+        if (prezzo) set('TOT', Math.round(diff * prezzo * 100) / 100);
+        return row;
+    }
+
+    document.getElementById('inv-genera').addEventListener('click', function() {
+        const I = currentInvent;
+        if (!I) { alert('Carica prima le giacenze di un articolo.'); return; }
+        if (!Object.keys(I.real).length) { alert('Non hai inserito nessuna quantità reale.'); return; }
+
+        const now = new Date();
+        const dataStr = `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
+        const idRett = `RETT-${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}-${pad2(now.getHours())}${pad2(now.getMinutes())}`;
+
+        const out = [], preview = [];
+        Object.entries(I.real).forEach(([k, real]) => {
+            const [c, s] = k.split('||');
+            const sys = I.sys[k] || 0, diff = round3(real - sys);
+            realStockOverrides[I.cod + '||' + k] = real; // il riassortimento userà la giacenza reale
+            if (diff === 0) return;
+            out.push(buildCorrectionRow(I.tpl[k] || I.tplAny, I, c, s, diff, idRett, dataStr));
+            preview.push({ c, s, sys, real, diff });
+        });
+        I.rows = out;
+
+        let html = `<h6 class="text-primary"><i class="fas fa-list me-2"></i>Righe di rettifica per Elenco Note (ID ${esc(idRett)})</h6>`;
+        if (!out.length) {
+            html += '<p class="text-success">Nessuna differenza: la giacenza contabile corrisponde a quella reale.</p>';
+        } else {
+            let tot = 0;
+            html += `<table class="table table-sm table-bordered bg-white" style="font-size:0.85rem"><thead class="table-secondary"><tr>
+                <th>Codice</th><th>Colore</th><th>Misura</th><th>Sistema</th><th>Reale</th><th>Rettifica (${esc(COL.qta)})</th></tr></thead><tbody>`;
+            preview.forEach(p => {
+                tot += p.diff;
+                html += `<tr><td>${esc(I.cod)}</td><td>${esc(p.c)}</td><td>${esc(p.s)}</td><td>${p.sys}</td><td>${p.real}</td>
+                    <td class="fw-bold ${p.diff > 0 ? 'text-success' : 'text-danger'}">${p.diff > 0 ? '+' : ''}${p.diff}</td></tr>`;
+            });
+            html += `</tbody><tfoot><tr><th colspan="5" class="text-end">Totale rettifica</th><th>${round3(tot)}</th></tr></tfoot></table>
+                <div class="alert alert-info small mb-0">Premi <strong>Copia righe</strong> e incollale nella prima riga libera del foglio NOTE (colonna A), oppure esporta in Excel.
+                Positivo = carico, negativo = scarico. Le righe hanno destinazione "${esc(RETTIFICA_DESTINAZIONE)}" e sono escluse dalle vendite nel riassortimento.</div>`;
+        }
+        document.getElementById('invRows').innerHTML = html;
+        document.getElementById('inv-copia').disabled = !out.length;
+        document.getElementById('inv-excel').disabled = !out.length;
+    });
+
+    // Colonne da esportare: da A fino all'ultima colonna valorizzata (per non toccare eventuali formule a destra)
+    function rettificaColumns(rows) {
+        let last = 0;
+        rows.forEach(r => globalCols.forEach((h, i) => { if (r[h] !== '' && r[h] !== undefined && i > last) last = i; }));
+        return globalCols.slice(0, last + 1);
+    }
+
+    document.getElementById('inv-copia').addEventListener('click', async function() {
+        const I = currentInvent; if (!I || !I.rows.length) return;
+        const cols = rettificaColumns(I.rows);
+        const tsv = I.rows.map(r => cols.map(h => {
+            const v = r[h];
+            return typeof v === 'number' ? String(v).replace('.', ',') : String(v ?? '').replace(/[\t\r\n]+/g, ' ');
+        }).join('\t')).join('\n');
+        try {
+            await navigator.clipboard.writeText(tsv);
+            this.innerHTML = '<i class="fas fa-check me-2"></i> Copiate!';
+            setTimeout(() => this.innerHTML = '<i class="fas fa-copy me-2"></i> Copia righe per Elenco Note', 2000);
+        } catch (e) {
+            prompt('Copia manualmente (Ctrl+C):', tsv);
+        }
+    });
+
+    document.getElementById('inv-excel').addEventListener('click', async function() {
+        const I = currentInvent; if (!I || !I.rows.length) return;
+        const cols = rettificaColumns(I.rows);
+        const wb = new ExcelJS.Workbook();
+        const sh = wb.addWorksheet('Rettifiche NOTE');
+        sh.addRow(cols);
+        sh.getRow(1).font = { bold: true };
+        I.rows.forEach(r => sh.addRow(cols.map(h => r[h])));
+        cols.forEach((h, i) => sh.getColumn(i + 1).width = Math.max(10, String(h).length + 2));
+        await downloadWorkbook(wb, `Rettifiche_${String(I.cod).replace(/[^\w-]+/g, '_')}.xlsx`);
+    });
+
+    // ================= DETTAGLIO TABELLA =================
     function formatDetails(d) {
         let colors = new Set(), sizes = new Set(), matrix = {};
 
@@ -1006,12 +1575,7 @@
             let table = $('#dataTable').DataTable({
                 data: tableData,
                 columns: [
-                    {
-                        className: 'dt-control',
-                        orderable: false,
-                        data: null,
-                        defaultContent: '<i class="fas fa-plus-circle text-success fs-5"></i>'
-                    },
+                    { className: 'dt-control', orderable: false, data: null, defaultContent: '<i class="fas fa-plus-circle text-success fs-5"></i>' },
                     { data: 'ean' },
                     { data: 'desc' },
                     { data: 'qta', render: $.fn.dataTable.render.number('.', ',', 0, '') },
