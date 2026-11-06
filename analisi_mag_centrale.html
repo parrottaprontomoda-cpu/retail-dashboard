@@ -40,6 +40,7 @@
         /* Riassortimento */
         .rs-sub { font-size: 0.68rem; color: #6c757d; white-space: nowrap; }
         .rs-ord { font-size: 1rem; }
+        .rs-stima { font-style: italic; }
         .rs-cell-det { font-size: 0.66rem; color: #6c757d; white-space: nowrap; }
         .rs-pz { font-size: 0.7rem; color: #0d6efd; white-space: nowrap; }
         .rs-pzconf { width: 64px; display: inline-block; padding: 0 4px; height: 24px; font-size: 0.8rem; }
@@ -381,6 +382,10 @@
                             <input class="form-check-input" type="checkbox" id="rs-dettaglio">
                             <label class="form-check-label small" for="rs-dettaglio">Mostra venduto e giacenza</label>
                         </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="rs-completa" checked>
+                            <label class="form-check-label small" for="rs-completa" title="Propone anche le combinazioni colore/taglia senza vendite proprie, stimando la richiesta dalle vendite del colore e dalla distribuzione delle taglie dell'articolo">Completa griglia colori/taglie</label>
+                        </div>
                     </div>
                     <div class="col-12 col-md-2">
                         <button id="rs-ricalcola" class="btn btn-sm btn-primary w-100"><i class="fas fa-calculator me-1"></i> Ricalcola</button>
@@ -484,7 +489,7 @@
     let bigdataPzTime = 0;
     // Memoria locale dei pezzi per confezione: si riaggiorna da sola dopo questi giorni
     const BIGDATA_CACHE_DAYS = 7;
-    const BIGDATA_CACHE_KEY = 'bigdata_pz_conf_cache_v2';
+    const BIGDATA_CACHE_KEY = 'bigdata_pz_conf_cache_v3';
 
     function readBigdataCache() {
         try {
@@ -571,7 +576,16 @@
         const iE = colIndex(BIGDATA_COL_EAN), iC = colIndex(BIGDATA_COL_CODICE), iU = colIndex(BIGDATA_COL_PZCONF);
         const map = {};
         let first = true;
-        parseCsv(text, r => { if (first) { first = false; return; } addPzToMap(map, [r[iE], r[iC]], r[iU]); });
+        const rows = [];
+        parseCsv(text, r => { if (first) { first = false; return; } rows.push(r); });
+        // 1° passaggio: colonne EAN e codice (priorità)
+        rows.forEach(r => addPzToMap(map, [r[iE], r[iC]], r[iU]));
+        // 2° passaggio: qualunque altra colonna con un valore "da codice" (es. codice interno)
+        const isCode = v => { v = String(v || '').trim(); return /^[A-Za-z0-9._\/-]{4,20}$/.test(v) && (/[A-Za-z]/.test(v) ? true : v.replace(/\D/g, '').length >= 6) && !/^\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}$/.test(v); };
+        rows.forEach(r => {
+            const codes = r.filter((v, i) => i !== iE && i !== iC && i !== iU && isCode(v));
+            if (codes.length) addPzToMap(map, codes, r[iU]);
+        });
         return map;
     }
 
@@ -678,6 +692,14 @@
             script.onerror = () => { cleanup(); reject(new Error('Errore di rete')); };
             document.body.appendChild(script);
         });
+    }
+
+    function codLit(cod) {
+        if (globalColTypes['COD'] === 'number') {
+            const n = Number(String(cod).replace(/\D/g, ''));
+            if (String(cod).trim() !== '' && !isNaN(n)) return n;
+        }
+        return gvizLit(cod);
     }
 
     function gvizRowsToObjects(resp) {
@@ -1203,8 +1225,20 @@
             }
             // Giacenza: saldo di TUTTO lo storico del fornitore (non solo il periodo caricato)
             const cols = selectCols(['COD', 'DESCRIZIONE', 'PREZZO', 'forn', 'CLI', 'MAG', COL.data, 'DATA', COL.qta, COL.idril, COL.misura, COL.colore]);
-            const resp = await gvizQuery(`SELECT ${cols} WHERE ${globalColIds['forn']} = ${gvizLit(forn)}`);
-            const stockRows = gvizRowsToObjects(resp).map(normalizeRow);
+            // 1) codici articolo del fornitore
+            const respCod = await gvizQuery(`SELECT ${globalColIds['COD']} WHERE ${globalColIds['forn']} = ${gvizLit(forn)}`);
+            const codici = [...new Set(respCod.table.rows
+                .map(r => r.c && r.c[0] ? (r.c[0].f ?? r.c[0].v) : '')
+                .map(v => String(v ?? '').trim()).filter(Boolean))];
+            // 2) TUTTI i movimenti di quei codici, anche con fornitore diverso o vuoto (a blocchi)
+            const stockRows = [];
+            const BLOCCO = 40;
+            for (let i = 0; i < codici.length; i += BLOCCO) {
+                btn.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i> Calcolo giacenze ${Math.min(i + BLOCCO, codici.length)}/${codici.length}...`;
+                const where = codici.slice(i, i + BLOCCO).map(c => `${globalColIds['COD']} = ${codLit(c)}`).join(' OR ');
+                const resp = await gvizQuery(`SELECT ${cols} WHERE ${where}`);
+                gvizRowsToObjects(resp).forEach(r => stockRows.push(normalizeRow(r)));
+            }
 
             const items = {};
             let senzaData = 0;
@@ -1253,6 +1287,7 @@
         const smin = Math.max(0, parseInt(document.getElementById('rs-smin').value) || 0);
         const solo = document.getElementById('rs-solo').checked;
         const det = document.getElementById('rs-dettaglio').checked;
+        const completa = document.getElementById('rs-completa').checked;
         R.params = { giorni, cop, smin };
         R.visible = [];
 
@@ -1262,12 +1297,39 @@
             const pc = pzConfOf(it);
             it.pz = pc.n; it.pzSrc = pc.src;
             let itConf = 0, itV = 0, itG = 0;
+            // 1) vendite per variante
             Object.values(it.cells).forEach(ce => {
                 ce.v = 0; ce.vs = 0;
                 ce.sales.forEach(x => { if (x.t >= tRecent) ce.v += x.q; if (x.t >= tStorico) ce.vs += x.q; });
                 ce.v = round3(ce.v); ce.vs = round3(ce.vs);
-                ce.esaurito = ce.g <= 0 && ce.vs > 0;
-                ce.fab = ce.vs > 0 ? Math.max(Math.ceil(ce.v / giorni * cop), smin) : 0;
+                ce.stima = false; ce.ev = 0; ce.evs = 0;
+            });
+            // 2) completamento griglia: colori e taglie "attivi" (con vendite), escluse le voci ASS / N/D
+            if (completa) {
+                const NOVAR = v => ['ASS', 'N/D', ''].includes(String(v).toUpperCase().trim());
+                const colV = {}, colVs = {}, sizeVs = {}; let totVs = 0;
+                Object.values(it.cells).forEach(ce => {
+                    if (NOVAR(ce.c) || NOVAR(ce.s)) return;
+                    colV[ce.c] = (colV[ce.c] || 0) + ce.v; colVs[ce.c] = (colVs[ce.c] || 0) + ce.vs;
+                    sizeVs[ce.s] = (sizeVs[ce.s] || 0) + ce.vs; totVs += ce.vs;
+                });
+                if (totVs > 0) {
+                    Object.keys(colVs).filter(c => colVs[c] > 0).forEach(c => {
+                        Object.keys(sizeVs).filter(sz => sizeVs[sz] > 0).forEach(sz => {
+                            const ce = rsGetCell(it, c, sz);
+                            if (ce.vs > 0) return;                       // ha vendite proprie: nessuna stima
+                            const share = sizeVs[sz] / totVs;
+                            ce.ev = round3(colV[c] * share); ce.evs = round3(colVs[c] * share);
+                            ce.stima = true;
+                        });
+                    });
+                }
+            }
+            // 3) fabbisogno e confezioni
+            Object.values(it.cells).forEach(ce => {
+                const vRate = ce.stima ? ce.ev : ce.v, vHist = ce.stima ? ce.evs : ce.vs;
+                ce.esaurito = ce.g <= 0 && vHist > 0;
+                ce.fab = vHist > 0 ? Math.max(Math.ceil(vRate / giorni * cop), smin) : 0;
                 ce.need = Math.max(0, Math.ceil(ce.fab - Math.max(ce.g, 0)));   // unità mancanti
                 ce.conf = Math.ceil(ce.need / it.pz);                             // confezioni da ordinare
                 ce.un = ce.conf * it.pz;                                          // unità ordinate
@@ -1282,8 +1344,11 @@
             totConf += itConf; totUn += itUn; totVal += itUn * it.prezzo;
 
             const badge = pc.src === 'BIGDATA' ? 'bg-success' : (pc.src === 'manuale' ? 'bg-primary' : 'bg-warning text-dark');
-            const colors = [...it.colors].sort((a, b) => String(a).localeCompare(String(b)));
-            const sizes = [...it.sizes].sort(sortSizes);
+            // nasconde righe/colonne ASS o N/D senza nulla da ordinare
+            const hideVar = v => ['ASS', 'N/D', ''].includes(String(v).toUpperCase().trim());
+            const anyConf = (pred) => Object.values(it.cells).some(ce => pred(ce) && ce.conf > 0);
+            const colors = [...it.colors].filter(c => !hideVar(c) || anyConf(ce => ce.c === c)).sort((a, b) => String(a).localeCompare(String(b)));
+            const sizes = [...it.sizes].filter(z => !hideVar(z) || anyConf(ce => ce.s === z)).sort(sortSizes);
 
             body += `<div class="packing-item">
                 <div class="bg-light p-2 border border-bottom-0 d-flex flex-wrap align-items-center gap-2">
@@ -1306,8 +1371,8 @@
                     const ce = it.cells[c + '||' + s];
                     if (!ce) { body += `<td style="color:#ddd">·</td>`; return; }
                     rowConf += ce.conf;
-                    const tip = `Venduto ultimi ${giorni} gg: ${ce.v} · Ultima vendita: ${ce.lastSale ? fmtDataOra(ce.lastSale).split(' ')[0] : 'mai'} · Giacenza ${ce.g}${ce.ovr ? ' (reale)' : ''} · Fabbisogno ${ce.fab} · Mancano ${ce.need} un.`;
-                    body += `<td title="${esc(tip)}"${ce.esaurito ? ' style="background:#fdecea"' : ''}><span class="rs-ord fw-bold ${ce.conf > 0 ? 'text-primary' : 'text-muted'}">${ce.conf > 0 ? ce.conf : '-'}</span>`
+                    const tip = (ce.stima ? `STIMA: variante senza vendite proprie, richiesta stimata ${ce.ev} un. in ${giorni} gg dalle vendite del colore e dalla distribuzione delle taglie · ` : '') + `Venduto ultimi ${giorni} gg: ${ce.v} · Ultima vendita: ${ce.lastSale ? fmtDataOra(ce.lastSale).split(' ')[0] : 'mai'} · Giacenza ${ce.g}${ce.ovr ? ' (reale)' : ''} · Fabbisogno ${ce.fab} · Mancano ${ce.need} un.`;
+                    body += `<td title="${esc(tip)}"${ce.esaurito ? ' style="background:#fdecea"' : ''}><span class="rs-ord fw-bold ${ce.conf > 0 ? 'text-primary' : 'text-muted'}${ce.stima ? ' rs-stima' : ''}">${ce.conf > 0 ? ce.conf : '-'}</span>`
                         + (det ? `<div class="rs-cell-det">v ${ce.v} · g <span class="${ce.g < 0 ? 'text-danger' : ''}">${ce.g}</span>${ce.ovr ? ' ✓' : ''}</div>` : '')
                         + `</td>`;
                 });
@@ -1334,7 +1399,7 @@
                 <p class="mb-1"><strong>Unità di vendita:</strong> ${totUn}</p>
                 <p class="mb-0 small text-muted">Valore indicativo: € ${totVal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div></div>
-            <p class="small text-muted d-print-none mb-2">Le griglie mostrano solo le <strong>confezioni da ordinare</strong>. Passa il mouse su una casella per vedere venduto, ultima vendita, giacenza e fabbisogno. <span style="background:#fdecea" class="px-1">Rosa</span> = variante esaurita.
+            <p class="small text-muted d-print-none mb-2">Le griglie mostrano solo le <strong>confezioni da ordinare</strong>. Passa il mouse su una casella per vedere venduto, ultima vendita, giacenza e fabbisogno. <span style="background:#fdecea" class="px-1">Rosa</span> = variante esaurita. <em>Corsivo</em> = quantità stimata per una variante senza vendite proprie (completamento griglia).
             Unità per confezione trovate in BIGDATA: <strong>${nBig} su ${nArt}</strong> articoli venduti
             (<span class="badge bg-warning text-dark">non trovato</span> = considerata 1 unità: correggi a mano o verifica il codice in BIGDATA).</p>`;
 
@@ -1360,7 +1425,7 @@
     });
     document.getElementById('rs-solo').addEventListener('change', renderRestock);
     document.getElementById('rs-dettaglio').addEventListener('change', renderRestock);
-    ['rs-giorni', 'rs-storico', 'rs-copertura', 'rs-smin'].forEach(id => document.getElementById(id).addEventListener('change', renderRestock));
+    ['rs-giorni', 'rs-storico', 'rs-copertura', 'rs-smin', 'rs-completa'].forEach(id => document.getElementById(id).addEventListener('change', renderRestock));
 
     // Dal riassortimento si apre direttamente l'inventario dell'articolo
     $('#restockBody').on('click', '.rs-inv', function() {
@@ -1402,7 +1467,7 @@
                     (c, s) => (it.cells[c + '||' + s] || { conf: 0 }).conf);
                 colors.forEach(c => sizes.forEach(s => {
                     const ce = it.cells[c + '||' + s]; if (!ce) return;
-                    det.addRow([cod, it.desc, c, s, ce.v, ce.g, ce.ovr ? 'SI' : '', ce.fab, ce.need, pz, it.pzSrc, ce.conf, ce.un, it.prezzo, round3(ce.un * it.prezzo)]);
+                    det.addRow([cod, it.desc, c, s, ce.stima ? `stima ${ce.ev}` : ce.v, ce.g, ce.ovr ? 'SI' : '', ce.fab, ce.need, pz, it.pzSrc, ce.conf, ce.un, it.prezzo, round3(ce.un * it.prezzo)]);
                 }));
             });
             sh.getColumn(1).width = 22;
@@ -1470,11 +1535,7 @@
         document.getElementById('inv-copia').disabled = true;
         document.getElementById('inv-excel').disabled = true;
         try {
-            let lit = gvizLit(cod);
-            if (globalColTypes['COD'] === 'number') {
-                const n = Number(String(cod).replace(/\D/g, ''));
-                if (!isNaN(n)) lit = n;
-            }
+            const lit = codLit(cod);
             const resp = await gvizQuery(`SELECT * WHERE ${globalColIds['COD']} = ${lit}`);
             const rows = gvizRowsToObjects(resp).map(normalizeRow);
             if (!rows.length) { body.innerHTML = `<p class="text-danger">Nessun movimento trovato per il codice <strong>${esc(cod)}</strong>.</p>`; return; }
