@@ -357,18 +357,22 @@
             <div class="bg-light border-bottom px-4 py-3 d-print-none">
                 <div class="row g-2 align-items-end">
                     <div class="col-6 col-md-2">
-                        <label class="small fw-bold">Giorni di vendita</label>
-                        <input type="number" id="rs-giorni" class="form-control form-control-sm" min="1">
+                        <label class="small fw-bold" title="Le vendite di questi ultimi giorni danno il ritmo di vendita">Vendite ultimi (gg)</label>
+                        <input type="number" id="rs-giorni" class="form-control form-control-sm" min="1" value="90">
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="small fw-bold" title="Le varianti vendute almeno una volta in questo periodo vengono sempre riportate almeno alla scorta minima, anche se ora sono esaurite">Esauriti: venduti ultimi (gg)</label>
+                        <input type="number" id="rs-storico" class="form-control form-control-sm" min="1" value="365">
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="small fw-bold">Copertura (giorni)</label>
                         <input type="number" id="rs-copertura" class="form-control form-control-sm" min="1" value="30">
                     </div>
-                    <div class="col-6 col-md-3">
-                        <label class="small fw-bold">Scorta minima per variante venduta</label>
+                    <div class="col-6 col-md-2">
+                        <label class="small fw-bold">Scorta minima (un.)</label>
                         <input type="number" id="rs-smin" class="form-control form-control-sm" min="0" value="1">
                     </div>
-                    <div class="col-6 col-md-3">
+                    <div class="col-6 col-md-2">
                         <div class="form-check mt-1">
                             <input class="form-check-input" type="checkbox" id="rs-solo" checked>
                             <label class="form-check-label small" for="rs-solo">Solo articoli da riordinare</label>
@@ -387,7 +391,8 @@
                     <button id="rs-bigdata-refresh" class="btn btn-sm btn-outline-secondary py-0"><i class="fas fa-sync-alt me-1"></i> Aggiorna confezioni da BIGDATA</button>
                 </div>
                 <div class="small text-muted mt-2">
-                    Per ogni colore/misura, in unità di vendita: <strong>mancano</strong> = venduto ÷ giorni × copertura (minimo la scorta minima) − giacenza.
+                    Per ogni colore/misura, in unità di vendita: <strong>mancano</strong> = venduto negli ultimi giorni ÷ giorni × copertura (almeno la scorta minima, anche per le varianti esaurite che hanno venduto nel periodo "Esauriti") − giacenza.
+                    Le vendite sono calcolate su tutto lo storico di Elenco Note, indipendentemente dal periodo scaricato all'apertura.
                     <strong>Confezioni</strong> = mancano ÷ unità per confezione (BIGDATA, colonna U), arrotondato in su. Unità ordinate = confezioni × unità per confezione.
                 </div>
             </div>
@@ -1169,7 +1174,7 @@
     function rsGetCell(it, c, s) {
         it.colors.add(c); it.sizes.add(s);
         const k = c + '||' + s;
-        if (!it.cells[k]) it.cells[k] = { c, s, v: 0, g: 0, ovr: false };
+        if (!it.cells[k]) it.cells[k] = { c, s, v: 0, vs: 0, g: 0, ovr: false, sales: [], lastSale: null };
         return it.cells[k];
     }
 
@@ -1197,22 +1202,23 @@
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Calcolo giacenze...';
             }
             // Giacenza: saldo di TUTTO lo storico del fornitore (non solo il periodo caricato)
-            const cols = selectCols(['COD', 'DESCRIZIONE', 'PREZZO', 'forn', 'CLI', 'MAG', COL.qta, COL.idril, COL.misura, COL.colore]);
+            const cols = selectCols(['COD', 'DESCRIZIONE', 'PREZZO', 'forn', 'CLI', 'MAG', COL.data, 'DATA', COL.qta, COL.idril, COL.misura, COL.colore]);
             const resp = await gvizQuery(`SELECT ${cols} WHERE ${globalColIds['forn']} = ${gvizLit(forn)}`);
             const stockRows = gvizRowsToObjects(resp).map(normalizeRow);
 
             const items = {};
+            let senzaData = 0;
             stockRows.forEach(r => {
                 const it = rsGetItem(items, r);
-                rsGetCell(it, r._colore || 'N/D', r._misura || 'N/D').g += r._qta_num;
-            });
-
-            // Vendite: uscite (movimenti negativi) del periodo caricato, escluse le rettifiche
-            globalData.forEach(r => {
-                if (r['forn'] !== forn || r._qta_num >= 0 || isRettifica(r)) return;
-                if (fTipo !== 'ALL' && r._TipoDestinazione !== fTipo) return;
-                const it = rsGetItem(items, r);
-                rsGetCell(it, r._colore || 'N/D', r._misura || 'N/D').v += -r._qta_num;
+                const ce = rsGetCell(it, r._colore || 'N/D', r._misura || 'N/D');
+                ce.g += r._qta_num;
+                // Vendite = uscite (movimenti negativi) su TUTTO lo storico, escluse le rettifiche
+                if (r._qta_num < 0 && !isRettifica(r) && (fTipo === 'ALL' || r._TipoDestinazione === fTipo)) {
+                    const d = parseDataIt(r[COL.data] || r['DATA']);
+                    if (!d) { senzaData++; return; }
+                    ce.sales.push({ t: d.getTime(), q: -r._qta_num });
+                    if (!ce.lastSale || d > ce.lastSale) ce.lastSale = d;
+                }
             });
 
             // Giacenze reali inserite nell'inventario
@@ -1223,10 +1229,9 @@
                 ce.g = val; ce.ovr = true;
             });
 
-            Object.values(items).forEach(it => Object.values(it.cells).forEach(ce => { ce.g = round3(ce.g); ce.v = round3(ce.v); }));
+            Object.values(items).forEach(it => Object.values(it.cells).forEach(ce => { ce.g = round3(ce.g); }));
 
-            currentRestock = { forn, fTipo, items, giorniDefault: periodDays(), visible: [] };
-            document.getElementById('rs-giorni').value = currentRestock.giorniDefault;
+            currentRestock = { forn, fTipo, items, giorniDefault: 90, senzaData, visible: [] };
             renderRestock();
             bootstrap.Modal.getOrCreateInstance(document.getElementById('restockModal')).show();
         } catch (err) {
@@ -1241,6 +1246,9 @@
     function renderRestock() {
         const R = currentRestock; if (!R) return;
         const giorni = Math.max(1, parseInt(document.getElementById('rs-giorni').value) || R.giorniDefault);
+        const storico = Math.max(giorni, parseInt(document.getElementById('rs-storico').value) || 365);
+        const oggi0 = new Date(); oggi0.setHours(23, 59, 59, 999);
+        const tRecent = oggi0.getTime() - giorni * 86400000, tStorico = oggi0.getTime() - storico * 86400000;
         const cop = Math.max(1, parseInt(document.getElementById('rs-copertura').value) || 30);
         const smin = Math.max(0, parseInt(document.getElementById('rs-smin').value) || 0);
         const solo = document.getElementById('rs-solo').checked;
@@ -1255,13 +1263,18 @@
             it.pz = pc.n; it.pzSrc = pc.src;
             let itConf = 0, itV = 0, itG = 0;
             Object.values(it.cells).forEach(ce => {
-                ce.fab = ce.v > 0 ? Math.max(Math.ceil(ce.v / giorni * cop), smin) : 0;
+                ce.v = 0; ce.vs = 0;
+                ce.sales.forEach(x => { if (x.t >= tRecent) ce.v += x.q; if (x.t >= tStorico) ce.vs += x.q; });
+                ce.v = round3(ce.v); ce.vs = round3(ce.vs);
+                ce.esaurito = ce.g <= 0 && ce.vs > 0;
+                ce.fab = ce.vs > 0 ? Math.max(Math.ceil(ce.v / giorni * cop), smin) : 0;
                 ce.need = Math.max(0, Math.ceil(ce.fab - Math.max(ce.g, 0)));   // unità mancanti
                 ce.conf = Math.ceil(ce.need / it.pz);                             // confezioni da ordinare
                 ce.un = ce.conf * it.pz;                                          // unità ordinate
                 itConf += ce.conf; itV += ce.v; itG += ce.g;
             });
-            if (itV <= 0) return;
+            const itVs = Object.values(it.cells).reduce((a, ce) => a + ce.vs, 0);
+            if (itVs <= 0) return;
             nArt++; if (pc.src === 'BIGDATA') nBig++;
             if (solo && itConf === 0) return;
             R.visible.push(cod);
@@ -1275,7 +1288,7 @@
             body += `<div class="packing-item">
                 <div class="bg-light p-2 border border-bottom-0 d-flex flex-wrap align-items-center gap-2">
                     <div class="me-auto"><strong>${esc(cod)}</strong> - ${esc(it.desc)}
-                        <div class="small text-muted">Venduto ${round3(itV)} un. · Giacenza ${round3(itG)} un.</div></div>
+                        <div class="small text-muted">Venduto ${round3(itV)} un. negli ultimi ${giorni} gg · Giacenza ${round3(itG)} un.${itG <= 0 ? ' <span class="badge bg-danger">esaurito</span>' : ''}</div></div>
                     <div class="small d-print-none">Unità per conf.
                         <input type="number" min="1" step="1" class="form-control form-control-sm rs-pzconf" data-cod="${esc(cod)}" value="${it.pz}">
                         <span class="badge ${badge} rs-src">${pc.src}</span></div>
@@ -1293,8 +1306,8 @@
                     const ce = it.cells[c + '||' + s];
                     if (!ce) { body += `<td style="color:#ddd">·</td>`; return; }
                     rowConf += ce.conf;
-                    const tip = `Venduto ${ce.v} · Giacenza ${ce.g}${ce.ovr ? ' (reale)' : ''} · Fabbisogno ${ce.fab} · Mancano ${ce.need} un.`;
-                    body += `<td title="${esc(tip)}"><span class="rs-ord fw-bold ${ce.conf > 0 ? 'text-primary' : 'text-muted'}">${ce.conf > 0 ? ce.conf : '-'}</span>`
+                    const tip = `Venduto ultimi ${giorni} gg: ${ce.v} · Ultima vendita: ${ce.lastSale ? fmtDataOra(ce.lastSale).split(' ')[0] : 'mai'} · Giacenza ${ce.g}${ce.ovr ? ' (reale)' : ''} · Fabbisogno ${ce.fab} · Mancano ${ce.need} un.`;
+                    body += `<td title="${esc(tip)}"${ce.esaurito ? ' style="background:#fdecea"' : ''}><span class="rs-ord fw-bold ${ce.conf > 0 ? 'text-primary' : 'text-muted'}">${ce.conf > 0 ? ce.conf : '-'}</span>`
                         + (det ? `<div class="rs-cell-det">v ${ce.v} · g <span class="${ce.g < 0 ? 'text-danger' : ''}">${ce.g}</span>${ce.ovr ? ' ✓' : ''}</div>` : '')
                         + `</td>`;
                 });
@@ -1313,7 +1326,7 @@
             <div class="col-7">
                 <h2 class="mb-0 text-uppercase fw-bold">RIASSORTIMENTO</h2>
                 <h5 class="text-secondary mt-1">Fornitore: <strong>${esc(R.forn)}</strong></h5>
-                <div class="small text-muted">Vendite ultimi ${giorni} gg${R.fTipo !== 'ALL' ? ' · ' + esc(R.fTipo) : ''} · Copertura ${cop} gg · Scorta min. ${smin} un.</div>
+                <div class="small text-muted">Vendite ultimi ${giorni} gg (esauriti: ${storico} gg)${R.fTipo !== 'ALL' ? ' · ' + esc(R.fTipo) : ''} · Copertura ${cop} gg · Scorta min. ${smin} un.</div>
             </div>
             <div class="col-5 text-end">
                 <p class="mb-1"><strong>Data:</strong> ${pad2(oggi.getDate())}/${pad2(oggi.getMonth() + 1)}/${oggi.getFullYear()} · <strong>Articoli:</strong> ${R.visible.length}</p>
@@ -1321,11 +1334,12 @@
                 <p class="mb-1"><strong>Unità di vendita:</strong> ${totUn}</p>
                 <p class="mb-0 small text-muted">Valore indicativo: € ${totVal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div></div>
-            <p class="small text-muted d-print-none mb-2">Le griglie mostrano solo le <strong>confezioni da ordinare</strong>. Passa il mouse su una casella per vedere venduto, giacenza e fabbisogno.
+            <p class="small text-muted d-print-none mb-2">Le griglie mostrano solo le <strong>confezioni da ordinare</strong>. Passa il mouse su una casella per vedere venduto, ultima vendita, giacenza e fabbisogno. <span style="background:#fdecea" class="px-1">Rosa</span> = variante esaurita.
             Unità per confezione trovate in BIGDATA: <strong>${nBig} su ${nArt}</strong> articoli venduti
             (<span class="badge bg-warning text-dark">non trovato</span> = considerata 1 unità: correggi a mano o verifica il codice in BIGDATA).</p>`;
 
         updateBigdataInfo();
+        if (R.senzaData) header += `<div class="alert alert-warning small py-2 d-print-none">${R.senzaData} uscite non hanno una data leggibile e non sono state contate come vendite.</div>`;
         if (bigdataPzError) header += `<div class="alert alert-warning small py-2 d-print-none"><i class="fas fa-exclamation-triangle me-1"></i> ${esc(bigdataPzError)}</div>`;
         document.getElementById('restockBody').innerHTML = header + (body || '<p class="text-muted">Nessun articolo da riordinare con questi parametri.</p>');
     }
@@ -1346,6 +1360,7 @@
     });
     document.getElementById('rs-solo').addEventListener('change', renderRestock);
     document.getElementById('rs-dettaglio').addEventListener('change', renderRestock);
+    ['rs-giorni', 'rs-storico', 'rs-copertura', 'rs-smin'].forEach(id => document.getElementById(id).addEventListener('change', renderRestock));
 
     // Dal riassortimento si apre direttamente l'inventario dell'articolo
     $('#restockBody').on('click', '.rs-inv', function() {
@@ -1365,7 +1380,7 @@
             sh.mergeCells('A1:F1');
             sh.getCell('A1').value = 'RIASSORTIMENTO - ' + R.forn;
             sh.getCell('A1').font = { bold: true, size: 16 };
-            sh.getCell('A2').value = 'Giorni vendita:'; sh.getCell('B2').value = R.params.giorni;
+            sh.getCell('A2').value = 'Vendite ultimi gg:'; sh.getCell('B2').value = R.params.giorni;
             sh.getCell('A3').value = 'Copertura gg:'; sh.getCell('B3').value = R.params.cop;
             sh.getCell('A4').value = 'Scorta minima:'; sh.getCell('B4').value = R.params.smin;
             ['A2', 'A3', 'A4'].forEach(c => sh.getCell(c).font = { bold: true });
