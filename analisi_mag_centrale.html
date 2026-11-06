@@ -39,7 +39,8 @@
 
         /* Riassortimento */
         .rs-sub { font-size: 0.68rem; color: #6c757d; white-space: nowrap; }
-        .rs-ord { font-size: 0.95rem; }
+        .rs-ord { font-size: 1rem; }
+        .rs-cell-det { font-size: 0.66rem; color: #6c757d; white-space: nowrap; }
         .rs-pz { font-size: 0.7rem; color: #0d6efd; white-space: nowrap; }
         .rs-pzconf { width: 64px; display: inline-block; padding: 0 4px; height: 24px; font-size: 0.8rem; }
         .rs-src { font-size: 0.65rem; }
@@ -368,9 +369,13 @@
                         <input type="number" id="rs-smin" class="form-control form-control-sm" min="0" value="1">
                     </div>
                     <div class="col-6 col-md-3">
-                        <div class="form-check mt-3">
+                        <div class="form-check mt-1">
                             <input class="form-check-input" type="checkbox" id="rs-solo" checked>
                             <label class="form-check-label small" for="rs-solo">Solo articoli da riordinare</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="rs-dettaglio">
+                            <label class="form-check-label small" for="rs-dettaglio">Mostra venduto e giacenza</label>
                         </div>
                     </div>
                     <div class="col-12 col-md-2">
@@ -382,8 +387,8 @@
                     <button id="rs-bigdata-refresh" class="btn btn-sm btn-outline-secondary py-0"><i class="fas fa-sync-alt me-1"></i> Aggiorna confezioni da BIGDATA</button>
                 </div>
                 <div class="small text-muted mt-2">
-                    Per ogni colore/misura: <strong>fabbisogno</strong> = venduto ÷ giorni di vendita × copertura (arrotondato in su, minimo la scorta minima se la variante ha venduto);
-                    <strong>da ordinare</strong> = fabbisogno − giacenza attuale. Giacenza = saldo di tutto lo storico, oppure la giacenza reale se l'hai inserita in "Inventario Reale".
+                    Per ogni colore/misura, in unità di vendita: <strong>mancano</strong> = venduto ÷ giorni × copertura (minimo la scorta minima) − giacenza.
+                    <strong>Confezioni</strong> = mancano ÷ unità per confezione (BIGDATA, colonna U), arrotondato in su. Unità ordinate = confezioni × unità per confezione.
                 </div>
             </div>
             <div class="modal-body p-4" id="restockBody"></div>
@@ -459,8 +464,6 @@
     const RETTIFICA_COLONNE_DA_COPIARE = ['COD', 'DESCRIZIONE', 'forn', 'OPER', 'PREZZO'];
 
     // ---- CONFEZIONI (pezzi per confezione) ----
-    // Se nel foglio NOTE esiste una di queste colonne, il suo valore è il numero di pezzi per confezione.
-    const NOMI_COLONNA_PEZZI_CONF = ['PZ CONF', 'PZCONF', 'PZ_CONF', 'PZ/CONF', 'PEZZI CONF', 'PEZZI CONFEZIONE', 'PZ X CONF', 'CONF', 'CONFEZIONE'];
     const PZCONF_STORAGE_KEY = 'riassortimento_pz_conf_v1';
     // Fonte principale: file BIGDATA, foglio ARCHIVIO, colonna U = pezzi per confezione.
     // Il codice viene cercato sia nella colonna C (EAN) sia nella colonna D (codice aziendale).
@@ -476,7 +479,7 @@
     let bigdataPzTime = 0;
     // Memoria locale dei pezzi per confezione: si riaggiorna da sola dopo questi giorni
     const BIGDATA_CACHE_DAYS = 7;
-    const BIGDATA_CACHE_KEY = 'bigdata_pz_conf_cache_v1';
+    const BIGDATA_CACHE_KEY = 'bigdata_pz_conf_cache_v2';
 
     function readBigdataCache() {
         try {
@@ -506,35 +509,25 @@
     try { pzConfManual = JSON.parse(localStorage.getItem(PZCONF_STORAGE_KEY) || '{}') || {}; } catch (e) { pzConfManual = {}; }
     function savePzConf() { try { localStorage.setItem(PZCONF_STORAGE_KEY, JSON.stringify(pzConfManual)); } catch (e) {} }
 
-    function findPzConfColumn() {
-        const norm = h => String(h).toUpperCase().replace(/\s+/g, ' ').trim();
-        return globalCols.find(h => NOMI_COLONNA_PEZZI_CONF.includes(norm(h))) || '';
-    }
-
-    // Prova a leggere i pezzi per confezione dalla descrizione (es. "CONF 3", "CF.6", "3 PZ", "TRIS", "BIPACK")
-    function pzFromDescription(desc) {
-        const d = String(desc || '').toUpperCase();
-        let m = d.match(/\b(?:CONF(?:EZIONE)?|CF|PACK|BOX|SET)\s*\.?\s*(?:DA\s*)?X?\s*(\d{1,3})\b/);
-        if (!m) m = d.match(/\b(\d{1,3})\s*(?:PZ|PZZ|PEZZI|PCS)\b/);
-        if (m && +m[1] > 1) return +m[1];
-        if (/\bTRIPACK\b|\bTRIS\b/.test(d)) return 3;
-        if (/\bBIPACK\b|\bBIS\b/.test(d)) return 2;
-        return 0;
-    }
-
     function colIndex(letter) {
         let n = 0;
         for (const ch of String(letter).toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
         return n - 1;
     }
 
+    function pzKeys(code) {
+        let k = String(code ?? '').trim().toUpperCase();
+        if (/^\d+\.0$/.test(k)) k = k.slice(0, -2);
+        if (!k) return [];
+        const loose = k.replace(/[^A-Z0-9]/g, '').replace(/^0+/, '');
+        return loose && loose !== k ? [k, loose] : [k];
+    }
+
     function addPzToMap(map, codes, pzRaw) {
         const n = parseInt(String(pzRaw ?? '').replace(',', '.'), 10);
         if (!(n > 0)) return;
         codes.forEach(code => {
-            let k = String(code ?? '').trim().toUpperCase();
-            if (/^\d+\.0$/.test(k)) k = k.slice(0, -2);
-            if (k && !(map[k] > 0)) map[k] = n;
+            pzKeys(code).forEach(k => { if (!(map[k] > 0)) map[k] = n; });
         });
     }
 
@@ -602,13 +595,16 @@
 
     async function fetchBigdataPz() {
         let errs = [];
+        if (BIGDATA_CSV_URL) {
+            try {
+                const m = await loadBigdataViaCsv();
+                if (Object.keys(m).length) { bigdataPz = m; bigdataPzSource = 'CSV'; return true; }
+                errs.push('CSV: nessun valore in colonna ' + BIGDATA_COL_PZCONF);
+            } catch (e) { console.warn('BIGDATA CSV:', e); errs.push('CSV: ' + e.message); }
+        }
         if (BIGDATA_SHEET_ID && !BIGDATA_SHEET_ID.startsWith('INSERISCI')) {
             try { bigdataPz = await loadBigdataViaGviz(); bigdataPzSource = 'lettura diretta'; return true; }
             catch (e) { console.warn('BIGDATA gviz:', e); errs.push('lettura diretta: ' + e.message); }
-        }
-        if (BIGDATA_CSV_URL) {
-            try { bigdataPz = await loadBigdataViaCsv(); bigdataPzSource = 'CSV'; return true; }
-            catch (e) { console.warn('BIGDATA CSV:', e); errs.push('CSV: ' + e.message); }
         }
         bigdataPzError = 'Impossibile leggere i pezzi per confezione da BIGDATA (' + errs.join(' · ') + ').';
         return false;
@@ -617,13 +613,9 @@
     function pzConfOf(it) {
         if (pzConfManual[it.cod] > 0) return { n: pzConfManual[it.cod], src: 'manuale' };
         if (bigdataPz) {
-            const k = String(it.cod).trim().toUpperCase();
-            if (bigdataPz[k] > 0) return { n: bigdataPz[k], src: 'BIGDATA' };
+            for (const k of pzKeys(it.cod)) if (bigdataPz[k] > 0) return { n: bigdataPz[k], src: 'BIGDATA' };
         }
-        if (it.pzCol > 0) return { n: it.pzCol, src: 'foglio' };
-        const d = pzFromDescription(it.desc);
-        if (d > 0) return { n: d, src: 'descrizione' };
-        return { n: 1, src: '' };
+        return { n: 1, src: 'non trovato' };
     }
 
     const sizePriority = {
@@ -1172,8 +1164,6 @@
         if (!map[cod]) map[cod] = { cod, desc: r['DESCRIZIONE'] || 'N/D', prezzo: 0, colors: new Set(), sizes: new Set(), cells: {} };
         const it = map[cod];
         if (!it.prezzo) { let p = Math.abs(parseEuro(r['PREZZO'])); if (p) it.prezzo = p; }
-        const pzCol = findPzConfColumn();
-        if (pzCol && !it.pzCol) { let n = parseInt(String(r[pzCol] ?? '').replace(/\D/g, ''), 10); if (n > 0) it.pzCol = n; }
         return it;
     }
     function rsGetCell(it, c, s) {
@@ -1207,7 +1197,7 @@
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Calcolo giacenze...';
             }
             // Giacenza: saldo di TUTTO lo storico del fornitore (non solo il periodo caricato)
-            const cols = selectCols(['COD', 'DESCRIZIONE', 'PREZZO', 'forn', 'CLI', 'MAG', COL.qta, COL.idril, COL.misura, COL.colore, findPzConfColumn()]);
+            const cols = selectCols(['COD', 'DESCRIZIONE', 'PREZZO', 'forn', 'CLI', 'MAG', COL.qta, COL.idril, COL.misura, COL.colore]);
             const resp = await gvizQuery(`SELECT ${cols} WHERE ${globalColIds['forn']} = ${gvizLit(forn)}`);
             const stockRows = gvizRowsToObjects(resp).map(normalizeRow);
 
@@ -1254,79 +1244,89 @@
         const cop = Math.max(1, parseInt(document.getElementById('rs-copertura').value) || 30);
         const smin = Math.max(0, parseInt(document.getElementById('rs-smin').value) || 0);
         const solo = document.getElementById('rs-solo').checked;
+        const det = document.getElementById('rs-dettaglio').checked;
         R.params = { giorni, cop, smin };
         R.visible = [];
 
-        let totOrd = 0, totPz = 0, totVal = 0, body = '';
+        let totConf = 0, totUn = 0, totVal = 0, nBig = 0, nArt = 0, body = '';
         Object.keys(R.items).sort().forEach(cod => {
             const it = R.items[cod];
-            let itOrd = 0, itV = 0;
+            const pc = pzConfOf(it);
+            it.pz = pc.n; it.pzSrc = pc.src;
+            let itConf = 0, itV = 0, itG = 0;
             Object.values(it.cells).forEach(ce => {
                 ce.fab = ce.v > 0 ? Math.max(Math.ceil(ce.v / giorni * cop), smin) : 0;
-                ce.ord = Math.max(0, Math.ceil(ce.fab - Math.max(ce.g, 0)));
-                itOrd += ce.ord; itV += ce.v;
+                ce.need = Math.max(0, Math.ceil(ce.fab - Math.max(ce.g, 0)));   // unità mancanti
+                ce.conf = Math.ceil(ce.need / it.pz);                             // confezioni da ordinare
+                ce.un = ce.conf * it.pz;                                          // unità ordinate
+                itConf += ce.conf; itV += ce.v; itG += ce.g;
             });
             if (itV <= 0) return;
-            if (solo && itOrd === 0) return;
+            nArt++; if (pc.src === 'BIGDATA') nBig++;
+            if (solo && itConf === 0) return;
             R.visible.push(cod);
-            const pc = pzConfOf(it);
-            it.pz = pc.n;
-            totOrd += itOrd; totPz += itOrd * it.pz; totVal += itOrd * it.prezzo;
-            const pzInfo = `<span class="d-print-none ms-2">Pz/conf <input type="number" min="1" step="1" class="form-control form-control-sm rs-pzconf" data-cod="${esc(cod)}" value="${it.pz}"></span>`
-                + (pc.src ? `<span class="badge bg-light text-secondary border rs-src ms-1 d-print-none">${pc.src}</span>` : '')
-                + `<span class="d-none d-print-inline"> · ${it.pz} pz/conf</span>`;
+            const itUn = itConf * it.pz;
+            totConf += itConf; totUn += itUn; totVal += itUn * it.prezzo;
 
+            const badge = pc.src === 'BIGDATA' ? 'bg-success' : (pc.src === 'manuale' ? 'bg-primary' : 'bg-warning text-dark');
             const colors = [...it.colors].sort((a, b) => String(a).localeCompare(String(b)));
             const sizes = [...it.sizes].sort(sortSizes);
+
             body += `<div class="packing-item">
-                <h5 class="bg-light p-2 border border-bottom-0 mb-0"><strong>${esc(cod)}</strong> - ${esc(it.desc)}
-                    <span class="float-end">Venduto: ${round3(itV)} conf · <span class="text-primary">Da ordinare: ${itOrd} conf${it.pz > 1 ? ` = <strong>${itOrd * it.pz} pz</strong>` : ''}</span>${pzInfo}
-                    <button class="btn btn-sm btn-outline-warning ms-2 py-0 d-print-none rs-inv" data-cod="${esc(cod)}" title="Correggi giacenza reale"><i class="fas fa-clipboard-check"></i></button></span></h5>
-                <table class="table table-bordered table-sm matrix-table border-top-0 mb-0"><thead class="table-secondary"><tr>
-                <th class="color-col text-start ps-2">Colore \\ Misura</th>`;
+                <div class="bg-light p-2 border border-bottom-0 d-flex flex-wrap align-items-center gap-2">
+                    <div class="me-auto"><strong>${esc(cod)}</strong> - ${esc(it.desc)}
+                        <div class="small text-muted">Venduto ${round3(itV)} un. · Giacenza ${round3(itG)} un.</div></div>
+                    <div class="small d-print-none">Unità per conf.
+                        <input type="number" min="1" step="1" class="form-control form-control-sm rs-pzconf" data-cod="${esc(cod)}" value="${it.pz}">
+                        <span class="badge ${badge} rs-src">${pc.src}</span></div>
+                    <div class="fs-6 text-primary fw-bold">${itConf} conf.${it.pz > 1 ? ` <span class="small fw-normal">(${it.pz} un./conf = ${itUn} un.)</span>` : ''}</div>
+                    <button class="btn btn-sm btn-outline-warning py-0 d-print-none rs-inv" data-cod="${esc(cod)}" title="Correggi giacenza reale"><i class="fas fa-clipboard-check"></i></button>
+                </div>
+                <table class="table table-bordered table-sm matrix-table mb-0"><thead class="table-secondary"><tr>
+                <th class="color-col text-start ps-2">Confezioni</th>`;
             sizes.forEach(s => body += `<th>${esc(s)}</th>`);
             body += `<th class="tot-col">TOT</th></tr></thead><tbody>`;
             colors.forEach(c => {
-                let rowOrd = 0;
+                let rowConf = 0;
                 body += `<tr><td class="color-col text-start ps-2">${esc(c)}</td>`;
                 sizes.forEach(s => {
                     const ce = it.cells[c + '||' + s];
-                    if (!ce) { body += `<td style="color:#ccc">-</td>`; return; }
-                    rowOrd += ce.ord;
-                    body += `<td><div class="rs-ord fw-bold ${ce.ord > 0 ? 'text-primary' : 'text-muted'}">${ce.ord > 0 ? ce.ord : '-'}</div>${ce.ord > 0 && it.pz > 1 ? `<div class="rs-pz">= ${ce.ord * it.pz} pz</div>` : ''}
-                        <div class="rs-sub">v ${ce.v} · g <span class="${ce.g < 0 ? 'text-danger fw-bold' : ''}">${ce.g}</span>${ce.ovr ? ' <i class="fas fa-check-circle text-success" title="Giacenza reale da inventario"></i>' : ''}</div></td>`;
+                    if (!ce) { body += `<td style="color:#ddd">·</td>`; return; }
+                    rowConf += ce.conf;
+                    const tip = `Venduto ${ce.v} · Giacenza ${ce.g}${ce.ovr ? ' (reale)' : ''} · Fabbisogno ${ce.fab} · Mancano ${ce.need} un.`;
+                    body += `<td title="${esc(tip)}"><span class="rs-ord fw-bold ${ce.conf > 0 ? 'text-primary' : 'text-muted'}">${ce.conf > 0 ? ce.conf : '-'}</span>`
+                        + (det ? `<div class="rs-cell-det">v ${ce.v} · g <span class="${ce.g < 0 ? 'text-danger' : ''}">${ce.g}</span>${ce.ovr ? ' ✓' : ''}</div>` : '')
+                        + `</td>`;
                 });
-                body += `<td class="tot-col ${rowOrd > 0 ? 'text-primary' : ''}">${rowOrd > 0 ? rowOrd : '-'}${rowOrd > 0 && it.pz > 1 ? `<div class="rs-pz">= ${rowOrd * it.pz} pz</div>` : ''}</td></tr>`;
+                body += `<td class="tot-col ${rowConf > 0 ? 'text-primary' : ''}">${rowConf > 0 ? rowConf : '-'}</td></tr>`;
             });
-            body += `<tr class="table-light"><th class="color-col text-start ps-2">TOT. MISURA</th>`;
-            let gt = 0;
+            body += `<tr class="table-light"><th class="color-col text-start ps-2">TOTALE</th>`;
             sizes.forEach(s => {
-                let t = 0; colors.forEach(c => { const ce = it.cells[c + '||' + s]; if (ce) t += ce.ord; });
-                gt += t;
-                body += `<th class="${t > 0 ? 'text-primary' : ''}">${t > 0 ? t : '-'}${t > 0 && it.pz > 1 ? `<div class="rs-pz">= ${t * it.pz} pz</div>` : ''}</th>`;
+                let t = 0; colors.forEach(c => { const ce = it.cells[c + '||' + s]; if (ce) t += ce.conf; });
+                body += `<th class="${t > 0 ? 'text-primary' : ''}">${t > 0 ? t : '-'}</th>`;
             });
-            body += `<th class="tot-col text-primary">${gt > 0 ? gt : '-'}${gt > 0 && it.pz > 1 ? `<div class="rs-pz">= ${gt * it.pz} pz</div>` : ''}</th></tr></tbody></table></div>`;
+            body += `<th class="tot-col text-primary">${itConf > 0 ? itConf : '-'}</th></tr></tbody></table></div>`;
         });
 
         let oggi = new Date();
-        let header = `<div class="row border-bottom pb-3 mb-4">
+        let header = `<div class="row border-bottom pb-3 mb-3">
             <div class="col-7">
                 <h2 class="mb-0 text-uppercase fw-bold">RIASSORTIMENTO</h2>
                 <h5 class="text-secondary mt-1">Fornitore: <strong>${esc(R.forn)}</strong></h5>
-                <div class="small text-muted">Vendite: ${giorni} giorni${R.fTipo !== 'ALL' ? ' · ' + esc(R.fTipo) : ''} · Copertura ${cop} gg · Scorta min. ${smin}</div>
+                <div class="small text-muted">Vendite ultimi ${giorni} gg${R.fTipo !== 'ALL' ? ' · ' + esc(R.fTipo) : ''} · Copertura ${cop} gg · Scorta min. ${smin} un.</div>
             </div>
             <div class="col-5 text-end">
-                <p class="mb-1"><strong>Data:</strong> ${pad2(oggi.getDate())}/${pad2(oggi.getMonth() + 1)}/${oggi.getFullYear()}</p>
-                <p class="mb-1"><strong>Articoli:</strong> ${R.visible.length}</p>
-                <p class="mb-1"><strong>Confezioni da ordinare:</strong> <span class="text-primary fw-bold">${totOrd}</span></p>
-                <p class="mb-1 fs-5"><strong>Pezzi da ordinare:</strong> <span class="text-primary fw-bold">${totPz}</span></p>
-                <p class="mb-0 small text-muted">Valore indicativo (PREZZO note): € ${totVal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                <p class="mb-1"><strong>Data:</strong> ${pad2(oggi.getDate())}/${pad2(oggi.getMonth() + 1)}/${oggi.getFullYear()} · <strong>Articoli:</strong> ${R.visible.length}</p>
+                <p class="mb-1 fs-5"><strong>Confezioni da ordinare:</strong> <span class="text-primary fw-bold">${totConf}</span></p>
+                <p class="mb-1"><strong>Unità di vendita:</strong> ${totUn}</p>
+                <p class="mb-0 small text-muted">Valore indicativo: € ${totVal.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div></div>
-            <p class="small text-muted d-print-none">In ogni casella: <strong>numero grande</strong> = confezioni da ordinare (<span class="text-primary">= pezzi</span> se la confezione ha più pezzi) · <strong>v</strong> = venduto nel periodo · <strong>g</strong> = giacenza attuale (<span class="text-danger">rossa se negativa</span>, <i class="fas fa-check-circle text-success"></i> = giacenza reale da inventario).
-            Il valore <strong>Pz/conf</strong> viene letto da BIGDATA (ARCHIVIO, colonna ${BIGDATA_COL_PZCONF}), altrimenti dal foglio${findPzConfColumn() ? ' (colonna "' + esc(findPzConfColumn()) + '")' : ''} o dalla descrizione; puoi correggerlo a mano e resta memorizzato su questo dispositivo.</p>`;
+            <p class="small text-muted d-print-none mb-2">Le griglie mostrano solo le <strong>confezioni da ordinare</strong>. Passa il mouse su una casella per vedere venduto, giacenza e fabbisogno.
+            Unità per confezione trovate in BIGDATA: <strong>${nBig} su ${nArt}</strong> articoli venduti
+            (<span class="badge bg-warning text-dark">non trovato</span> = considerata 1 unità: correggi a mano o verifica il codice in BIGDATA).</p>`;
 
         updateBigdataInfo();
-        if (bigdataPzError) header += `<div class="alert alert-warning small py-2 d-print-none"><i class="fas fa-exclamation-triangle me-1"></i> ${esc(bigdataPzError)}${bigdataPz ? '' : ' Uso la descrizione o il valore manuale.'}</div>`;
+        if (bigdataPzError) header += `<div class="alert alert-warning small py-2 d-print-none"><i class="fas fa-exclamation-triangle me-1"></i> ${esc(bigdataPzError)}</div>`;
         document.getElementById('restockBody').innerHTML = header + (body || '<p class="text-muted">Nessun articolo da riordinare con questi parametri.</p>');
     }
 
@@ -1345,6 +1345,7 @@
         renderRestock();
     });
     document.getElementById('rs-solo').addEventListener('change', renderRestock);
+    document.getElementById('rs-dettaglio').addEventListener('change', renderRestock);
 
     // Dal riassortimento si apre direttamente l'inventario dell'articolo
     $('#restockBody').on('click', '.rs-inv', function() {
@@ -1371,7 +1372,7 @@
 
             let row = 6, maxCols = 5;
             const det = wb.addWorksheet('Dettaglio');
-            det.addRow(['Codice', 'Descrizione', 'Colore', 'Misura', 'Venduto', 'Giacenza', 'Giacenza reale', 'Fabbisogno', 'Conf. da ordinare', 'Pz/conf', 'Pezzi da ordinare', 'Prezzo', 'Valore']);
+            det.addRow(['Codice', 'Descrizione', 'Colore', 'Misura', 'Venduto', 'Giacenza', 'Giacenza reale', 'Fabbisogno', 'Unità mancanti', 'Unità/conf', 'Fonte', 'Confezioni da ordinare', 'Unità ordinate', 'Prezzo', 'Valore']);
             det.getRow(1).font = { bold: true };
 
             R.visible.forEach(cod => {
@@ -1379,19 +1380,19 @@
                 const colors = [...it.colors].sort((a, b) => String(a).localeCompare(String(b)));
                 const sizes = [...it.sizes].sort(sortSizes);
                 maxCols = Math.max(maxCols, sizes.length + 2);
-                let itOrd = Object.values(it.cells).reduce((a, ce) => a + ce.ord, 0);
+                let itConf = Object.values(it.cells).reduce((a, ce) => a + ce.conf, 0);
                 const pz = it.pz || 1;
-                row = addMatrixBlock(sh, row, `${cod} - ${it.desc}${pz > 1 ? ` (conf. da ${pz} pz)` : ''}`,
-                    pz > 1 ? `${itOrd} conf = ${itOrd * pz} pz` : `Ordine: ${itOrd} pz.`, colors, sizes,
-                    (c, s) => (it.cells[c + '||' + s] || { ord: 0 }).ord);
+                row = addMatrixBlock(sh, row, `${cod} - ${it.desc} (conf. da ${pz} un.)`,
+                    `${itConf} conf = ${itConf * pz} un.`, colors, sizes,
+                    (c, s) => (it.cells[c + '||' + s] || { conf: 0 }).conf);
                 colors.forEach(c => sizes.forEach(s => {
                     const ce = it.cells[c + '||' + s]; if (!ce) return;
-                    det.addRow([cod, it.desc, c, s, ce.v, ce.g, ce.ovr ? 'SI' : '', ce.fab, ce.ord, pz, ce.ord * pz, it.prezzo, round3(ce.ord * it.prezzo)]);
+                    det.addRow([cod, it.desc, c, s, ce.v, ce.g, ce.ovr ? 'SI' : '', ce.fab, ce.need, pz, it.pzSrc, ce.conf, ce.un, it.prezzo, round3(ce.un * it.prezzo)]);
                 }));
             });
             sh.getColumn(1).width = 22;
             for (let c = 2; c <= maxCols; c++) sh.getColumn(c).width = 10;
-            [14, 34, 16, 10, 10, 10, 14, 11, 16, 9, 16, 10, 12].forEach((w, i) => det.getColumn(i + 1).width = w);
+            [14, 34, 16, 10, 10, 10, 14, 11, 14, 11, 12, 20, 14, 10, 12].forEach((w, i) => det.getColumn(i + 1).width = w);
 
             await downloadWorkbook(wb, `Riassortimento_${R.forn.replace(/[^\w-]+/g, '_')}.xlsx`);
         } catch (err) {
