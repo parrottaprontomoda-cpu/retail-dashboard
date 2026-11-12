@@ -49,6 +49,29 @@
   .fav-tag { position: absolute; left: 8px; bottom: 8px; background: #fff8e1; color: #6d4c00; border: 1px solid #f0c36d; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 10px; pointer-events: none; }
   #cart-limit { font-size: 12px; color: #888; margin: -6px 0 10px; }
 
+  /* ===== Quantità, serie completa, riepilogo ===== */
+  .variant-cell.in-cart .cart-qty-btn:last-child { border-radius: 0 6px 6px 0; }
+  .variant-cell.in-cart .cart-qty-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .variant-chip.in-cart .cart-qty-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .serie-btn { font-size: 10px; font-weight: 700; border: 1px solid var(--primary); color: #137a39; background: #e7f8ee; border-radius: 10px; padding: 1px 8px; margin-left: 6px; cursor: pointer; white-space: nowrap; }
+  .serie-btn:hover { background: #cdeedb; }
+  .variant-serie-row { text-align: right; margin-bottom: 4px; }
+  .cart-item-controls input { width: 46px; text-align: center; border: 1px solid var(--border); border-radius: 6px; padding: 4px 2px; font-weight: bold; font-size: 14px; }
+  .cart-item-controls button:disabled { opacity: .35; cursor: not-allowed; }
+  .cart-colli { font-size: 10px; color: #888; text-align: center; }
+  #cart-summary { font-size: 12px; color: #555; margin-bottom: 4px; }
+  #cart-summary b { color: var(--dark); }
+  .cart-saving { color: #137a39; font-weight: 600; }
+  #cart-review h4 { margin: 4px 0 8px; font-size: 15px; }
+  .rv-art { border-bottom: 1px solid #f0f0f0; padding: 6px 0; font-size: 13px; }
+  .rv-art small { color: #888; display: block; }
+  .rv-campo label { display: block; font-size: 12px; font-weight: bold; color: #555; margin: 10px 0 4px; }
+  .rv-campo select, .rv-campo textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px; font-size: 14px; font-family: inherit; }
+  #back-btn { width: 100%; background: transparent; color: var(--dark); border: 1px solid var(--border); padding: 10px; border-radius: 8px; font-weight: bold; font-size: 13px; cursor: pointer; margin-top: 10px; display: none; }
+  #cart-toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--dark); color: #fff; padding: 10px 18px; border-radius: 22px; font-size: 13px;
+    z-index: 40; box-shadow: 0 4px 16px rgba(0,0,0,.3); max-width: 92vw; text-align: center; opacity: 0; pointer-events: none; transition: opacity .25s; }
+  #cart-toast.show { opacity: 1; }
+
   /* ===== MODALITÀ: vetrina (senza codice) / cliente / admin ===== */
   #report-btn, #stats-btn, #import-btn { display: none; }
   body.admin-mode #report-btn, body.admin-mode #stats-btn, body.admin-mode #import-btn { display: inline-block; }
@@ -328,12 +351,15 @@
   </div>
   <div id="cart-items"></div>
   <div id="cart-footer">
+    <div id="cart-summary"></div>
     <div id="cart-total">Totale: € 0.00 <span class="iva-label">+ IVA</span></div>
     <div id="cart-limit"></div>
-    <button id="whatsapp-btn" onclick="sendWhatsApp()">Invia Ordine su WhatsApp</button>
+    <button id="whatsapp-btn" onclick="azioneOrdine()">Rivedi e invia l'ordine</button>
+    <button id="back-btn" onclick="tornaAlCarrello()">← Modifica il carrello</button>
     <button id="clear-cart-btn" onclick="clearCart()">🗑️ Svuota Carrello</button>
   </div>
 </div>
+<div id="cart-toast"></div>
 
 <script>
   const API_URL = 'https://script.google.com/macros/s/AKfycbx09XG2XA-PrkoaueaWySeYOm8IxKX4BtNv7oTGJqxBkqkUWJOoZsSKabh1RlXFBcKVIw/exec';
@@ -473,6 +499,7 @@
     }
     applyMode();
     applyProducts(d.products);
+    ripristinaCarrello();
   }
 
   function applyMode() {
@@ -546,11 +573,15 @@
     PRODUCTS = list;
     if (!firstApplyDone) { readStateFromUrl(); firstApplyDone = true; }
 
+    let tolti = 0, ridotti = 0;
     Object.keys(CART).forEach(id => {
       const np = PRODUCTS.find(x => x.id == id);
-      if (!np || !np.disponibile) delete CART[id];
-      else CART[id].product = np;
+      if (!np || !np.disponibile) { delete CART[id]; tolti++; return; }
+      CART[id].product = np;
+      const m = maxColli(np);
+      if (CART[id].qty > m) { CART[id].qty = m; ridotti++; }
     });
+    if (tolti || ridotti) setTimeout(() => avviso('Disponibilità aggiornate: ' + (tolti ? tolti + (tolti === 1 ? ' articolo non più disponibile tolto' : ' articoli non più disponibili tolti') + ' dal carrello' : '') + (tolti && ridotti ? ' · ' : '') + (ridotti ? ridotti + (ridotti === 1 ? ' quantità ridotta' : ' quantità ridotte') + ' alla disponibilità' : '')), 0);
 
     refreshChips();
     updateFilters(true);
@@ -784,7 +815,7 @@
     list.forEach(p => {
       const key = p.codiceProdotto || p.id;
       if (!map[key]) {
-        map[key] = { codiceProdotto: p.codiceProdotto, nome: p.nome, descrizione: p.descrizione, prezzo: p.prezzo, sconto: p.sconto, scontoFino: p.scontoFino, categoria: p.categoria, catalogo: p.catalogo, tipo: catKey(p.tipo), materiale: catKey(p.materiale), immagine: p.immagine, variants: [] };
+        map[key] = { codiceProdotto: p.codiceProdotto, nome: p.nome, descrizione: p.descrizione, prezzo: p.prezzo, sconto: p.sconto, scontoFino: p.scontoFino, scontoCliente: p.scontoCliente, categoria: p.categoria, catalogo: p.catalogo, tipo: catKey(p.tipo), materiale: catKey(p.materiale), immagine: p.immagine, variants: [] };
       }
       map[key].variants.push(p);
       const g = map[key];
@@ -900,7 +931,7 @@
         if (!v.disponibile) return `<div class="variant-chip out">Esaurito</div>`;
         if (!PREZZI) return `<div class="variant-chip view-only${isPresale(v) ? ' presale' : ''}">${isPresale(v) ? 'Prevendita' : 'Disponibile'}</div>`;
         if (inCart > 0) {
-          return `<div class="variant-chip in-cart"><button class="cart-qty-btn" style="border-radius:4px 0 0 4px;" onclick="changeQty('${v.id}', -1)">-</button><span class="cart-qty-val">${pz > 1 ? pz + ' pz in carrello' : 'In carrello'}</span></div>`;
+          return `<div class="variant-chip in-cart"><button class="cart-qty-btn" style="border-radius:4px 0 0 4px;" onclick="changeQty('${v.id}', -1)">-</button><span class="cart-qty-val">${inCart} ${inCart > 1 ? 'colli' : 'collo'}${pz > 1 ? ' · ' + (inCart * pz) + ' pz' : ''}</span><button class="cart-qty-btn" style="border-radius:0 4px 4px 0;" onclick="changeQty('${v.id}', 1)" ${inCart >= maxColli(v) ? 'disabled' : ''}>+</button></div>`;
         }
         if (isPresale(v)) {
           return `<div class="variant-chip presale" onclick="changeQty('${v.id}', 1)">Prevendita (Clicca x ordinare)</div>`;
@@ -929,7 +960,8 @@
         if (!PREZZI) return `<div class="variant-cell view-only${isPresale(v) ? ' presale' : ''}" title="${escHtml(lbl)} — ${isPresale(v) ? 'prevendita' : 'disponibile'}">${escHtml(lbl)}<span class="variant-cell-qty">${isPresale(v) ? 'Prev.' : '✓'}</span></div>`;
 
         if (inCart > 0) {
-          return `<div class="variant-cell in-cart" title="Nel carrello: ${pz} pz"><button class="cart-qty-btn" style="border-radius:6px 0 0 6px;" onclick="changeQty('${v.id}', -1)">-</button><div class="cart-qty-val" title="Nel carrello">${escHtml(lbl)}${pz > 1 ? ' · ' + pz + 'pz' : ''}</div></div>`;
+          const max = maxColli(v);
+          return `<div class="variant-cell in-cart" title="${escHtml(lbl)} — nel carrello: ${inCart} ${inCart > 1 ? 'colli' : 'collo'} (${inCart * pz} pz)${isFinite(max) && max < 99 ? ' · disponibili ' + max : ''}"><button class="cart-qty-btn" style="border-radius:6px 0 0 6px;" onclick="changeQty('${v.id}', -1)">-</button><div class="cart-qty-val">${escHtml(lbl)}${inCart > 1 ? ' ×' + inCart : ''}</div><button class="cart-qty-btn" onclick="changeQty('${v.id}', 1)" ${inCart >= max ? 'disabled' : ''}>+</button></div>`;
         }
 
         if (isPresale(v)) {
@@ -938,8 +970,12 @@
 
         return `<div class="variant-cell" title="${escHtml(lbl)} — Disponibili: ${v.quantita}${pz > 1 ? ' (collo da ' + pz + ' pz)' : ''}" onclick="changeQty('${v.id}', 1)">${escHtml(lbl)}<span class="variant-cell-qty">${v.quantita}</span></div>`;
       }).join('');
+      // "+ serie": un collo di ogni taglia disponibile di quel colore
+      const ordinabili = PREZZI ? misure.filter(m => { const v = map[m + '|' + col]; return v && v.disponibile; }).length : 0;
+      const serie = ordinabili > 1
+        ? `<button class="serie-btn" data-k="${escHtml(String(g.codiceProdotto || g.variants[0].id))}" data-col="${escHtml(col)}" title="Aggiunge un collo di ogni taglia disponibile${col ? ' in ' + escHtml(col) : ''}">+ serie${col ? '' : ' completa'}</button>` : '';
       return `<div class="variant-color-group">
-        ${col ? `<div class="variant-color-name">${escHtml(col)}</div>` : ''}
+        ${col ? `<div class="variant-color-name">${escHtml(col)}${serie}</div>` : (serie ? `<div class="variant-serie-row">${serie}</div>` : '')}
         <div class="variant-size-row">${cells}</div>
       </div>`;
     }).join('');
@@ -1100,6 +1136,8 @@
   }
 
   document.getElementById('grid').addEventListener('click', e => {
+    const serie = e.target.closest('.serie-btn');
+    if (serie) { aggiungiSerie(serie.dataset.k, serie.dataset.col); return; }
     const wrap = e.target.closest('.img-wrap[data-k]');
     if (wrap) {
       const k = wrap.dataset.k;
@@ -1114,41 +1152,151 @@
   });
 
   // ===== CARRELLO =====
-  function changeQty(id, delta) {
-    if (!PREZZI) return;
-    const p = PRODUCTS.find(x => x.id == id);
-    if (!p || !p.disponibile) return;
+  // ===== CARRELLO =====
+  // Quanti colli si possono ordinare di una variante: prevendita senza limite, altrimenti
+  // la giacenza (in pezzi) divisa per i pezzi del collo, almeno 1 se la variante è disponibile.
+  function maxColli(p) {
+    if (!p || !p.disponibile) return 0;
+    if (isPresale(p)) return 99;
+    const q = Number(p.quantita);
+    if (!isFinite(q) || q <= 0) return 99;   // giacenza non indicata: nessun limite
+    return Math.max(1, Math.floor(q / colloQty(p)));
+  }
 
-    if (!CART[id]) {
-      if (delta > 0) CART[id] = { product: p, qty: 1 };
-    } else {
-      CART[id].qty += delta;
-      if (CART[id].qty > 1) CART[id].qty = 1;
-      if (CART[id].qty <= 0) delete CART[id];
-    }
+  function setQty(id, n) {
+    if (!PREZZI) return null;
+    const p = PRODUCTS.find(x => x.id == id);
+    if (!p || !p.disponibile) return null;
+    const max = maxColli(p);
+    n = Math.max(0, Math.min(Math.round(Number(n) || 0), max));
+    if (n === 0) delete CART[id]; else CART[id] = { product: p, qty: n };
+    return { n: n, max: max };
+  }
+
+  function changeQty(id, delta) {
+    const prima = CART[id] ? CART[id].qty : 0;
+    const r = setQty(id, prima + delta);
+    if (r && delta > 0 && r.n === prima) avviso('Disponibili al massimo ' + r.max + (r.max > 1 ? ' colli' : ' collo') + ' per questa variante.');
     renderGrid();
     renderCart();
+  }
+
+  function inputQty(id, el) {
+    const r = setQty(id, el.value);
+    if (r && Number(el.value) > r.max) avviso('Disponibili al massimo ' + r.max + (r.max > 1 ? ' colli' : ' collo') + ' per questa variante.');
+    renderGrid();
+    renderCart();
+  }
+
+  // Un collo in più di ogni taglia disponibile di un colore (col = '' per gli articoli senza colore)
+  function aggiungiSerie(k, col) {
+    const varianti = PRODUCTS.filter(p => String(p.codiceProdotto || p.id) === k && (p.colore || '') === col && p.disponibile);
+    const aggiunte = [];
+    let alMassimo = 0;
+    sortSizes(varianti.map(v => v.misura || '')).forEach(m => {
+      const v = varianti.find(x => (x.misura || '') === m);
+      if (!v) return;
+      const prima = CART[v.id] ? CART[v.id].qty : 0;
+      const r = setQty(v.id, prima + 1);
+      if (r && r.n > prima) aggiunte.push(m || 'pz'); else alMassimo++;
+    });
+    renderGrid();
+    renderCart();
+    if (aggiunte.length) avviso('🛒 Aggiunta la serie' + (col ? ' ' + col : '') + ': ' + aggiunte.join(', ') + ' (' + aggiunte.length + ' colli)' + (alMassimo ? ' · ' + alMassimo + (alMassimo === 1 ? ' taglia già al massimo' : ' taglie già al massimo') : ''));
+    else avviso('Tutte le taglie' + (col ? ' ' + col : '') + ' sono già al massimo disponibile.');
+  }
+
+  // Messaggio breve in basso che sparisce da solo
+  let avvisoTimer = null;
+  function avviso(msg) {
+    const t = document.getElementById('cart-toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(avvisoTimer);
+    avvisoTimer = setTimeout(() => t.classList.remove('show'), 3500);
+  }
+
+  // ----- Carrello ricordato nel dispositivo (per cliente) -----
+  let CART_EXTRA = { note: '', consegna: '' };
+  let CART_RIPRISTINATO = false;
+  let REVISIONE = false;   // true = schermata di riepilogo prima dell'invio
+  const cartKey = () => 'catalogo_carrello_' + (CLIENT_CODE || 'pubblico');
+
+  function salvaCarrello() {
+    if (!CART_RIPRISTINATO || !PREZZI) return;   // prima del ripristino non sovrascrivo il carrello salvato
+    try {
+      const righe = {};
+      Object.keys(CART).forEach(id => { righe[id] = CART[id].qty; });
+      if (!Object.keys(righe).length && !CART_EXTRA.note && !CART_EXTRA.consegna) localStorage.removeItem(cartKey());
+      else localStorage.setItem(cartKey(), JSON.stringify({ t: Date.now(), righe: righe, note: CART_EXTRA.note, consegna: CART_EXTRA.consegna }));
+    } catch (e) {}
+  }
+
+  // Al primo caricamento dei prodotti riprendo il carrello lasciato in sospeso, controllando le disponibilità
+  function ripristinaCarrello() {
+    if (CART_RIPRISTINATO || !PREZZI || !PRODUCTS.length) return;
+    CART_RIPRISTINATO = true;
+    let dati = null;
+    try { dati = JSON.parse(localStorage.getItem(cartKey()) || 'null'); } catch (e) {}
+    if (!dati || !dati.righe) return;
+    let ripresi = 0, tolti = 0, ridotti = 0;
+    Object.keys(dati.righe).forEach(id => {
+      const p = PRODUCTS.find(x => x.id == id);
+      const voluti = Number(dati.righe[id]) || 0;
+      if (!p || !p.disponibile) { tolti++; return; }
+      const n = Math.min(voluti, maxColli(p));
+      if (n < voluti) ridotti++;
+      if (n > 0) { CART[id] = { product: p, qty: n }; ripresi++; }
+    });
+    CART_EXTRA = { note: dati.note || '', consegna: dati.consegna || '' };
+    renderGrid();
+    renderCart();
+    if (ripresi || tolti) {
+      avviso('🛒 Abbiamo ritrovato il tuo carrello: ' + ripresi + (ripresi === 1 ? ' articolo' : ' articoli') +
+        (tolti ? ' · ' + tolti + ' non più disponibili, tolti' : '') + (ridotti ? ' · ' + ridotti + ' ridotti alla disponibilità' : ''));
+    }
   }
 
   function clearCart() {
     if (Object.keys(CART).length === 0) return;
     if (!confirm('Sei sicuro di voler svuotare tutto il carrello?')) return;
     CART = {};
+    CART_EXTRA = { note: '', consegna: '' };
+    REVISIONE = false;
     renderGrid();
     renderCart();
   }
 
-  function renderCart() {
+  // Totali del carrello (prezzi netti IVA)
+  function totaliCarrello() {
     const items = Object.values(CART);
-    document.getElementById('cart-count').innerText = items.reduce((s, i) => s + pieceCount(i), 0);
+    let colli = 0, pezzi = 0, totale = 0, pieno = 0;
+    items.forEach(i => {
+      const pz = pieceCount(i);
+      colli += i.qty; pezzi += pz;
+      totale += pz * prezzoUnit(i.product) / DIVISORE_IVA;
+      pieno += pz * i.product.prezzo / DIVISORE_IVA;
+    });
+    const articoli = new Set(items.map(i => String(i.product.codiceProdotto || i.product.id))).size;
+    return { items: items, colli: colli, pezzi: pezzi, totale: totale, risparmio: Math.max(0, pieno - totale), articoli: articoli };
+  }
+
+  function renderCart() {
+    const T = totaliCarrello();
+    const items = T.items;
+    document.getElementById('cart-count').innerText = T.pezzi;
     const itemsEl = document.getElementById('cart-items');
+    if (!items.length) REVISIONE = false;
 
     if (items.length === 0) {
       itemsEl.innerHTML = '<p style="color:#888;text-align:center;margin-top:30px;">Il carrello è vuoto</p>';
+    } else if (REVISIONE) {
+      itemsEl.innerHTML = htmlRiepilogo(T);
     } else {
       itemsEl.innerHTML = items.map(i => {
         const pz = pieceCount(i);
         const sub = (pz * prezzoUnit(i.product)) / DIVISORE_IVA;
+        const max = maxColli(i.product);
         const scontoNote = scontiNote(i.product, ' · ', '', '');
         const packNote = colloQty(i.product) > 1 ? ` · collo da ${colloQty(i.product)} pz` : '';
         const presaleNote = isPresale(i.product) ? ' · PREVENDITA' : '';
@@ -1158,23 +1306,71 @@
             <div style="font-weight:600;">${escHtml(i.product.nome)}</div>
             <div class="cart-item-variant">${escHtml(variantLabel(i.product))}${packNote}${presaleNote}${scontoNote} — ${pz} pz — € ${sub.toFixed(2)} <span class="iva-label">+ IVA</span></div>
           </div>
-          <div class="cart-item-controls">
-            <button onclick="changeQty('${i.product.id}', -1)">-</button>
-            <span style="font-weight:bold;min-width:14px;text-align:center;">${pz}</span>
+          <div>
+            <div class="cart-item-controls">
+              <button onclick="changeQty('${i.product.id}', -1)" title="Un collo in meno">-</button>
+              <input type="number" inputmode="numeric" min="0" max="${max}" value="${i.qty}" onchange="inputQty('${i.product.id}', this)" aria-label="Colli">
+              <button onclick="changeQty('${i.product.id}', 1)" ${i.qty >= max ? 'disabled' : ''} title="Un collo in più">+</button>
+            </div>
+            <div class="cart-colli">${i.qty > 1 ? 'colli' : 'collo'}${max < 99 ? ' · max ' + max : ''}</div>
           </div>
         </div>`;
       }).join('');
     }
 
-    const total = items.reduce((s, i) => s + pieceCount(i) * prezzoUnit(i.product), 0);
-    document.getElementById('cart-total').innerHTML = 'Totale: € ' + (total / DIVISORE_IVA).toFixed(2) + ' <span class="iva-label">+ IVA</span>';
+    document.getElementById('cart-summary').innerHTML = items.length
+      ? `<b>${T.articoli}</b> ${T.articoli === 1 ? 'articolo' : 'articoli'} · <b>${T.colli}</b> ${T.colli === 1 ? 'collo' : 'colli'} · <b>${T.pezzi}</b> pezzi` +
+        (T.risparmio >= 0.01 ? ` · <span class="cart-saving">risparmi € ${T.risparmio.toFixed(2)}</span>` : '')
+      : '';
+    document.getElementById('cart-total').innerHTML = 'Totale: € ' + T.totale.toFixed(2) + ' <span class="iva-label">+ IVA</span>';
     const max = limiteOrdine();
     document.getElementById('cart-limit').textContent = max
-      ? (total / DIVISORE_IVA > max ? '⚠️ ' : '') + 'Importo massimo per ordine: € ' + max.toFixed(2) + ' + IVA' + (total / DIVISORE_IVA > max ? ' — oltre, l\'ordine sarà una richiesta da confermare' : '')
+      ? (T.totale > max ? '⚠️ ' : '') + 'Importo massimo per ordine: € ' + max.toFixed(2) + ' + IVA' + (T.totale > max ? ' — oltre, l\'ordine sarà una richiesta da confermare' : '')
       : '';
+    const btn = document.getElementById('whatsapp-btn');
+    btn.textContent = REVISIONE ? '✅ Conferma e invia su WhatsApp' : 'Rivedi e invia l\'ordine';
+    btn.disabled = !items.length;
+    document.getElementById('back-btn').style.display = REVISIONE ? 'block' : 'none';
+    document.getElementById('clear-cart-btn').style.display = REVISIONE ? 'none' : '';
+    salvaCarrello();
   }
 
+  // Riepilogo raggruppato per articolo e colore, con consegna e note
+  function htmlRiepilogo(T) {
+    const gruppi = {};
+    T.items.forEach(i => {
+      const p = i.product;
+      const k = String(p.codiceProdotto || p.id) + '|' + (p.colore || '');
+      const g = gruppi[k] || (gruppi[k] = { nome: p.nome, cod: p.codiceProdotto, colore: p.colore, righe: [], colli: 0, pezzi: 0, tot: 0 });
+      g.righe.push({ m: p.misura || '', q: i.qty });
+      g.colli += i.qty; g.pezzi += pieceCount(i); g.tot += pieceCount(i) * prezzoUnit(p) / DIVISORE_IVA;
+    });
+    const GIORNI = ['Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+    return `<div id="cart-review"><h4>📋 Riepilogo dell'ordine</h4>` +
+      Object.values(gruppi).map(g => {
+        const taglie = sortSizes(g.righe.map(r => r.m)).map(m => { const r = g.righe.find(x => x.m === m); return (m || 'Q.tà') + (r.q > 1 ? ' ×' + r.q : ''); });
+        return `<div class="rv-art"><b>${escHtml(g.nome)}</b>${g.colore ? ' — ' + escHtml(g.colore) : ''}
+          <small>${escHtml(taglie.join(', '))} · ${g.colli} ${g.colli === 1 ? 'collo' : 'colli'} · ${g.pezzi} pz · € ${g.tot.toFixed(2)} + IVA${g.cod ? ' · Cod. ' + escHtml(g.cod) : ''}</small></div>`;
+      }).join('') +
+      `<div class="rv-campo"><label for="cart-consegna">🚚 Giorno di consegna preferito</label>
+        <select id="cart-consegna" onchange="CART_EXTRA.consegna = this.value; salvaCarrello()">
+          <option value="">Nessuna preferenza</option>
+          ${GIORNI.map(d => `<option${CART_EXTRA.consegna === d ? ' selected' : ''}>${d}</option>`).join('')}
+        </select></div>
+      <div class="rv-campo"><label for="cart-note">📝 Note per l'ordine</label>
+        <textarea id="cart-note" rows="3" maxlength="500" placeholder="Es. consegnare dopo il 20, chiamare prima di passare…" oninput="CART_EXTRA.note = this.value; salvaCarrello()">${escHtml(CART_EXTRA.note)}</textarea></div>
+    </div>`;
+  }
+
+  function azioneOrdine() {
+    if (!Object.keys(CART).length) return;
+    if (!REVISIONE) { REVISIONE = true; renderCart(); document.getElementById('cart-items').scrollTop = 0; return; }
+    sendWhatsApp();
+  }
+  function tornaAlCarrello() { REVISIONE = false; renderCart(); }
+
   function toggleCart(open) {
+    if (open && REVISIONE) { REVISIONE = false; renderCart(); }
     document.getElementById('cart-panel').classList.toggle('open', open);
     document.getElementById('overlay').classList.toggle('show', open);
   }
@@ -1237,11 +1433,17 @@
       righe.push({ ean: String(i.product.id), pezzi: pz, prezzo: Math.round(unit * 10000) / 10000,
         nome: i.product.nome, variante: variantLabel(i.product), prevendita: isPresale(i.product) });
     });
+    const T = totaliCarrello();
+    msg += `\n📦 ${T.colli} ${T.colli === 1 ? 'collo' : 'colli'} · ${T.pezzi} pezzi`;
+    if (CART_EXTRA.consegna) msg += `\n🚚 Consegna preferita: ${CART_EXTRA.consegna}`;
+    if (CART_EXTRA.note.trim()) msg += `\n📝 Note: ${CART_EXTRA.note.trim().replace(/\s*\n+\s*/g, ' / ')}`;
     msg += `\n*Totale: € ${total.toFixed(2)} + IVA*`;
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
     salvaOrdine(ordine, righe);
 
     CART = {};
+    CART_EXTRA = { note: '', consegna: '' };
+    REVISIONE = false;
     renderGrid();
     renderCart();
     toggleCart(false);
