@@ -49,6 +49,23 @@
   .fav-tag { position: absolute; left: 8px; bottom: 8px; background: #fff8e1; color: #6d4c00; border: 1px solid #f0c36d; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 10px; pointer-events: none; }
   #cart-limit { font-size: 12px; color: #888; margin: -6px 0 10px; }
 
+  /* ===== Articolo terminato: fascia rossa in diagonale ===== */
+  .card.terminato .card-img { filter: grayscale(0.85); opacity: 0.6; }
+  .terminato-band { position: absolute; top: 50%; left: -20%; width: 140%; transform: translateY(-50%) rotate(-24deg); z-index: 2;
+    background: rgba(211,47,47,0.93); color: #fff; text-align: center; font-weight: 900; font-size: 26px; letter-spacing: 5px;
+    padding: 7px 0; box-shadow: 0 3px 12px rgba(0,0,0,0.35); pointer-events: none; text-transform: uppercase; }
+
+  /* ===== Nuovi arrivi ===== */
+  .nuovo-badge { position: absolute; left: 8px; top: 8px; z-index: 3; background: #ff6f00; color: #fff; font-size: 10px; font-weight: 800;
+    padding: 3px 8px; border-radius: 10px; pointer-events: none; letter-spacing: .3px; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+  .nuovo-badge.sotto { top: 34px; }
+  #nuovi-btn { color: #e65100; border-color: #ffcc80; }
+  #nuovi-btn.on { background: #ff6f00; color: #fff; border-color: #ff6f00; }
+  #nuovi-btn[hidden] { display: none; }
+  .nuovi-strip { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: #fff3e0; border: 1px solid #ffcc80;
+    border-radius: 12px; padding: 10px 12px; font-size: 14px; color: #8a3b00; }
+  .nuovi-strip button { border: 1px solid #e65100; background: #fff; color: #e65100; border-radius: 16px; padding: 5px 12px; font-weight: 700; cursor: pointer; }
+
   /* ===== Quantità, serie completa, riepilogo ===== */
   .variant-cell.in-cart .cart-qty-btn:last-child { border-radius: 0 6px 6px 0; }
   .variant-cell.in-cart .cart-qty-btn:disabled { opacity: .35; cursor: not-allowed; }
@@ -279,6 +296,7 @@
     <select id="f-categoria" data-field="categoria" aria-label="Categoria"></select>
     <select id="f-tipo" data-field="tipo" aria-label="Tipo"></select>
     <select id="f-materiale" data-field="materiale" aria-label="Materiale"></select>
+    <button id="nuovi-btn" onclick="toggleNuovi()" hidden>🆕 Nuovi arrivi</button>
     <button id="reset-btn" onclick="resetFilters()" hidden>✕ Azzera</button>
     <button id="share-btn" onclick="shareCurrent()">🔗 Condividi</button>
   </div>
@@ -419,7 +437,40 @@
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
+  // ===== NUOVI ARRIVI =====
+  // Un articolo è "nuovo" per GIORNI_NOVITA giorni dalla data di caricamento (colonna R del foglio CATALOGO).
+  const GIORNI_NOVITA = 15;
+  let SOLO_NUOVI = false;   // filtro "Nuovi arrivi" attivo
+  let NUOVI_AUTO = false;   // attivato da solo all'apertura (si spegne appena il cliente sceglie un filtro)
+  let NUOVI_KEYS = new Set();
+
+  function eNuovo(p) {
+    const d = String((p && p.dataCarico) || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+    const giorni = (Date.now() - new Date(d + 'T00:00:00').getTime()) / 864e5;
+    return giorni < GIORNI_NOVITA + 1;   // compreso il giorno di caricamento (e date future)
+  }
+  // Un prodotto è nuovo se almeno una sua variante (es. un colore aggiunto) è nuova: lo mostro intero
+  // (gli articoli nuovi ma già terminati non vengono mostrati tra le novità)
+  function calcolaNuovi() {
+    const nuovi = new Set(PRODUCTS.filter(eNuovo).map(p => String(p.codiceProdotto || p.id)));
+    const ordinabili = new Set(PRODUCTS.filter(p => p.disponibile).map(p => String(p.codiceProdotto || p.id)));
+    NUOVI_KEYS = new Set([...nuovi].filter(k => ordinabili.has(k)));
+  }
+  function toggleNuovi(forza) {
+    SOLO_NUOVI = typeof forza === 'boolean' ? forza : !SOLO_NUOVI;
+    NUOVI_AUTO = false;
+    if (SOLO_NUOVI) track('filtro', 'novita', 'Nuovi arrivi');
+    renderFilters();
+    updateFilters();
+    syncUrl();
+    window.scrollTo(0, 0);
+  }
+  // Appena il cliente sceglie un filtro o cerca, la vista automatica "nuovi arrivi" lascia il posto a tutto il catalogo
+  function spegniNuoviAuto() { if (NUOVI_AUTO) { SOLO_NUOVI = false; NUOVI_AUTO = false; } }
+
   function matchesFilters(p) {
+    if (SOLO_NUOVI && !NUOVI_KEYS.has(String(p.codiceProdotto || p.id))) return false;
     const matchCat = ACTIVE_CAT === 'Tutti' || norm(p.categoria) === norm(ACTIVE_CAT);
     const matchCatalog = ACTIVE_CATALOGS.size === 0 || ACTIVE_CATALOGS.has(p.catalogo);
     const matchTipo = !ACTIVE_TIPO || norm(p.tipo) === norm(ACTIVE_TIPO);
@@ -436,6 +487,7 @@
       if (ACTIVE_CATALOGS.size) u.searchParams.set('catalogo', [...ACTIVE_CATALOGS].join('|')); else u.searchParams.delete('catalogo');
       if (ACTIVE_TIPO) u.searchParams.set('tipo', ACTIVE_TIPO); else u.searchParams.delete('tipo');
       if (ACTIVE_MAT) u.searchParams.set('materiale', ACTIVE_MAT); else u.searchParams.delete('materiale');
+      if (SOLO_NUOVI && !NUOVI_AUTO) u.searchParams.set('nuovi', '1'); else u.searchParams.delete('nuovi');
       if (u.href !== window.location.href) history.pushState(null, '', u);
     } catch (e) {}
   }
@@ -461,6 +513,11 @@
     const pick = (field, w) => w ? ([...new Set(PRODUCTS.map(x => catKey(x[field])))].find(c => c && norm(c) === norm(w)) || '') : '';
     ACTIVE_TIPO = pick('tipo', p.get('tipo'));
     ACTIVE_MAT = pick('materiale', p.get('materiale'));
+    // Nuovi arrivi: ?nuovi=1 li mostra; aprendo il catalogo senza filtri si parte da lì (se ce ne sono)
+    calcolaNuovi();
+    const senzaFiltri = !['catalogo', 'categoria', 'tipo', 'materiale', 'nuovi'].some(k => p.get(k));
+    SOLO_NUOVI = p.get('nuovi') === '1' || (senzaFiltri && NUOVI_KEYS.size > 0);
+    NUOVI_AUTO = SOLO_NUOVI && p.get('nuovi') !== '1';
   }
   window.addEventListener('popstate', () => {
     readStateFromUrl();
@@ -571,7 +628,7 @@
       setTimeout(() => setBanner('⚠️ Il server non invia Tipo/Materiale: ripubblica una nuova versione dell\'Apps Script'), 0);
     }
     PRODUCTS = list;
-    if (!firstApplyDone) { readStateFromUrl(); firstApplyDone = true; }
+    if (!firstApplyDone) { readStateFromUrl(); firstApplyDone = true; } else calcolaNuovi();
 
     let tolti = 0, ridotti = 0;
     Object.keys(CART).forEach(id => {
@@ -681,7 +738,11 @@
     fillSelect('f-tipo', 'Tutti i tipi', countBy(base2.filter(p => !ACTIVE_MAT || norm(p.materiale) === norm(ACTIVE_MAT)), 'tipo'), ACTIVE_TIPO);
     fillSelect('f-materiale', 'Tutti i materiali', countBy(base2.filter(p => !ACTIVE_TIPO || norm(p.tipo) === norm(ACTIVE_TIPO)), 'materiale'), ACTIVE_MAT);
 
-    const anyActive = ACTIVE_CATALOGS.size > 0 || ACTIVE_CAT !== 'Tutti' || ACTIVE_TIPO || ACTIVE_MAT || document.getElementById('search').value.trim();
+    const anyActive = ACTIVE_CATALOGS.size > 0 || ACTIVE_CAT !== 'Tutti' || ACTIVE_TIPO || ACTIVE_MAT || document.getElementById('search').value.trim() || (SOLO_NUOVI && !NUOVI_AUTO);
+    const nb = document.getElementById('nuovi-btn');
+    nb.hidden = NUOVI_KEYS.size === 0;
+    nb.classList.toggle('on', SOLO_NUOVI);
+    nb.textContent = '🆕 Nuovi arrivi (' + NUOVI_KEYS.size + ')';
     document.getElementById('reset-btn').hidden = !anyActive;
     fitTopBar();
   }
@@ -694,6 +755,7 @@
       else if (field === 'categoria') ACTIVE_CAT = val || 'Tutti';
       else if (field === 'tipo') ACTIVE_TIPO = val;
       else if (field === 'materiale') ACTIVE_MAT = val;
+      spegniNuoviAuto();
       if (val) track('filtro', field, val);
       validateFilters();
       renderFilters();
@@ -708,6 +770,7 @@
     ACTIVE_CAT = 'Tutti';
     ACTIVE_TIPO = '';
     ACTIVE_MAT = '';
+    SOLO_NUOVI = false; NUOVI_AUTO = false;
     document.getElementById('search').value = '';
     renderFilters();
     updateFilters();
@@ -722,6 +785,7 @@
     if (ACTIVE_CAT !== 'Tutti') params.push('categoria=' + encodeURIComponent(ACTIVE_CAT));
     if (ACTIVE_TIPO) params.push('tipo=' + encodeURIComponent(ACTIVE_TIPO));
     if (ACTIVE_MAT) params.push('materiale=' + encodeURIComponent(ACTIVE_MAT));
+    if (SOLO_NUOVI) params.push('nuovi=1');
     params.push('condiviso=1');
     return baseUrl + '?' + params.join('&');
   }
@@ -784,6 +848,8 @@
   function debouncedFilters() {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
+      if (document.getElementById('search').value.trim()) spegniNuoviAuto();
+      renderFilters();
       updateFilters();
       document.getElementById('reset-btn').hidden = !(ACTIVE_CATALOGS.size > 0 || ACTIVE_CAT !== 'Tutti' || ACTIVE_TIPO || ACTIVE_MAT || document.getElementById('search').value.trim());
     }, 150);
@@ -824,7 +890,13 @@
         if (u && g.immagini.indexOf(u) < 0) g.immagini.push(u);
       });
     });
-    return Object.values(map).sort((a, b) =>
+    const gruppi = Object.values(map);
+    gruppi.forEach(g => {
+      g.terminato = !g.variants.some(v => v.disponibile);   // nessuna taglia/colore ordinabile
+      g.nuovo = NUOVI_KEYS.has(String(g.codiceProdotto || g.variants[0].id));
+    });
+    // gli articoli terminati scendono in fondo; per il resto l'ordine resta tipo → materiale → nome
+    return gruppi.sort((a, b) => (a.terminato - b.terminato) ||
       cmpEmptyLast(a.tipo, b.tipo) || cmpEmptyLast(a.materiale, b.materiale) || cmpIt(a.nome || '', b.nome || ''));
   }
 
@@ -1087,7 +1159,10 @@
     const fav = brandPreferiti();
 
     let html = '';
-    if (fav.length && ACTIVE_CATALOGS.size === 0) {
+    if (SOLO_NUOVI) {
+      html += `<div class="nuovi-strip">🆕 <b>Nuovi arrivi</b> degli ultimi ${GIORNI_NOVITA} giorni<button onclick="toggleNuovi(false)">Vedi tutto il catalogo</button></div>`;
+    }
+    if (fav.length && ACTIVE_CATALOGS.size === 0 && !SOLO_NUOVI) {
       html += `<div class="fav-strip"><strong>⭐ I tuoi brand:</strong>${fav.map(n => `<button class="fav-chip" data-brand="${escHtml(n)}">${escHtml(n)}</button>`).join('')}</div>`;
     }
 
@@ -1103,11 +1178,13 @@
       const hasPresale = g.variants.some(isPresale);
 
       return `
-        <div class="card">
+        <div class="card${g.terminato ? ' terminato' : ''}">
           <div class="img-wrap" data-k="${escHtml(gk)}">
             <img class="card-img" src="${escHtml(img)}" loading="lazy" decoding="async" alt="${safeCaption}" onerror="this.onerror=null;this.src='https://via.placeholder.com/300x200?text=Foto+Mancante'">
             ${galHtml(gk, imgs.length)}
             ${g.tipo ? `<span class="tipo-badge">${escHtml(g.tipo)}</span>` : ''}
+            ${g.nuovo && !g.terminato ? `<span class="nuovo-badge${g.tipo ? ' sotto' : ''}">🆕 NUOVO ARRIVO</span>` : ''}
+            ${g.terminato ? '<div class="terminato-band">Terminato</div>' : ''}
             ${fav.indexOf(g.catalogo) >= 0 ? '<span class="fav-tag">⭐ il tuo brand</span>' : ''}
             ${g.materiale ? `<div class="ribbon-wrap"><div class="ribbon" title="${escHtml(g.materiale)}">${escHtml(g.materiale)}</div></div>` : ''}
           </div>
