@@ -68,6 +68,26 @@
   .promo-cta { background: var(--primary); color: #fff; }
   .promo-ok { background: #eee; color: var(--dark); }
 
+  /* ===== Invito a lasciare l'email ===== */
+  #email-invito { position: fixed; left: 50%; bottom: 16px; transform: translate(-50%, 140%); z-index: 85; width: calc(100% - 32px); max-width: 420px;
+    background: #fff; border-radius: 14px; box-shadow: 0 10px 34px rgba(0,0,0,0.3); padding: 16px 18px 14px; transition: transform .35s ease; }
+  #email-invito.show { transform: translate(-50%, 0); }
+  #email-invito h3 { margin: 0 26px 4px 0; font-size: 16px; }
+  #email-invito p { margin: 0 0 10px; font-size: 13px; color: #555; line-height: 1.4; }
+  #email-invito input[type=email], .rv-campo input[type=email] { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 15px; font-family: inherit; box-sizing: border-box; }
+  .em-consenso { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: #555; margin: 8px 0 4px; line-height: 1.35; cursor: pointer; }
+  .em-consenso input { margin-top: 2px; flex: none; }
+  .rv-campo .em-consenso { font-weight: normal; color: #555; font-size: 12px; margin: 8px 0 0; display: flex; }
+  .em-privacy { font-size: 11px; color: #888; margin: 4px 0 0; }
+  .em-privacy a { color: inherit; }
+  .em-errore { font-size: 12px; color: #c62828; min-height: 16px; margin-top: 4px; }
+  .em-azioni { display: flex; gap: 8px; margin-top: 6px; }
+  .em-azioni button { flex: 1; padding: 11px; border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer; border: none; }
+  .em-si { background: var(--primary); color: #fff; }
+  .em-si:disabled { opacity: .6; cursor: wait; }
+  .em-no { background: #eee; color: var(--dark); }
+  .em-x { position: absolute; top: 8px; right: 10px; border: none; background: none; font-size: 22px; color: #999; cursor: pointer; line-height: 1; }
+
   /* ===== Articolo terminato: fascia rossa in diagonale ===== */
   .card.terminato .card-img { filter: grayscale(0.85); opacity: 0.6; }
   .terminato-band { position: absolute; top: 50%; left: -20%; width: 140%; transform: translateY(-50%) rotate(-24deg); z-index: 2;
@@ -414,9 +434,27 @@
   </div>
 </div>
 
+<div id="email-invito" role="dialog" aria-labelledby="em-titolo">
+  <button class="em-x" onclick="rimandaEmail()" aria-label="Chiudi">&times;</button>
+  <h3 id="em-titolo">📧 Restiamo in contatto</h3>
+  <p>Lascia la tua email per ricevere novità, nuovi arrivi e offerte riservate.</p>
+  <input type="email" id="em-email" placeholder="nome@esempio.it" autocomplete="email" inputmode="email"
+    onkeydown="if (event.key === 'Enter') inviaEmailInvito()">
+  <label class="em-consenso"><input type="checkbox" id="em-consenso">
+    <span>Acconsento a ricevere comunicazioni commerciali (novità e offerte) da Parrotta Pronto Moda. Posso annullare in qualsiasi momento.</span></label>
+  <div class="em-privacy" hidden></div>
+  <div class="em-errore" id="em-errore"></div>
+  <div class="em-azioni">
+    <button class="em-no" onclick="rimandaEmail()">Non ora</button>
+    <button class="em-si" id="em-invia" onclick="inviaEmailInvito()">Registrami</button>
+  </div>
+</div>
+
 <script>
   const API_URL = 'https://script.google.com/macros/s/AKfycbx09XG2XA-PrkoaueaWySeYOm8IxKX4BtNv7oTGJqxBkqkUWJOoZsSKabh1RlXFBcKVIw/exec';
   const WHATSAPP_NUMBER = '39096421546';
+  // Pagina dell'informativa privacy: quando è pronta incolla qui il link (es. 'https://…/privacy.html')
+  const PRIVACY_URL = '';
   const DIVISORE_IVA = 1.22;
 
   // ===== CLIENTE (codice personale nel link: ?c=CODICE) =====
@@ -593,6 +631,83 @@
     applyProducts(d.products);
     ripristinaCarrello();
     preparaAvvisi(d.avvisi);
+    if (d.t === undefined) pianificaInvitoEmail();   // solo con i dati appena arrivati dal server
+  }
+
+  // ===== INVITO A LASCIARE L'EMAIL =====
+  // Compare (in basso, senza bloccare) ai clienti con link personale che non hanno ancora un'email
+  // nel foglio CLIENTI. "Non ora" lo rimanda di una settimana; registrata l'email non compare più.
+  const GIORNI_RIMANDO_EMAIL = 7;
+  const emailKey = () => 'catalogo_email_' + (CLIENT_CODE || '');
+  let INVITO_TIMER = null;
+  const emailOk = s => /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(s) && s.length <= 120;
+  function statoEmailLocale() {
+    try { return JSON.parse(localStorage.getItem(emailKey()) || '{}'); } catch (e) { return {}; }
+  }
+  function salvaStatoEmail(o) {
+    try { localStorage.setItem(emailKey(), JSON.stringify(Object.assign(statoEmailLocale(), o))); } catch (e) {}
+  }
+  // true = il cliente non ha email (né sul server né registrata da questo dispositivo)
+  function serveEmail() {
+    if (!CLIENT_CODE || !CLIENTE || CLIENTE.admin || CLIENTE.haEmail !== false) return false;
+    return !statoEmailLocale().registrata;
+  }
+  function pianificaInvitoEmail() {
+    clearTimeout(INVITO_TIMER);
+    if (!serveEmail()) return;
+    const forza = new URLSearchParams(window.location.search).get('email') === '1';
+    const st = statoEmailLocale();
+    if (!forza && st.rimandato && Date.now() - st.rimandato < GIORNI_RIMANDO_EMAIL * 864e5) return;
+    INVITO_TIMER = setTimeout(mostraInvitoEmail, forza ? 800 : 20000);   // lascio prima guardare il catalogo
+  }
+  function mostraInvitoEmail() {
+    if (!serveEmail()) return;
+    const occupato = AVVISO || document.getElementById('cart-panel').classList.contains('open') ||
+      document.getElementById('report-container').classList.contains('show');
+    if (occupato) { INVITO_TIMER = setTimeout(mostraInvitoEmail, 8000); return; }
+    const priv = document.querySelector('#email-invito .em-privacy');
+    if (PRIVACY_URL) { priv.innerHTML = 'Leggi l\'<a href="' + escHtml(PRIVACY_URL) + '" target="_blank" rel="noopener">informativa privacy</a>.'; priv.hidden = false; }
+    document.getElementById('em-errore').textContent = '';
+    document.getElementById('email-invito').classList.add('show');
+    track('email', 'invito', '');
+  }
+  function chiudiInvitoEmail() { document.getElementById('email-invito').classList.remove('show'); }
+  function rimandaEmail() {
+    salvaStatoEmail({ rimandato: Date.now() });
+    chiudiInvitoEmail();
+    track('email', 'rimandato', '');
+  }
+  // Manda l'email al server (foglio CLIENTI). Risponde { ok, … }
+  async function registraEmail(email, consenso, origine) {
+    const r = await fetch(API_URL, {
+      method: 'POST', keepalive: true,
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'registraEmail', cli: CLIENT_CODE, email, consenso: !!consenso, origine: origine || 'invito' })
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'Registrazione non riuscita');
+    salvaStatoEmail({ registrata: Date.now() });
+    if (CLIENTE) Object.assign(CLIENTE, { haEmail: true, consensoEmail: !!j.consensoEmail, emailMascherata: j.emailMascherata || '' });
+    return j;
+  }
+  async function inviaEmailInvito() {
+    const email = document.getElementById('em-email').value.trim().toLowerCase();
+    const consenso = document.getElementById('em-consenso').checked;
+    const err = document.getElementById('em-errore');
+    if (!emailOk(email)) { err.textContent = 'Controlla l\'indirizzo email.'; return; }
+    if (!consenso) { err.textContent = 'Spunta il consenso per ricevere novità e offerte.'; return; }
+    const btn = document.getElementById('em-invia');
+    btn.disabled = true; btn.textContent = 'Invio…'; err.textContent = '';
+    try {
+      await registraEmail(email, true, 'invito');
+      chiudiInvitoEmail();
+      avviso('Grazie! Riceverai le nostre novità a ' + email);
+      track('email', 'registrata', '');
+    } catch (e) {
+      err.textContent = 'Non è stato possibile registrare l\'email. Riprova tra poco.';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Registrami';
+    }
   }
 
   // ===== POPUP AVVISI / PROMOZIONI (dal foglio AVVISI) =====
@@ -1573,12 +1688,24 @@
         </select></div>
       <div class="rv-campo"><label for="cart-note">📝 Note per l'ordine</label>
         <textarea id="cart-note" rows="3" maxlength="500" placeholder="Es. consegnare dopo il 20, chiamare prima di passare…" oninput="CART_EXTRA.note = this.value; salvaCarrello()">${escHtml(CART_EXTRA.note)}</textarea></div>
+      ${serveEmail() ? `<div class="rv-campo"><label for="cart-email">📧 La tua email (facoltativa)</label>
+        <input type="email" id="cart-email" placeholder="nome@esempio.it" autocomplete="email" inputmode="email" value="${escHtml(CART_EXTRA.email || '')}"
+          oninput="CART_EXTRA.email = this.value.trim(); salvaCarrello()">
+        <label class="em-consenso"><input type="checkbox" id="cart-email-consenso"${CART_EXTRA.consenso ? ' checked' : ''}
+          onchange="CART_EXTRA.consenso = this.checked; salvaCarrello()">
+          <span>Voglio ricevere anche novità e offerte via email</span></label>
+        ${PRIVACY_URL ? `<div class="em-privacy">Leggi l'<a href="${escHtml(PRIVACY_URL)}" target="_blank" rel="noopener">informativa privacy</a>.</div>` : ''}</div>` : ''}
     </div>`;
   }
 
   function azioneOrdine() {
     if (!Object.keys(CART).length) return;
     if (!REVISIONE) { REVISIONE = true; renderCart(); document.getElementById('cart-items').scrollTop = 0; return; }
+    const em = String(CART_EXTRA.email || '').trim().toLowerCase();
+    if (em && serveEmail()) {
+      if (!emailOk(em)) { avviso('Controlla l\'email oppure lascia il campo vuoto.'); document.getElementById('cart-email').focus(); return; }
+      registraEmail(em, !!CART_EXTRA.consenso, 'ordine').then(() => track('email', 'registrata', 'ordine')).catch(() => {});
+    }
     sendWhatsApp();
   }
   function tornaAlCarrello() { REVISIONE = false; renderCart(); }
