@@ -68,6 +68,39 @@
   .promo-cta { background: var(--primary); color: #fff; }
   .promo-ok { background: #eee; color: var(--dark); }
 
+  /* ===== Caricamento prodotti (ADMIN) ===== */
+  #carico-pop { position: fixed; inset: 0; z-index: 95; background: rgba(0,0,0,0.55); display: none; align-items: flex-start; justify-content: center; padding: 16px; overflow: auto; }
+  #carico-pop.show { display: flex; }
+  .cr-box { background: #fff; border-radius: 14px; width: 100%; max-width: 760px; padding: 18px 18px 20px; position: relative; box-shadow: 0 12px 40px rgba(0,0,0,0.35); }
+  .cr-box h2 { margin: 0 34px 12px 0; font-size: 19px; }
+  .cr-cerca { display: flex; gap: 8px; }
+  .cr-cerca input { flex: 1; min-width: 0; }
+  .cr-box input[type=text], .cr-box input[type=number], .cr-box textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 15px; font-family: inherit; }
+  .cr-btn { border: none; border-radius: 10px; padding: 11px 16px; font-weight: bold; font-size: 14px; cursor: pointer; background: var(--primary); color: #fff; white-space: nowrap; }
+  .cr-btn.sec { background: #eee; color: var(--dark); }
+  .cr-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .cr-info { font-size: 13px; color: #555; margin: 12px 0 6px; }
+  .cr-foto { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 4px; }
+  .cr-foto img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); background: #f3f3f3; }
+  .cr-nofoto { background: #fff8e1; border: 1px solid #ffe082; color: #6d4c00; border-radius: 10px; padding: 12px; font-size: 13px; margin: 10px 0; }
+  .cr-nofoto .cr-azioni { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .cr-tab { width: 100%; border-collapse: collapse; font-size: 13px; margin: 6px 0 10px; }
+  .cr-tab th { text-align: left; font-size: 11px; color: #777; text-transform: uppercase; padding: 6px 4px; border-bottom: 1px solid var(--border); }
+  .cr-tab td { padding: 5px 4px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  .cr-tab img { width: 34px; height: 34px; object-fit: cover; border-radius: 6px; background: #f3f3f3; display: block; }
+  .cr-tab tr.presente td { color: #aaa; }
+  .cr-griglia { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+  .cr-griglia .largo { grid-column: 1 / -1; }
+  .cr-griglia label { display: block; font-size: 12px; font-weight: bold; color: #555; margin-bottom: 4px; }
+  .cr-griglia small { color: #888; font-weight: normal; }
+  .cr-check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+  .cr-esito { font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .cr-esito.err { color: #c62828; }
+  .cr-esito.ok { color: #1b5e20; }
+  .cr-piede { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .cr-piede .cr-btn { flex: 1; }
+  @media (max-width: 560px) { .cr-griglia { grid-template-columns: 1fr; } .cr-tab .cr-ean { font-size: 11px; } }
+
   /* ===== Invito a lasciare l'email ===== */
   #email-invito { position: fixed; left: 50%; bottom: 16px; transform: translate(-50%, 140%); z-index: 85; width: calc(100% - 32px); max-width: 420px;
     background: #fff; border-radius: 14px; box-shadow: 0 10px 34px rgba(0,0,0,0.3); padding: 16px 18px 14px; transition: transform .35s ease; }
@@ -129,9 +162,9 @@
   #cart-toast.show { opacity: 1; }
 
   /* ===== MODALITÀ: vetrina (senza codice) / cliente / admin ===== */
-  #report-btn, #stats-btn, #import-btn { display: none; }
-  body.admin-mode #report-btn, body.admin-mode #stats-btn, body.admin-mode #import-btn { display: inline-block; }
-  #stats-btn, #import-btn { background: #fff; color: var(--dark); }
+  #report-btn, #stats-btn, #import-btn, #carico-btn { display: none; }
+  body.admin-mode #report-btn, body.admin-mode #stats-btn, body.admin-mode #import-btn, body.admin-mode #carico-btn { display: inline-block; }
+  #stats-btn, #import-btn, #carico-btn { background: #fff; color: var(--dark); }
   body.vetrina-mode #cart-btn { display: none; }
   #client-name { font-size: 13px; font-weight: normal; opacity: .75; margin-left: 6px; }
   #access-banner { display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 20px 10px; padding: 10px 12px; background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px; font-size: 13px; color: #6d4c00; }
@@ -322,6 +355,7 @@
       <button id="report-btn" onclick="openReport()">📄 Strumento di Vendita (PDF)</button>
       <button id="stats-btn" onclick="openStats()">📊 Visite</button>
       <button id="import-btn" onclick="openImport()">📥 Importa ordine</button>
+      <button id="carico-btn" onclick="apriCarico()">＋ Carica prodotto</button>
       <button id="cart-btn" onclick="toggleCart(true)">🛒 <span id="cart-count">0</span></button>
     </div>
   </header>
@@ -431,6 +465,19 @@
         <button class="promo-ok" onclick="chiudiAvviso()">Chiudi</button>
       </div>
     </div>
+  </div>
+</div>
+
+<div id="carico-pop" onclick="if (event.target === this) chiudiCarico()">
+  <div class="cr-box" role="dialog" aria-modal="true" aria-labelledby="cr-titolo">
+    <button class="promo-close" onclick="chiudiCarico()" aria-label="Chiudi">&times;</button>
+    <h2 id="cr-titolo">＋ Carica prodotto nel catalogo</h2>
+    <div class="cr-cerca">
+      <input type="text" id="cr-codice" placeholder="Codice prodotto (o un EAN / codice interno)" autocomplete="off"
+        onkeydown="if (event.key === 'Enter') cercaCarico()">
+      <button class="cr-btn" id="cr-cerca-btn" onclick="cercaCarico()">Cerca in BIGDATA</button>
+    </div>
+    <div id="cr-corpo"></div>
   </div>
 </div>
 
@@ -633,6 +680,161 @@
     preparaAvvisi(d.avvisi);
     if (d.t === undefined) pianificaInvitoEmail();   // solo con i dati appena arrivati dal server
   }
+
+  // ===== CARICAMENTO PRODOTTI (solo ADMIN) =====
+  // Codice prodotto → varianti (EAN, colore, misura) da BIGDATA → foto e dati da Gestione immagini
+  // → righe nel foglio CATALOGO con la data di oggi (compaiono tra i Nuovi arrivi).
+  let CR = null;   // ultima ricerca
+  function apriCarico() {
+    document.getElementById('carico-pop').classList.add('show');
+    setTimeout(() => document.getElementById('cr-codice').focus(), 50);
+  }
+  function chiudiCarico() { document.getElementById('carico-pop').classList.remove('show'); }
+  const crEl = id => document.getElementById(id);
+  const crMaiusc = s => String(s || '').trim().toUpperCase().replace(/\s+/g, ' ');
+
+  async function cercaCarico() {
+    const q = crEl('cr-codice').value.trim();
+    if (!q) return;
+    const corpo = crEl('cr-corpo'), btn = crEl('cr-cerca-btn');
+    btn.disabled = true; btn.textContent = 'Cerco…';
+    corpo.innerHTML = '<p class="cr-info">⏳ Cerco il prodotto in BIGDATA e le foto in Gestione immagini…</p>';
+    try {
+      const j = await (await fetch(API_URL + '?action=cercaprodotto&cli=' + encodeURIComponent(CLIENT_CODE) + '&q=' + encodeURIComponent(q) + '&_=' + Date.now(), { cache: 'no-store' })).json();
+      if (!j.ok) throw new Error(j.error || 'Risposta non valida');
+      CR = j;
+      CR.senzaFoto = false;
+      disegnaCarico();
+    } catch (e) {
+      corpo.innerHTML = '<p class="cr-esito err">' + escHtml(e.message === 'Failed to fetch' ? 'Server non raggiungibile: hai pubblicato la nuova versione dello script?' : e.message) + '</p>';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Cerca in BIGDATA';
+    }
+  }
+
+  // Foto di una variante: quelle del suo EAN, poi quelle del suo colore, poi tutte
+  function fotoVariante(v) {
+    const f = CR.foto || {};
+    return (f.perEan && f.perEan[crMaiusc(v.ean)]) || (f.perColore && f.perColore[crMaiusc(v.colore)]) || f.tutte || [];
+  }
+
+  function disegnaCarico() {
+    const corpo = crEl('cr-corpo');
+    const V = CR.varianti || [];
+    if (!V.length) {
+      corpo.innerHTML = '<p class="cr-esito err">Nessun articolo con codice <b>' + escHtml(crEl('cr-codice').value.trim()) + '</b> in BIGDATA (foglio ARCHIVIO).</p>';
+      return;
+    }
+    const misure = sortSizes([...new Set(V.map(v => v.misura))]);
+    V.sort((a, b) => cmpIt(a.colore, b.colore) || misure.indexOf(a.misura) - misure.indexOf(b.misura));
+    const nuove = V.filter(v => !v.giaPresente).length;
+    const e = CR.esistente || {}, d = (CR.foto && CR.foto.dati) || {}, v0 = V[0];
+    const f = CR.foto || {};
+    const opz = l => (l || []).map(x => '<option value="' + escHtml(x) + '">').join('');
+    let fotoHtml;
+    if (f.trovate) {
+      fotoHtml = '<div class="cr-info">📷 <b>' + f.trovate + ' foto</b> trovate in Gestione immagini — ogni variante prende quelle del suo colore.</div>' +
+        '<div class="cr-foto">' + f.tutte.slice(0, 12).map(u => '<img src="' + escHtml(u) + '" alt="" loading="lazy">').join('') + '</div>';
+    } else {
+      const motivo = !f.configurato ? 'Gestione immagini non è ancora collegata (manca IMMAGINI_ID in Carico.gs).'
+        : f.errore ? escHtml(f.errore) : 'Per questo prodotto non ci sono foto in Gestione immagini.';
+      fotoHtml = '<div class="cr-nofoto">⚠️ ' + motivo + '<br>Carica lì le foto e i dati del prodotto, poi torna qui e premi <b>Cerca di nuovo</b>.' +
+        '<div class="cr-azioni">' +
+        (CR.appImmagini ? '<button class="cr-btn" onclick="apriGestioneImmagini()">📷 Apri Gestione immagini</button>' : '<span>(indirizzo dell\'app non impostato: GESTIONE_IMMAGINI_URL in Carico.gs)</span>') +
+        '<button class="cr-btn sec" onclick="cercaCarico()">🔄 Cerca di nuovo</button></div>' +
+        '<label class="cr-check" style="margin-top:10px;font-size:12px"><input type="checkbox" id="cr-senzafoto"' + (CR.senzaFoto ? ' checked' : '') +
+        ' onchange="CR.senzaFoto = this.checked; aggiornaPulsanteCarico()"> Carica comunque senza foto</label></div>';
+    }
+    corpo.innerHTML =
+      '<div class="cr-info"><b>' + escHtml(CR.codice) + '</b>' + (v0.brand ? ' · ' + escHtml(v0.brand) : '') + ' · ' + V.length + ' varianti' +
+        (V.length - nuove ? ' (' + (V.length - nuove) + ' già nel catalogo)' : '') + (CR.esistente ? ' · dati ripresi dal catalogo' : '') + '</div>' +
+      fotoHtml +
+      '<table class="cr-tab"><thead><tr><th><input type="checkbox" id="cr-tutti" checked onchange="document.querySelectorAll(\'.cr-sel:not(:disabled)\').forEach(x => x.checked = this.checked); aggiornaPulsanteCarico()"></th>' +
+        '<th>Foto</th><th>EAN</th><th>Colore</th><th>Misura</th><th></th></tr></thead><tbody>' +
+      V.map((v, i) => {
+        const fv = fotoVariante(v)[0];
+        return '<tr class="' + (v.giaPresente ? 'presente' : '') + '"><td><input type="checkbox" class="cr-sel" data-i="' + i + '"' + (v.giaPresente ? ' disabled' : ' checked') + ' onchange="aggiornaPulsanteCarico()"></td>' +
+          '<td>' + (fv ? '<img src="' + escHtml(fv) + '" alt="" loading="lazy">' : '—') + '</td>' +
+          '<td class="cr-ean">' + escHtml(v.ean) + '</td><td>' + escHtml(v.colore || '—') + '</td><td>' + escHtml(v.misura || '—') + '</td>' +
+          '<td>' + (v.giaPresente ? '<small>già presente</small>' : '') + '</td></tr>';
+      }).join('') + '</tbody></table>' +
+      '<div class="cr-griglia">' +
+        '<div class="largo"><label for="cr-nome">Nome</label><input type="text" id="cr-nome" value="' + escHtml(e.nome || d.nome || v0.descrizione || '') + '"></div>' +
+        '<div class="largo"><label for="cr-descr">Descrizione</label><textarea id="cr-descr" rows="2">' + escHtml(e.descrizione || d.descrizione || '') + '</textarea></div>' +
+        '<div><label for="cr-categoria">Categoria *</label><input type="text" id="cr-categoria" list="cr-l-cat" value="' + escHtml(e.categoria || '') + '"><datalist id="cr-l-cat">' + opz(CR.categorie) + '</datalist></div>' +
+        '<div><label for="cr-catalogo">Nome catalogo *</label><input type="text" id="cr-catalogo" list="cr-l-catal" value="' + escHtml(e.catalogo || v0.brand || '') + '"><datalist id="cr-l-catal">' + opz(CR.cataloghi) + '</datalist></div>' +
+        '<div><label for="cr-prezzo">Prezzo IVA inclusa <small id="cr-netto"></small></label><input type="number" id="cr-prezzo" step="0.01" min="0" value="' + (e.prezzo || v0.prezzo || '') + '" oninput="aggiornaNetto()"></div>' +
+        '<div><label for="cr-collo">Pezzi per collo</label><input type="number" id="cr-collo" min="1" step="1" value="' + (e.pezziCollo || v0.confezione || 1) + '"></div>' +
+        '<div><label for="cr-tipo">Tipo</label><input type="text" id="cr-tipo" list="cr-l-tipo" value="' + escHtml(e.tipo || d.tipo || '') + '"><datalist id="cr-l-tipo">' + opz(CR.tipi) + '</datalist></div>' +
+        '<div><label for="cr-mat">Materiale</label><input type="text" id="cr-mat" list="cr-l-mat" value="' + escHtml(e.materiale || d.materiale || '') + '"><datalist id="cr-l-mat">' + opz(CR.materiali) + '</datalist></div>' +
+        '<div class="largo"><label class="cr-check"><input type="checkbox" id="cr-ordinabile"' + (e.ordinabile ? ' checked' : '') + '> Ordinabile anche senza giacenza (prevendita)</label></div>' +
+      '</div>' +
+      '<div class="cr-esito" id="cr-esito"></div>' +
+      '<div class="cr-piede"><button class="cr-btn sec" onclick="chiudiCarico()">Chiudi</button>' +
+        '<button class="cr-btn" id="cr-salva" onclick="salvaCarico()"></button></div>';
+    aggiornaNetto();
+    aggiornaPulsanteCarico();
+  }
+
+  function aggiornaNetto() {
+    const p = Number(crEl('cr-prezzo').value) || 0;
+    crEl('cr-netto').textContent = p ? '(€ ' + (p / DIVISORE_IVA).toFixed(2) + ' + IVA)' : '';
+  }
+  function crScelte() { return [...document.querySelectorAll('.cr-sel:checked:not(:disabled)')].map(x => CR.varianti[+x.dataset.i]); }
+  function aggiornaPulsanteCarico() {
+    const b = crEl('cr-salva'); if (!b) return;
+    const n = crScelte().length;
+    const fotoOk = (CR.foto && CR.foto.trovate) || CR.senzaFoto;
+    b.disabled = !n || !fotoOk;
+    b.textContent = !n ? 'Nessuna variante da caricare' : !fotoOk ? 'Prima carica le foto' : '✅ Carica ' + n + (n === 1 ? ' variante' : ' varianti') + ' nel catalogo';
+  }
+  function apriGestioneImmagini() {
+    const u = new URL(CR.appImmagini);
+    const v0 = (CR.varianti || [])[0] || {};
+    u.searchParams.set('codice', CR.codice || '');
+    if (v0.brand) u.searchParams.set('brand', v0.brand);
+    window.open(u.toString(), '_blank');
+  }
+
+  async function salvaCarico() {
+    const es = crEl('cr-esito');
+    const scelte = crScelte();
+    const comune = {
+      codice: CR.codice, nome: crEl('cr-nome').value.trim(), descrizione: crEl('cr-descr').value.trim(),
+      categoria: crEl('cr-categoria').value.trim(), catalogo: crEl('cr-catalogo').value.trim(),
+      prezzo: Number(crEl('cr-prezzo').value) || 0, pezziCollo: Number(crEl('cr-collo').value) || 1,
+      tipo: crEl('cr-tipo').value.trim(), materiale: crEl('cr-mat').value.trim(), ordinabile: crEl('cr-ordinabile').checked,
+      immagini: (CR.foto && CR.foto.tutte) || []
+    };
+    es.className = 'cr-esito err';
+    if (!comune.categoria) { es.textContent = 'Scrivi la categoria.'; crEl('cr-categoria').focus(); return; }
+    if (!comune.catalogo) { es.textContent = 'Scrivi il nome del catalogo.'; crEl('cr-catalogo').focus(); return; }
+    if (!comune.prezzo && !confirm('Il prezzo è vuoto: caricare comunque?')) return;
+    const b = crEl('cr-salva'); b.disabled = true; b.textContent = 'Carico…'; es.className = 'cr-esito'; es.textContent = '';
+    try {
+      const r = await fetch(API_URL, {
+        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'caricaProdotti', cli: CLIENT_CODE, comune,
+          righe: scelte.map(v => ({ ean: v.ean, misura: v.misura, colore: v.colore, immagini: fotoVariante(v) })) })
+      });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'Caricamento non riuscito');
+      scelte.forEach(v => { v.giaPresente = true; });
+      disegnaCarico();
+      const es2 = crEl('cr-esito');
+      es2.className = 'cr-esito ok';
+      es2.innerHTML = '✅ ' + j.aggiunti + (j.aggiunti === 1 ? ' variante aggiunta' : ' varianti aggiunte') + ' al foglio CATALOGO.' +
+        (j.saltati && j.saltati.length ? '<br><small>Saltati: ' + escHtml(j.saltati.join(', ')) + '</small>' : '') +
+        '<br><small>Il catalogo si aggiorna da solo; puoi cercare un altro codice.</small>';
+      crEl('cr-codice').select();
+      try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+      loadProducts();
+    } catch (e) {
+      es.className = 'cr-esito err'; es.textContent = e.message;
+      aggiornaPulsanteCarico();
+    }
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && crEl('carico-pop').classList.contains('show')) chiudiCarico(); });
 
   // ===== INVITO A LASCIARE L'EMAIL =====
   // Compare (in basso, senza bloccare) ai clienti con link personale che non hanno ancora un'email
