@@ -859,6 +859,7 @@ async function carica(force, completo) {
         collegatiOra = 0;
         renderTutto();
         salvaCacheLocale();
+        importaEmailCatalogo();
         const v = DATA.vendite || {};
         const vend = v.completo ? ` · vendite rilette per intero (${esc(v.motivo)})` : (v.nuove ? ` · <b>+${v.nuove.toLocaleString('it-IT')}</b> nuove righe vendite` : ' · nessuna nuova riga vendite');
         $('statoDati').innerHTML = `Dati aggiornati alle ${new Date(DATA.aggiornato).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} · ${DATA.clienti.length} clienti${force ? vend : ''}`;
@@ -1537,8 +1538,44 @@ async function caricaMappaCatalogo(mostraEsito) {
         const n = Object.keys(CAT.clienti).length;
         if (mostraEsito) $('sCatEsito').innerHTML = `<span class="text-success"><i class="fas fa-check-circle me-1"></i>${n} clienti con link al catalogo</span>`;
         if (DATA && $('cmpOfferta') && $('cmpOfferta').value) renderCampagna();
+        importaEmailCatalogo();
     } catch (e) {
         if (mostraEsito) $('sCatEsito').innerHTML = `<span class="text-danger">${esc(e.message)}</span>`;
+    }
+}
+
+// Email lasciate dai clienti nel catalogo (con consenso): vanno nella scheda del cliente
+// SOLO se qui l'email manca, così non sovrascrivo mai un indirizzo inserito a mano.
+// Parte da sola all'avvio e dopo "Aggiorna dai Fogli"; serve il collegamento al catalogo.
+let EMAIL_IN_CORSO = false;
+async function importaEmailCatalogo() {
+    if (EMAIL_IN_CORSO || !catalogoCollegato() || !DATA || !Array.isArray(DATA.clienti)) return;
+    EMAIL_IN_CORSO = true;
+    try {
+        const j = await (await fetch(urlCatalogo('emailclienti'))).json();
+        if (!j.ok || !j.email) return;   // server del catalogo non ancora aggiornato: nessun problema
+        const mancanti = DATA.clienti.filter(c => !String(c.email || '').trim() && j.email[String(c.codice).trim().toUpperCase()]);
+        let fatti = 0;
+        for (const c of mancanti) {
+            const email = j.email[String(c.codice).trim().toUpperCase()].email;
+            // invio la scheda COMPLETA con la sola email cambiata, così gli altri campi restano com'erano
+            const cli = {
+                codice: c.codice, nome: c.nome, piva: c.piva || '', referente: c.referente || '', tel: c.tel || '', email: email,
+                citta: c.citta || '', giorniConc: +c.giorniConc || 0, fido: +c.fido || 0, inizioRapporto: c.inizioRapporto || '',
+                attivo: c.attivo !== false, note: c.note || '', nomiCollegati: Array.isArray(c.nomiCollegati) ? c.nomiCollegati : []
+            };
+            try { await api('saveCliente', { cliente: cli, nuovo: false }); c.email = email; fatti++; }
+            catch (e) { console.warn('Email non salvata per ' + c.codice, e); }
+        }
+        if (fatti) {
+            salvaCacheLocale();
+            if ($('cmpOfferta') && $('cmpOfferta').value) renderCampagna();
+            toast(`<i class="fas fa-envelope me-1"></i>${fatti === 1 ? '1 email nuova arrivata' : fatti + ' email nuove arrivate'} dal catalogo e salvata nelle schede clienti.`);
+        }
+    } catch (e) {
+        console.warn('Email dal catalogo non lette', e);
+    } finally {
+        EMAIL_IN_CORSO = false;
     }
 }
 
