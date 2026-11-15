@@ -596,21 +596,34 @@
   }
 
   // ===== POPUP AVVISI / PROMOZIONI (dal foglio AVVISI) =====
-  // Ogni avviso si vede una volta per dispositivo ("UNA VOLTA") o una volta per visita ("OGNI VISITA").
+  // Ripetizione (colonna J del foglio AVVISI):
+  //  UNA VOLTA  → una sola volta per dispositivo
+  //  OGNI GIORNO → alla prima apertura di ogni giorno
+  //  OGNI VISITA → ogni volta che il catalogo viene aperto
   // ?avvisi=tutti mostra di nuovo tutti quelli attivi (utile per controllarli).
   const AVVISI_VISTI_KEY = 'catalogo_avvisi_visti';
   let CODA_AVVISI = [], AVVISO = null;
   const oggiIso = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
-  function avvisiVisti(sessione) {
-    try { return JSON.parse((sessione ? sessionStorage : localStorage).getItem(AVVISI_VISTI_KEY) || '{}'); } catch (e) { return {}; }
+  const frequenzaAvviso = a => a.frequenza || (a.ogniVisita ? 'visita' : 'una');
+  function avvisiVisti() {
+    try { return JSON.parse(localStorage.getItem(AVVISI_VISTI_KEY) || '{}'); } catch (e) { return {}; }
+  }
+  function giaVisto(a) {
+    const f = frequenzaAvviso(a), v = avvisiVisti()[a.id];
+    if (f === 'visita') return false;
+    if (f === 'giorno') return v === oggiIso();
+    return !!v;
   }
   function segnaVisto(a) {
+    const f = frequenzaAvviso(a);
+    if (f === 'visita') return;
     try {
-      const st = a.ogniVisita ? sessionStorage : localStorage;
-      const v = avvisiVisti(a.ogniVisita); v[a.id] = Date.now();
-      st.setItem(AVVISI_VISTI_KEY, JSON.stringify(v));
+      const v = avvisiVisti();
+      v[a.id] = f === 'giorno' ? oggiIso() : Date.now();
+      localStorage.setItem(AVVISI_VISTI_KEY, JSON.stringify(v));
     } catch (e) {}
   }
+  const AVVISI_MOSTRATI = new Set();   // in questa apertura ogni avviso compare una volta sola
 
   function preparaAvvisi(lista) {
     if (!Array.isArray(lista) || !lista.length) return;
@@ -621,7 +634,8 @@
       if (!a || !a.id || giaInCoda.has(a.id)) return;
       if (a.al && oggi > a.al) return;                 // scaduto (dati rimasti in memoria)
       if (a.dal && oggi < a.dal) return;
-      if (!tutti && avvisiVisti(a.ogniVisita)[a.id]) return;
+      if (AVVISI_MOSTRATI.has(a.id)) return;
+      if (!tutti && giaVisto(a)) return;
       CODA_AVVISI.push(a);
     });
     if (!AVVISO) setTimeout(prossimoAvviso, 600);      // lascio comparire prima il catalogo
@@ -650,6 +664,7 @@
     cta.textContent = a.pulsante || '';
     document.getElementById('promo-pop').classList.add('show');
     segnaVisto(a);
+    AVVISI_MOSTRATI.add(a.id);
     track('avviso', 'popup', a.titolo);
   }
 
