@@ -49,6 +49,25 @@
   .fav-tag { position: absolute; left: 8px; bottom: 8px; background: #fff8e1; color: #6d4c00; border: 1px solid #f0c36d; font-size: 10px; font-weight: bold; padding: 2px 7px; border-radius: 10px; pointer-events: none; }
   #cart-limit { font-size: 12px; color: #888; margin: -6px 0 10px; }
 
+  /* ===== Popup avvisi / promozioni ===== */
+  #promo-pop { position: fixed; inset: 0; z-index: 90; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; padding: 18px; }
+  #promo-pop.show { display: flex; animation: popIn .25s ease; }
+  @keyframes popIn { from { opacity: 0; } to { opacity: 1; } }
+  .promo-box { background: #fff; border-radius: 16px; width: 100%; max-width: 440px; max-height: 92vh; overflow: auto; position: relative;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.35); animation: popUp .3s ease; }
+  @keyframes popUp { from { transform: translateY(18px) scale(.97); } to { transform: none; } }
+  .promo-box img { width: 100%; max-height: 300px; object-fit: cover; display: block; border-radius: 16px 16px 0 0; background: #f3f3f3; }
+  .promo-close { position: absolute; top: 8px; right: 8px; width: 34px; height: 34px; border-radius: 50%; border: none; background: rgba(0,0,0,0.55);
+    color: #fff; font-size: 20px; line-height: 1; cursor: pointer; z-index: 2; }
+  .promo-body { padding: 18px 20px 20px; }
+  .promo-body h2 { margin: 0 0 8px; font-size: 21px; }
+  .promo-testo { font-size: 15px; color: #444; line-height: 1.5; white-space: pre-line; }
+  .promo-scad { display: inline-block; margin-top: 12px; font-size: 12px; font-weight: 700; color: #b71c1c; background: #ffebee; border-radius: 10px; padding: 3px 10px; }
+  .promo-azioni { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .promo-azioni button { flex: 1; min-width: 120px; padding: 12px; border-radius: 10px; font-weight: bold; font-size: 14px; cursor: pointer; border: none; }
+  .promo-cta { background: var(--primary); color: #fff; }
+  .promo-ok { background: #eee; color: var(--dark); }
+
   /* ===== Articolo terminato: fascia rossa in diagonale ===== */
   .card.terminato .card-img { filter: grayscale(0.85); opacity: 0.6; }
   .terminato-band { position: absolute; top: 50%; left: -20%; width: 140%; transform: translateY(-50%) rotate(-24deg); z-index: 2;
@@ -379,6 +398,22 @@
 </div>
 <div id="cart-toast"></div>
 
+<div id="promo-pop" onclick="if (event.target === this) chiudiAvviso()">
+  <div class="promo-box" role="dialog" aria-modal="true" aria-labelledby="promo-titolo">
+    <button class="promo-close" onclick="chiudiAvviso()" aria-label="Chiudi">&times;</button>
+    <img id="promo-img" alt="" hidden>
+    <div class="promo-body">
+      <h2 id="promo-titolo"></h2>
+      <div id="promo-testo" class="promo-testo"></div>
+      <span id="promo-scad" class="promo-scad" hidden></span>
+      <div class="promo-azioni">
+        <button id="promo-cta" class="promo-cta" onclick="azioneAvviso()" hidden></button>
+        <button class="promo-ok" onclick="chiudiAvviso()">Chiudi</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   const API_URL = 'https://script.google.com/macros/s/AKfycbx09XG2XA-PrkoaueaWySeYOm8IxKX4BtNv7oTGJqxBkqkUWJOoZsSKabh1RlXFBcKVIw/exec';
   const WHATSAPP_NUMBER = '39096421546';
@@ -541,7 +576,7 @@
     return null;
   }
   function writeCache(data) {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), products: data.products, cliente: data.cliente || null, prezzi: data.prezzi })); } catch (e) {}
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ t: Date.now(), products: data.products, cliente: data.cliente || null, prezzi: data.prezzi, avvisi: data.avvisi || [] })); } catch (e) {}
   }
   function productsUrl() {
     return API_URL + '?action=products' + (CLIENT_CODE ? '&cli=' + encodeURIComponent(CLIENT_CODE) : '');
@@ -557,7 +592,94 @@
     applyMode();
     applyProducts(d.products);
     ripristinaCarrello();
+    preparaAvvisi(d.avvisi);
   }
+
+  // ===== POPUP AVVISI / PROMOZIONI (dal foglio AVVISI) =====
+  // Ogni avviso si vede una volta per dispositivo ("UNA VOLTA") o una volta per visita ("OGNI VISITA").
+  // ?avvisi=tutti mostra di nuovo tutti quelli attivi (utile per controllarli).
+  const AVVISI_VISTI_KEY = 'catalogo_avvisi_visti';
+  let CODA_AVVISI = [], AVVISO = null;
+  const oggiIso = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  function avvisiVisti(sessione) {
+    try { return JSON.parse((sessione ? sessionStorage : localStorage).getItem(AVVISI_VISTI_KEY) || '{}'); } catch (e) { return {}; }
+  }
+  function segnaVisto(a) {
+    try {
+      const st = a.ogniVisita ? sessionStorage : localStorage;
+      const v = avvisiVisti(a.ogniVisita); v[a.id] = Date.now();
+      st.setItem(AVVISI_VISTI_KEY, JSON.stringify(v));
+    } catch (e) {}
+  }
+
+  function preparaAvvisi(lista) {
+    if (!Array.isArray(lista) || !lista.length) return;
+    const tutti = new URLSearchParams(window.location.search).get('avvisi') === 'tutti';
+    const oggi = oggiIso();
+    const giaInCoda = new Set(CODA_AVVISI.map(a => a.id).concat(AVVISO ? [AVVISO.id] : []));
+    lista.forEach(a => {
+      if (!a || !a.id || giaInCoda.has(a.id)) return;
+      if (a.al && oggi > a.al) return;                 // scaduto (dati rimasti in memoria)
+      if (a.dal && oggi < a.dal) return;
+      if (!tutti && avvisiVisti(a.ogniVisita)[a.id]) return;
+      CODA_AVVISI.push(a);
+    });
+    if (!AVVISO) setTimeout(prossimoAvviso, 600);      // lascio comparire prima il catalogo
+  }
+
+  function prossimoAvviso() {
+    if (AVVISO || !CODA_AVVISI.length) return;
+    if (document.getElementById('report-container').classList.contains('show')) return;
+    AVVISO = CODA_AVVISI.shift();
+    const a = AVVISO;
+    const img = document.getElementById('promo-img');
+    img.hidden = !a.immagine;
+    if (a.immagine) { img.src = a.immagine; img.onerror = () => { img.hidden = true; }; }
+    document.getElementById('promo-titolo').textContent = a.titolo || '';
+    // testo con a capo e *grassetto* come su WhatsApp
+    document.getElementById('promo-testo').innerHTML = escHtml(a.testo || '').replace(/\*([^*\n]+)\*/g, '<b>$1</b>');
+    const scad = document.getElementById('promo-scad');
+    const restano = a.al ? Math.round((new Date(a.al + 'T00:00:00') - new Date(oggiIso() + 'T00:00:00')) / 864e5) : null;
+    scad.hidden = restano === null;
+    if (restano !== null) {
+      const [y, m, g] = a.al.split('-');
+      scad.textContent = restano <= 0 ? '⏳ Ultimo giorno!' : restano === 1 ? '⏳ Termina domani' : restano <= 3 ? '⏳ Ultimi ' + (restano + 1) + ' giorni' : '⏳ Fino al ' + g + '/' + m + '/' + y;
+    }
+    const cta = document.getElementById('promo-cta');
+    cta.hidden = !(a.pulsante && a.link);
+    cta.textContent = a.pulsante || '';
+    document.getElementById('promo-pop').classList.add('show');
+    segnaVisto(a);
+    track('avviso', 'popup', a.titolo);
+  }
+
+  function chiudiAvviso() {
+    document.getElementById('promo-pop').classList.remove('show');
+    AVVISO = null;
+    setTimeout(prossimoAvviso, 400);
+  }
+
+  // Pulsante dell'avviso: "?…" apre il catalogo con quei filtri (es. ?nuovi=1, ?catalogo=…),
+  // "whatsapp" apre la chat con voi, un link https si apre in una nuova scheda
+  function azioneAvviso() {
+    const a = AVVISO; if (!a) return;
+    const link = String(a.link || '').trim();
+    track('avviso', 'clic', a.titolo);
+    chiudiAvviso();
+    if (!link) return;
+    if (/^whatsapp$/i.test(link)) {
+      window.open('https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent('Ciao! Vorrei informazioni su: ' + (a.titolo || '')), '_blank');
+    } else if (link.charAt(0) === '?') {
+      const u = new URL(window.location.href.split('?')[0].split('#')[0]);
+      new URLSearchParams(link.slice(1)).forEach((v, k) => u.searchParams.set(k, v));
+      const cond = new URLSearchParams(window.location.search).get('condiviso');
+      if (cond) u.searchParams.set('condiviso', cond);
+      window.location.href = u.toString();
+    } else if (/^https?:\/\//i.test(link)) {
+      window.open(link, '_blank', 'noopener');
+    }
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && AVVISO) chiudiAvviso(); });
 
   function applyMode() {
     document.body.classList.toggle('vetrina-mode', !PREZZI);
