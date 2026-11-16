@@ -100,6 +100,12 @@
   .cr-piede { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
   .cr-piede .cr-btn { flex: 1; }
   @media (max-width: 560px) { .cr-griglia { grid-template-columns: 1fr; } .cr-tab .cr-ean { font-size: 11px; } }
+  .cr-ftw { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .cr-ftb { display: flex; gap: 2px; }
+  .cr-ftb button { border: 1px solid var(--border); background: #fff; border-radius: 6px; width: 23px; height: 22px; font-size: 10px; padding: 0; cursor: pointer; color: #333; }
+  .cr-ftb button:disabled { opacity: .3; cursor: default; }
+  .cr-pos { position: absolute; right: 2px; top: 2px; background: rgba(0,0,0,.72); color: #fff; font-size: 10px; font-weight: bold; padding: 1px 5px; border-radius: 8px; line-height: 1.4; }
+  .cr-pos.cop { background: #f9a825; color: #222; }
   .cr-ft { position: relative; padding: 0; border: 3px solid var(--primary); border-radius: 10px; background: none; cursor: pointer; line-height: 0; }
   .cr-ft img { width: 64px; height: 64px; border: none; border-radius: 7px; }
   .cr-ft.off { border-color: #ddd; opacity: .35; }
@@ -225,6 +231,14 @@
   .variant-color-group:first-child { margin-top: 0; }
   .variant-color-name { font-size: 11px; font-weight: 600; color: #444; text-align: right; margin-bottom: 4px; }
   .variant-size-row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .col-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; margin-bottom: 8px; }
+  .col-chip { border: 1px solid var(--border); background: #fff; color: #333; border-radius: 14px; padding: 4px 10px; font-size: 11px; font-weight: 600; cursor: pointer; position: relative; font-family: inherit; }
+  .col-chip.on { background: var(--dark); color: #fff; border-color: var(--dark); }
+  .col-chip.esaurito { color: #aaa; text-decoration: line-through; }
+  .col-chip.on.esaurito { color: #ddd; }
+  .col-chip.tutti { border-style: dashed; color: #666; }
+  .col-chip.tutti.on { background: #fff; color: #333; border-color: #999; }
+  .col-chip-n { display: inline-block; margin-left: 5px; background: var(--primary); color: #fff; border-radius: 9px; padding: 0 5px; font-size: 10px; line-height: 15px; }
 
   .variant-matrix { border-collapse: collapse; font-size: 11px; margin-left: auto; }
   .variant-matrix th, .variant-matrix td { padding: 3px; text-align: center; }
@@ -741,8 +755,10 @@
 
   // Foto disponibili: quelle già nel catalogo + quelle di Gestione immagini. Spunta = usata nel catalogo.
   function preparaFoto() {
+    // ordine di partenza: quello già nel catalogo (la variante con più foto per prima), poi le nuove
     const nelCatalogo = [];
-    variantiMie().forEach(v => (v.immaginiCatalogo || []).forEach(u => { if (nelCatalogo.indexOf(u) < 0) nelCatalogo.push(u); }));
+    variantiMie().slice().sort((a, b) => (b.immaginiCatalogo || []).length - (a.immaginiCatalogo || []).length)
+      .forEach(v => (v.immaginiCatalogo || []).forEach(u => { if (nelCatalogo.indexOf(u) < 0) nelCatalogo.push(u); }));
     const gi = (CR.foto && CR.foto.tutte) || [];
     CR.fotoCatalogo = nelCatalogo;
     CR.fotoTutte = nelCatalogo.concat(gi.filter(u => nelCatalogo.indexOf(u) < 0));
@@ -751,8 +767,42 @@
   function toggleFoto(i) {
     const u = CR.fotoTutte[i];
     if (CR.fotoSel.has(u)) CR.fotoSel.delete(u); else CR.fotoSel.add(u);
-    const el = document.querySelector('.cr-ft[data-i="' + i + '"]');
-    if (el) el.classList.toggle('off', !CR.fotoSel.has(u));
+    disegnaFoto();
+  }
+  // Sposta una foto a sinistra/destra: l'ordine è quello della galleria nel catalogo (la n.1 è la copertina)
+  function muoviFoto(i, dir) {
+    const j = i + dir, L = CR.fotoTutte;
+    if (j < 0 || j >= L.length) return;
+    [L[i], L[j]] = [L[j], L[i]];
+    disegnaFoto();
+  }
+  function copertinaFoto(i) {
+    const L = CR.fotoTutte;
+    L.unshift(L.splice(i, 1)[0]);
+    CR.fotoSel.add(L[0]);
+    disegnaFoto();
+  }
+  function htmlFoto() {
+    let n = 0;
+    return CR.fotoTutte.map((u, i) => {
+      const on = CR.fotoSel.has(u);
+      const pos = on ? ++n : 0;
+      return '<div class="cr-ftw">' +
+        '<button type="button" class="cr-ft' + (on ? '' : ' off') + '" onclick="toggleFoto(' + i + ')" title="' + (on ? 'Togli dal catalogo' : 'Rimetti nel catalogo') + '">' +
+          '<img src="' + escHtml(u) + '" alt="" loading="lazy">' +
+          (on ? '<span class="cr-pos' + (pos === 1 ? ' cop' : '') + '">' + (pos === 1 ? '★ 1' : pos) + '</span>' : '') +
+          (CR.fotoCatalogo.indexOf(u) < 0 ? '<span class="cr-new">NUOVA</span>' : '') + '</button>' +
+        '<div class="cr-ftb"><button type="button" onclick="muoviFoto(' + i + ', -1)"' + (i ? '' : ' disabled') + ' aria-label="Sposta a sinistra">◀</button>' +
+          '<button type="button" onclick="copertinaFoto(' + i + ')"' + (pos === 1 ? ' disabled' : '') + ' title="Metti come copertina">★</button>' +
+          '<button type="button" onclick="muoviFoto(' + i + ', 1)"' + (i < CR.fotoTutte.length - 1 ? '' : ' disabled') + ' aria-label="Sposta a destra">▶</button></div></div>';
+    }).join('');
+  }
+  function disegnaFoto() {
+    const box = crEl('cr-foto-box');
+    if (box) box.innerHTML = htmlFoto();
+    // anteprima nella tabella delle varianti
+    const prima = [...CR.fotoTutte].find(u => CR.fotoSel.has(u)) || '';
+    document.querySelectorAll('.cr-tab img').forEach(im => { if (prima) im.src = prima; });
     aggiornaPulsanteCarico();
   }
 
@@ -762,16 +812,10 @@
     return (f.perEan && f.perEan[crMaiusc(v.ean)]) || (f.perColore && f.perColore[crMaiusc(v.colore)]) ||
       (f.generiche && f.generiche.length ? f.generiche : null) || f.tutte || [];
   }
-  // Elenco finale delle foto di una variante (solo quelle spuntate)
+  // Elenco finale delle foto di una variante: tutte quelle spuntate, nell'ordine scelto.
+  // Ogni variante riceve la stessa sequenza, così la galleria del catalogo la mostra esattamente così.
   function fotoVariante(v) {
-    const sel = u => CR.fotoSel.has(u);
-    const out = [];
-    const metti = u => { if (sel(u) && out.indexOf(u) < 0) out.push(u); };
-    (v.immaginiCatalogo || []).forEach(metti);
-    fotoGI(v).forEach(metti);
-    if (!out.length) (CR.fotoCatalogo || []).forEach(metti);   // nuova taglia di un prodotto già caricato
-    if (!out.length) CR.fotoTutte.forEach(metti);
-    return out;
+    return CR.fotoTutte.filter(u => CR.fotoSel.has(u));
   }
 
   function disegnaCarico() {
@@ -795,9 +839,7 @@
       const nGI = CR.fotoTutte.length - CR.fotoCatalogo.length;
       fotoHtml = '<div class="cr-info">📷 ' + (CR.fotoCatalogo.length ? '<b>' + CR.fotoCatalogo.length + '</b> nel catalogo' : '') +
         (CR.fotoCatalogo.length && nGI ? ' · ' : '') + (nGI ? '<b>' + nGI + ' nuove</b> da Gestione immagini' : '') +
-        '. Tocca una foto per toglierla o rimetterla.</div><div class="cr-foto">' +
-        CR.fotoTutte.map((u, i) => '<button type="button" class="cr-ft' + (CR.fotoSel.has(u) ? '' : ' off') + '" data-i="' + i + '" onclick="toggleFoto(' + i + ')">' +
-          '<img src="' + escHtml(u) + '" alt="" loading="lazy">' + (CR.fotoCatalogo.indexOf(u) < 0 ? '<span class="cr-new">NUOVA</span>' : '') + '</button>').join('') + '</div>';
+        '. Tocca una foto per toglierla o rimetterla; con ◀ ▶ decidi l\'ordine, ★ la mette come copertina.</div><div class="cr-foto" id="cr-foto-box">' + htmlFoto() + '</div>';
     }
     if (!(f.trovate) || esiste()) {
       const motivo = !f.configurato ? 'Gestione immagini non è ancora collegata.' : f.errore ? escHtml(f.errore)
@@ -1657,6 +1699,24 @@
     const map = {};
     g.variants.forEach(v => { map[(v.misura || '') + '|' + (v.colore || '')] = v; });
 
+    // Più di MAX_COLORI_SCHEDA colori: un colore alla volta, scelto con le "pastiglie" (la scheda resta corta)
+    const gk = String(g.codiceProdotto || g.variants[0].id);
+    GRUPPI[gk] = g;
+    let pastiglie = '';
+    const tuttiColori = colori;
+    if (colori.length > MAX_COLORI_SCHEDA && colori[0] !== '') {
+      const disp = col => g.variants.some(v => v.colore === col && v.disponibile);
+      const colliCol = col => g.variants.filter(v => v.colore === col).reduce((t, v) => t + (CART[v.id] ? CART[v.id].qty : 0), 0);
+      let sel = COL_SEL[gk];
+      if (sel !== '*' && tuttiColori.indexOf(sel) < 0) sel = tuttiColori.find(disp) || tuttiColori[0];
+      COL_SEL[gk] = sel;
+      pastiglie = `<div class="col-chips" data-k="${escHtml(gk)}">${tuttiColori.map(col => {
+        const n = colliCol(col);
+        return `<button type="button" class="col-chip${col === sel ? ' on' : ''}${disp(col) ? '' : ' esaurito'}" data-col="${escHtml(col)}">${escHtml(col)}${n ? `<span class="col-chip-n">${n}</span>` : ''}</button>`;
+      }).join('')}<button type="button" class="col-chip tutti${sel === '*' ? ' on' : ''}" data-col="*">${sel === '*' ? 'Riduci ▴' : 'Tutti (' + tuttiColori.length + ') ▾'}</button></div>`;
+      if (sel !== '*') colori = [sel];
+    }
+
     const blocks = colori.map(col => {
       const cells = misure.map(m => {
         const v = map[m + '|' + col];
@@ -1691,8 +1751,19 @@
       </div>`;
     }).join('');
 
-    return `<div class="variant-matrix-wrap">${blocks}</div>`;
+    return `<div class="variant-matrix-wrap" data-k="${escHtml(gk)}">${pastiglie}${blocks}</div>`;
   }
+
+  const MAX_COLORI_SCHEDA = 3;
+  const GRUPPI = {}, COL_SEL = {};   // gruppo per chiave; colore scelto per scheda ('*' = tutti)
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('.col-chip');
+    if (!b) return;
+    const box = b.closest('.col-chips'), k = box.dataset.k;
+    COL_SEL[k] = b.dataset.col === '*' && COL_SEL[k] === '*' ? '' : b.dataset.col;
+    const wrap = document.querySelector('.variant-matrix-wrap[data-k="' + (window.CSS && CSS.escape ? CSS.escape(k) : k) + '"]');
+    if (wrap && GRUPPI[k]) wrap.outerHTML = renderVariantMatrix(GRUPPI[k]);
+  });
 
   // === FOTO INGRANDITA ===
   // ===== GALLERIA FOTO =====
