@@ -715,7 +715,9 @@
   // Foto di una variante: quelle del suo EAN, poi quelle del suo colore, poi tutte
   function fotoVariante(v) {
     const f = CR.foto || {};
-    return (f.perEan && f.perEan[crMaiusc(v.ean)]) || (f.perColore && f.perColore[crMaiusc(v.colore)]) || f.tutte || [];
+    // EAN → colore → foto senza colore (valgono per tutti) → tutte
+    return (f.perEan && f.perEan[crMaiusc(v.ean)]) || (f.perColore && f.perColore[crMaiusc(v.colore)]) ||
+      (f.generiche && f.generiche.length ? f.generiche : null) || f.tutte || [];
   }
 
   function disegnaCarico() {
@@ -733,7 +735,7 @@
     const opz = l => (l || []).map(x => '<option value="' + escHtml(x) + '">').join('');
     let fotoHtml;
     if (f.trovate) {
-      fotoHtml = '<div class="cr-info">📷 <b>' + f.trovate + ' foto</b> trovate in Gestione immagini — ogni variante prende quelle del suo colore.</div>' +
+      fotoHtml = '<div class="cr-info">📷 <b>' + f.trovate + ' foto</b> trovate in Gestione immagini — dove il colore è indicato, ogni variante prende le foto del suo colore; le altre valgono per tutte.</div>' +
         '<div class="cr-foto">' + f.tutte.slice(0, 12).map(u => '<img src="' + escHtml(u) + '" alt="" loading="lazy">').join('') + '</div>';
     } else {
       const motivo = !f.configurato ? 'Gestione immagini non è ancora collegata (manca IMMAGINI_ID in Carico.gs).'
@@ -742,6 +744,9 @@
         '<div class="cr-azioni">' +
         (CR.appImmagini ? '<button class="cr-btn" onclick="apriGestioneImmagini()">📷 Apri Gestione immagini</button>' : '<span>(indirizzo dell\'app non impostato: GESTIONE_IMMAGINI_URL in Carico.gs)</span>') +
         '<button class="cr-btn sec" onclick="cercaCarico()">🔄 Cerca di nuovo</button></div>' +
+        (f.diagnosi && f.diagnosi.scheda ? '<div style="font-size:11px;color:#8a6d00;margin-top:8px">Controllato: scheda «' + escHtml(f.diagnosi.scheda) + '» (' + (f.diagnosi.righe || 0) + ' righe) · codici cercati in ' +
+          escHtml((f.diagnosi.colonneCodice || []).join(', ') || 'nessuna colonna') + ' · immagini da ' + escHtml(f.diagnosi.colonnaLink || '') +
+          ' · righe del prodotto trovate: ' + (f.diagnosi.righeProdotto || 0) + '</div>' : '') +
         '<label class="cr-check" style="margin-top:10px;font-size:12px"><input type="checkbox" id="cr-senzafoto"' + (CR.senzaFoto ? ' checked' : '') +
         ' onchange="CR.senzaFoto = this.checked; aggiornaPulsanteCarico()"> Carica comunque senza foto</label></div>';
     }
