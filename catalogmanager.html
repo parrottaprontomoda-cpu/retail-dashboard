@@ -75,7 +75,7 @@
   .cr-box h2 { margin: 0 34px 12px 0; font-size: 19px; }
   .cr-cerca { display: flex; gap: 8px; }
   .cr-cerca input { flex: 1; min-width: 0; }
-  .cr-box input[type=text], .cr-box input[type=number], .cr-box textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 15px; font-family: inherit; }
+  .cr-box input[type=text], .cr-box input[type=number], .cr-box input[type=date], .cr-box textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 15px; font-family: inherit; }
   .cr-btn { border: none; border-radius: 10px; padding: 11px 16px; font-weight: bold; font-size: 14px; cursor: pointer; background: var(--primary); color: #fff; white-space: nowrap; }
   .cr-btn.sec { background: #eee; color: var(--dark); }
   .cr-btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -100,6 +100,22 @@
   .cr-piede { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
   .cr-piede .cr-btn { flex: 1; }
   @media (max-width: 560px) { .cr-griglia { grid-template-columns: 1fr; } .cr-tab .cr-ean { font-size: 11px; } }
+  .cr-ft { position: relative; padding: 0; border: 3px solid var(--primary); border-radius: 10px; background: none; cursor: pointer; line-height: 0; }
+  .cr-ft img { width: 64px; height: 64px; border: none; border-radius: 7px; }
+  .cr-ft.off { border-color: #ddd; opacity: .35; }
+  .cr-ft.off::after { content: '✕'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 26px; color: #c62828; line-height: 1; }
+  .cr-new { position: absolute; left: 2px; bottom: 2px; background: #0b57d0; color: #fff; font-size: 9px; font-weight: bold; padding: 1px 4px; border-radius: 4px; line-height: 1.4; }
+  .cr-stato { background: #e8f0fe; border: 1px solid #c6dafc; color: #0b3d91; border-radius: 10px; padding: 10px 12px; font-size: 13px; margin: 8px 0; }
+  .cr-nuova { color: #0b57d0; font-weight: bold; }
+  .cr-mkt { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .cr-mkt h3 { margin: 0 0 10px; font-size: 15px; }
+  .cr-scorciatoie { display: flex; gap: 6px; flex-wrap: wrap; }
+  .cr-scorciatoie button { border: 1px solid var(--border); background: #fff; border-radius: 16px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .cr-avviso-box { background: #fafafa; border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+  .cr-box select { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 15px; font-family: inherit; background: #fff; }
+  .card-edit { position: absolute; top: 8px; right: 8px; z-index: 4; display: none; border: none; background: rgba(255,255,255,.92); border-radius: 50%; width: 36px; height: 36px;
+    font-size: 17px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+  body.admin-mode .card-edit { display: block; }
 
   /* ===== Invito a lasciare l'email ===== */
   #email-invito { position: fixed; left: 50%; bottom: 16px; transform: translate(-50%, 140%); z-index: 85; width: calc(100% - 32px); max-width: 420px;
@@ -471,11 +487,11 @@
 <div id="carico-pop" onclick="if (event.target === this) chiudiCarico()">
   <div class="cr-box" role="dialog" aria-modal="true" aria-labelledby="cr-titolo">
     <button class="promo-close" onclick="chiudiCarico()" aria-label="Chiudi">&times;</button>
-    <h2 id="cr-titolo">＋ Carica prodotto nel catalogo</h2>
+    <h2 id="cr-titolo">＋ Carica o richiama un prodotto</h2>
     <div class="cr-cerca">
       <input type="text" id="cr-codice" placeholder="Codice prodotto (o un EAN / codice interno)" autocomplete="off"
         onkeydown="if (event.key === 'Enter') cercaCarico()">
-      <button class="cr-btn" id="cr-cerca-btn" onclick="cercaCarico()">Cerca in BIGDATA</button>
+      <button class="cr-btn" id="cr-cerca-btn" onclick="cercaCarico()">Cerca</button>
     </div>
     <div id="cr-corpo"></div>
   </div>
@@ -633,9 +649,11 @@
     const pick = (field, w) => w ? ([...new Set(PRODUCTS.map(x => catKey(x[field])))].find(c => c && norm(c) === norm(w)) || '') : '';
     ACTIVE_TIPO = pick('tipo', p.get('tipo'));
     ACTIVE_MAT = pick('materiale', p.get('materiale'));
+    // ?q=CODICE (link del prodotto e pulsante degli avvisi): apre il catalogo già cercato su quel prodotto
+    if (p.get('q')) document.getElementById('search').value = p.get('q');
     // Nuovi arrivi: ?nuovi=1 li mostra; aprendo il catalogo senza filtri si parte da lì (se ce ne sono)
     calcolaNuovi();
-    const senzaFiltri = !['catalogo', 'categoria', 'tipo', 'materiale', 'nuovi'].some(k => p.get(k));
+    const senzaFiltri = !['catalogo', 'categoria', 'tipo', 'materiale', 'nuovi', 'q'].some(k => p.get(k));
     SOLO_NUOVI = p.get('nuovi') === '1' || (senzaFiltri && NUOVI_KEYS.size > 0);
     NUOVI_AUTO = SOLO_NUOVI && p.get('nuovi') !== '1';
   }
@@ -681,128 +699,245 @@
     if (d.t === undefined) pianificaInvitoEmail();   // solo con i dati appena arrivati dal server
   }
 
-  // ===== CARICAMENTO PRODOTTI (solo ADMIN) =====
-  // Codice prodotto → varianti (EAN, colore, misura) da BIGDATA → foto e dati da Gestione immagini
-  // → righe nel foglio CATALOGO con la data di oggi (compaiono tra i Nuovi arrivi).
+  // ===== CARICAMENTO E RICHIAMO PRODOTTI (solo ADMIN) =====
+  // Codice prodotto → varianti (EAN, colore, misura) da BIGDATA → foto e dati da Gestione immagini.
+  // Se il prodotto è già nel catalogo si "richiama": si aggiungono foto, si cambiano dati e promozioni,
+  // si aggiungono le varianti mancanti. Strumenti marketing: sconto a tempo, rimetti tra i Nuovi arrivi,
+  // avviso popup per i clienti, link e messaggio WhatsApp del prodotto.
   let CR = null;   // ultima ricerca
-  function apriCarico() {
+  function apriCarico(codice) {
     document.getElementById('carico-pop').classList.add('show');
-    setTimeout(() => document.getElementById('cr-codice').focus(), 50);
+    if (codice) { crEl('cr-codice').value = codice; cercaCarico(); }
+    else setTimeout(() => crEl('cr-codice').focus(), 50);
   }
   function chiudiCarico() { document.getElementById('carico-pop').classList.remove('show'); }
   const crEl = id => document.getElementById(id);
   const crMaiusc = s => String(s || '').trim().toUpperCase().replace(/\s+/g, ' ');
+  const dataTra = giorni => { const d = new Date(Date.now() + giorni * 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const fmtData = iso => iso ? iso.split('-').reverse().join('/') : '';
 
   async function cercaCarico() {
     const q = crEl('cr-codice').value.trim();
     if (!q) return;
     const corpo = crEl('cr-corpo'), btn = crEl('cr-cerca-btn');
     btn.disabled = true; btn.textContent = 'Cerco…';
-    corpo.innerHTML = '<p class="cr-info">⏳ Cerco il prodotto in BIGDATA e le foto in Gestione immagini…</p>';
+    corpo.innerHTML = '<p class="cr-info">⏳ Cerco il prodotto in BIGDATA, nel catalogo e le foto in Gestione immagini…</p>';
     try {
       const j = await (await fetch(API_URL + '?action=cercaprodotto&cli=' + encodeURIComponent(CLIENT_CODE) + '&q=' + encodeURIComponent(q) + '&_=' + Date.now(), { cache: 'no-store' })).json();
       if (!j.ok) throw new Error(j.error || 'Risposta non valida');
       CR = j;
       CR.senzaFoto = false;
+      preparaFoto();
       disegnaCarico();
     } catch (e) {
       corpo.innerHTML = '<p class="cr-esito err">' + escHtml(e.message === 'Failed to fetch' ? 'Server non raggiungibile: hai pubblicato la nuova versione dello script?' : e.message) + '</p>';
     } finally {
-      btn.disabled = false; btn.textContent = 'Cerca in BIGDATA';
+      btn.disabled = false; btn.textContent = 'Cerca';
     }
   }
 
-  // Foto di una variante: quelle del suo EAN, poi quelle del suo colore, poi tutte
-  function fotoVariante(v) {
+  const variantiMie = () => (CR.varianti || []).filter(v => v.giaPresente && !v.altroCodice);   // già nel catalogo con questo codice
+  const esiste = () => variantiMie().length > 0;
+
+  // Foto disponibili: quelle già nel catalogo + quelle di Gestione immagini. Spunta = usata nel catalogo.
+  function preparaFoto() {
+    const nelCatalogo = [];
+    variantiMie().forEach(v => (v.immaginiCatalogo || []).forEach(u => { if (nelCatalogo.indexOf(u) < 0) nelCatalogo.push(u); }));
+    const gi = (CR.foto && CR.foto.tutte) || [];
+    CR.fotoCatalogo = nelCatalogo;
+    CR.fotoTutte = nelCatalogo.concat(gi.filter(u => nelCatalogo.indexOf(u) < 0));
+    CR.fotoSel = new Set(CR.fotoTutte);   // le nuove di Gestione immagini sono già spuntate: basta salvare
+  }
+  function toggleFoto(i) {
+    const u = CR.fotoTutte[i];
+    if (CR.fotoSel.has(u)) CR.fotoSel.delete(u); else CR.fotoSel.add(u);
+    const el = document.querySelector('.cr-ft[data-i="' + i + '"]');
+    if (el) el.classList.toggle('off', !CR.fotoSel.has(u));
+    aggiornaPulsanteCarico();
+  }
+
+  // Foto di Gestione immagini adatte a una variante: del suo EAN, del suo colore, senza colore, tutte
+  function fotoGI(v) {
     const f = CR.foto || {};
-    // EAN → colore → foto senza colore (valgono per tutti) → tutte
     return (f.perEan && f.perEan[crMaiusc(v.ean)]) || (f.perColore && f.perColore[crMaiusc(v.colore)]) ||
       (f.generiche && f.generiche.length ? f.generiche : null) || f.tutte || [];
+  }
+  // Elenco finale delle foto di una variante (solo quelle spuntate)
+  function fotoVariante(v) {
+    const sel = u => CR.fotoSel.has(u);
+    const out = [];
+    const metti = u => { if (sel(u) && out.indexOf(u) < 0) out.push(u); };
+    (v.immaginiCatalogo || []).forEach(metti);
+    fotoGI(v).forEach(metti);
+    if (!out.length) (CR.fotoCatalogo || []).forEach(metti);   // nuova taglia di un prodotto già caricato
+    if (!out.length) CR.fotoTutte.forEach(metti);
+    return out;
   }
 
   function disegnaCarico() {
     const corpo = crEl('cr-corpo');
     const V = CR.varianti || [];
     if (!V.length) {
-      corpo.innerHTML = '<p class="cr-esito err">Nessun articolo con codice <b>' + escHtml(crEl('cr-codice').value.trim()) + '</b> in BIGDATA (foglio ARCHIVIO).</p>';
+      corpo.innerHTML = '<p class="cr-esito err">Nessun articolo con codice <b>' + escHtml(crEl('cr-codice').value.trim()) + '</b> in BIGDATA (foglio ARCHIVIO) né nel catalogo.</p>';
       return;
     }
     const misure = sortSizes([...new Set(V.map(v => v.misura))]);
     V.sort((a, b) => cmpIt(a.colore, b.colore) || misure.indexOf(a.misura) - misure.indexOf(b.misura));
-    const nuove = V.filter(v => !v.giaPresente).length;
-    const e = CR.esistente || {}, d = (CR.foto && CR.foto.dati) || {}, v0 = V[0];
+    const mie = variantiMie().length, nuove = V.filter(v => !v.giaPresente).length;
+    const e = CR.esistente || {}, d = (CR.foto && CR.foto.dati) || {};
+    const v0 = V.find(v => !v.soloCatalogo) || V[0];
     const f = CR.foto || {};
     const opz = l => (l || []).map(x => '<option value="' + escHtml(x) + '">').join('');
-    let fotoHtml;
-    if (f.trovate) {
-      fotoHtml = '<div class="cr-info">📷 <b>' + f.trovate + ' foto</b> trovate in Gestione immagini — dove il colore è indicato, ogni variante prende le foto del suo colore; le altre valgono per tutte.</div>' +
-        '<div class="cr-foto">' + f.tutte.slice(0, 12).map(u => '<img src="' + escHtml(u) + '" alt="" loading="lazy">').join('') + '</div>';
-    } else {
-      const motivo = !f.configurato ? 'Gestione immagini non è ancora collegata (manca IMMAGINI_ID in Carico.gs).'
-        : f.errore ? escHtml(f.errore) : 'Per questo prodotto non ci sono foto in Gestione immagini.';
-      fotoHtml = '<div class="cr-nofoto">⚠️ ' + motivo + '<br>Carica lì le foto e i dati del prodotto, poi torna qui e premi <b>Cerca di nuovo</b>.' +
-        '<div class="cr-azioni">' +
-        (CR.appImmagini ? '<button class="cr-btn" onclick="apriGestioneImmagini()">📷 Apri Gestione immagini</button>' : '<span>(indirizzo dell\'app non impostato: GESTIONE_IMMAGINI_URL in Carico.gs)</span>') +
-        '<button class="cr-btn sec" onclick="cercaCarico()">🔄 Cerca di nuovo</button></div>' +
-        (f.diagnosi && f.diagnosi.scheda ? '<div style="font-size:11px;color:#8a6d00;margin-top:8px">Controllato: scheda «' + escHtml(f.diagnosi.scheda) + '» (' + (f.diagnosi.righe || 0) + ' righe) · codici cercati in ' +
-          escHtml((f.diagnosi.colonneCodice || []).join(', ') || 'nessuna colonna') + ' · immagini da ' + escHtml(f.diagnosi.colonnaLink || '') +
-          ' · righe del prodotto trovate: ' + (f.diagnosi.righeProdotto || 0) + '</div>' : '') +
-        '<label class="cr-check" style="margin-top:10px;font-size:12px"><input type="checkbox" id="cr-senzafoto"' + (CR.senzaFoto ? ' checked' : '') +
-        ' onchange="CR.senzaFoto = this.checked; aggiornaPulsanteCarico()"> Carica comunque senza foto</label></div>';
+
+    // --- foto ---
+    let fotoHtml = '';
+    if (CR.fotoTutte.length) {
+      const nGI = CR.fotoTutte.length - CR.fotoCatalogo.length;
+      fotoHtml = '<div class="cr-info">📷 ' + (CR.fotoCatalogo.length ? '<b>' + CR.fotoCatalogo.length + '</b> nel catalogo' : '') +
+        (CR.fotoCatalogo.length && nGI ? ' · ' : '') + (nGI ? '<b>' + nGI + ' nuove</b> da Gestione immagini' : '') +
+        '. Tocca una foto per toglierla o rimetterla.</div><div class="cr-foto">' +
+        CR.fotoTutte.map((u, i) => '<button type="button" class="cr-ft' + (CR.fotoSel.has(u) ? '' : ' off') + '" data-i="' + i + '" onclick="toggleFoto(' + i + ')">' +
+          '<img src="' + escHtml(u) + '" alt="" loading="lazy">' + (CR.fotoCatalogo.indexOf(u) < 0 ? '<span class="cr-new">NUOVA</span>' : '') + '</button>').join('') + '</div>';
     }
+    if (!(f.trovate) || esiste()) {
+      const motivo = !f.configurato ? 'Gestione immagini non è ancora collegata.' : f.errore ? escHtml(f.errore)
+        : f.trovate ? 'Vuoi aggiungere altre foto?' : 'Per questo prodotto non ci sono foto in Gestione immagini.';
+      fotoHtml += '<div class="' + (f.trovate || CR.fotoTutte.length ? 'cr-info' : 'cr-nofoto') + '">' + (f.trovate || CR.fotoTutte.length ? '➕ ' : '⚠️ ') + motivo +
+        ' Carica le foto in Gestione immagini, poi premi <b>Cerca di nuovo</b>.' +
+        '<div class="cr-azioni">' +
+        (CR.appImmagini ? '<button class="cr-btn sec" onclick="apriGestioneImmagini()">📷 Apri Gestione immagini</button>' : '') +
+        '<button class="cr-btn sec" onclick="cercaCarico()">🔄 Cerca di nuovo</button></div>' +
+        (!CR.fotoTutte.length ? '<label class="cr-check" style="margin-top:10px;font-size:12px"><input type="checkbox" id="cr-senzafoto"' + (CR.senzaFoto ? ' checked' : '') +
+          ' onchange="CR.senzaFoto = this.checked; aggiornaPulsanteCarico()"> Carica comunque senza foto</label>' : '') +
+        (!f.trovate && f.diagnosi && f.diagnosi.scheda ? '<div style="font-size:11px;color:#8a6d00;margin-top:8px">Controllato: scheda «' + escHtml(f.diagnosi.scheda) + '» (' + (f.diagnosi.righe || 0) + ' righe) · codici cercati in ' +
+          escHtml((f.diagnosi.colonneCodice || []).join(', ')) + ' · righe del prodotto: ' + (f.diagnosi.righeProdotto || 0) + '</div>' : '') +
+        '</div>';
+    }
+
+    const avvisiCol = (CR.colonne && /non trovata/.test(CR.colonne.MISURA || '') ? '<div class="cr-nofoto">⚠️ In BIGDATA non trovo la colonna della <b>misura</b> (BIG_COL.MISURA in Carico.gs).</div>' : '');
+    const stato = esiste()
+      ? '<div class="cr-stato">✏️ <b>Prodotto già nel catalogo</b> (' + mie + (mie === 1 ? ' variante' : ' varianti') + ')' + (e.dataCarico ? ' · caricato il ' + fmtData(e.dataCarico) : '') +
+        (nuove ? ' · <b>' + nuove + ' nuove varianti</b> in BIGDATA' : '') + '. Le modifiche valgono per tutte le varianti.</div>'
+      : '';
+
     corpo.innerHTML =
-      '<div class="cr-info"><b>' + escHtml(CR.codice) + '</b>' + (v0.brand ? ' · ' + escHtml(v0.brand) : '') + ' · ' + V.length + ' varianti' +
-        (V.length - nuove ? ' (' + (V.length - nuove) + ' già nel catalogo)' : '') + (CR.esistente ? ' · dati ripresi dal catalogo' : '') + '</div>' +
-      fotoHtml +
-      (CR.colonne && /non trovata/.test(CR.colonne.MISURA || '') ? '<div class="cr-nofoto">⚠️ In BIGDATA non ho riconosciuto la colonna della <b>misura</b>: scrivi il suo numero in <code>BIG_COL.MISURA</code> (in cima a Carico.gs, es. 8 per la colonna H).</div>' : '') +
-      (CR.colonne && /non trovata/.test(CR.colonne.COLORE || '') ? '<div class="cr-nofoto">⚠️ In BIGDATA non ho riconosciuto la colonna del <b>colore</b>: scrivi il suo numero in <code>BIG_COL.COLORE</code>.</div>' : '') +
+      '<div class="cr-info"><b>' + escHtml(CR.codice) + '</b>' + (v0.brand ? ' · ' + escHtml(v0.brand) : '') + ' · ' + V.length + ' varianti</div>' +
+      stato + avvisiCol + fotoHtml +
       '<table class="cr-tab"><thead><tr><th><input type="checkbox" id="cr-tutti" checked onchange="document.querySelectorAll(\'.cr-sel:not(:disabled)\').forEach(x => x.checked = this.checked); aggiornaPulsanteCarico()"></th>' +
         '<th>Foto</th><th>EAN</th><th>Colore</th><th>Misura</th><th></th></tr></thead><tbody>' +
       V.map((v, i) => {
         const fv = fotoVariante(v)[0];
+        const nota = !v.giaPresente ? '<small class="cr-nuova">nuova</small>' : v.altroCodice ? '<small>in altro prodotto</small>' : '<small>nel catalogo</small>';
         return '<tr class="' + (v.giaPresente ? 'presente' : '') + '"><td><input type="checkbox" class="cr-sel" data-i="' + i + '"' + (v.giaPresente ? ' disabled' : ' checked') + ' onchange="aggiornaPulsanteCarico()"></td>' +
           '<td>' + (fv ? '<img src="' + escHtml(fv) + '" alt="" loading="lazy">' : '—') + '</td>' +
-          '<td class="cr-ean">' + escHtml(v.ean) + '</td><td>' + escHtml(v.colore || '—') + '</td><td>' + escHtml(v.misura || '—') + '</td>' +
-          '<td>' + (v.giaPresente ? '<small>già presente</small>' : '') + '</td></tr>';
+          '<td class="cr-ean">' + escHtml(v.ean) + '</td><td>' + escHtml(v.colore || '—') + '</td><td>' + escHtml(v.misura || '—') + '</td><td>' + nota + '</td></tr>';
       }).join('') + '</tbody></table>' +
       '<div class="cr-griglia">' +
         '<div class="largo"><label for="cr-cod">Codice prodotto <small>(raggruppa tutte le varianti in una sola scheda del catalogo)</small></label><input type="text" id="cr-cod" value="' + escHtml(CR.codice || '') + '"></div>' +
         '<div class="largo"><label for="cr-nome">Nome prodotto <small>(titolo della scheda)</small></label><input type="text" id="cr-nome" value="' + escHtml(e.nome || pulisciTesto(d.descrizione) || v0.descrizione || '') + '"></div>' +
-        '<div class="largo"><label for="cr-descr">Descrizione <small>(facoltativa, sotto il titolo)</small></label><textarea id="cr-descr" rows="2">' + escHtml(e.descrizione || (v0.descrizione && pulisciTesto(d.descrizione) && v0.descrizione !== pulisciTesto(d.descrizione) ? v0.descrizione : '')) + '</textarea></div>' +
+        '<div class="largo"><label for="cr-descr">Descrizione <small>(facoltativa, sotto il titolo)</small></label><textarea id="cr-descr" rows="2">' + escHtml(esiste() ? (e.descrizione || '') : (v0.descrizione && pulisciTesto(d.descrizione) && v0.descrizione !== pulisciTesto(d.descrizione) ? v0.descrizione : '')) + '</textarea></div>' +
         '<div><label for="cr-categoria">Categoria *</label><input type="text" id="cr-categoria" list="cr-l-cat" value="' + escHtml(e.categoria || '') + '"><datalist id="cr-l-cat">' + opz(CR.categorie) + '</datalist></div>' +
-        '<div><label for="cr-catalogo">Nome catalogo *</label><input type="text" id="cr-catalogo" list="cr-l-catal" value="' + escHtml(e.catalogo || v0.brand || '') + '"><datalist id="cr-l-catal">' + opz(CR.cataloghi) + '</datalist></div>' +
+        '<div><label for="cr-catalogo-sel">Nome catalogo *</label><select id="cr-catalogo-sel" onchange="crEl(\'cr-catalogo-nuovo\').hidden = this.value !== \'__nuovo__\'; if (this.value === \'__nuovo__\') crEl(\'cr-catalogo-nuovo\').focus()">' +
+          '<option value="">— scegli —</option>' + (CR.cataloghi || []).map(x => '<option value="' + escHtml(x) + '"' + (x === e.catalogo ? ' selected' : '') + '>' + escHtml(x) + '</option>').join('') +
+          '<option value="__nuovo__">＋ Nuovo catalogo…</option></select>' +
+          '<input type="text" id="cr-catalogo-nuovo" placeholder="Nome del nuovo catalogo" hidden style="margin-top:6px"></div>' +
         '<div><label for="cr-prezzo">Prezzo IVA inclusa <small id="cr-netto"></small></label><input type="number" id="cr-prezzo" step="0.01" min="0" value="' + (e.prezzo || v0.prezzo || '') + '" oninput="aggiornaNetto()"></div>' +
         '<div><label for="cr-collo">Pezzi per collo</label><input type="number" id="cr-collo" min="1" step="1" value="' + (e.pezziCollo || v0.confezione || 1) + '"></div>' +
         '<div><label for="cr-tipo">Tipo</label><input type="text" id="cr-tipo" list="cr-l-tipo" value="' + escHtml(e.tipo || d.tipo || '') + '"><datalist id="cr-l-tipo">' + opz(CR.tipi) + '</datalist></div>' +
         '<div><label for="cr-mat">Materiale</label><input type="text" id="cr-mat" list="cr-l-mat" value="' + escHtml(e.materiale || d.materiale || '') + '"><datalist id="cr-l-mat">' + opz(CR.materiali) + '</datalist></div>' +
-        '<div><label for="cr-sconto">Promozione: sconto % <small>(vuoto = nessuna)</small></label><input type="number" id="cr-sconto" min="0" max="99" step="1" value="' + (e.sconto || '') + '"></div>' +
-        '<div><label for="cr-fino">Promozione valida fino al <small>(vuoto = senza scadenza)</small></label><input type="date" id="cr-fino" value="' + escHtml(e.scontoFino || '') + '"></div>' +
-        '<div class="largo cr-info" style="margin:0">🆕 La data di caricamento (oggi) viene scritta da sola: il prodotto comparirà tra i <b>Nuovi arrivi</b> per ' + GIORNI_NOVITA + ' giorni.</div>' +
         '<div class="largo"><label class="cr-check"><input type="checkbox" id="cr-ordinabile"' + (e.ordinabile ? ' checked' : '') + '> Ordinabile anche senza giacenza (prevendita)</label></div>' +
       '</div>' +
+
+      // --- marketing ---
+      '<div class="cr-mkt"><h3>📣 Promozione e marketing</h3><div class="cr-griglia">' +
+        '<div><label for="cr-sconto">Sconto % a tempo <small>(vuoto = nessuno)</small></label><input type="number" id="cr-sconto" min="0" max="99" step="1" value="' + (e.sconto || '') + '" oninput="aggiornaAvvisoAuto()"></div>' +
+        '<div><label for="cr-fino">Valido fino al <small>(vuoto = senza scadenza)</small></label><input type="date" id="cr-fino" value="' + escHtml(e.scontoFino || '') + '" oninput="aggiornaAvvisoAuto()"></div>' +
+        '<div class="largo cr-scorciatoie">' + [3, 7, 15, 30].map(g => '<button type="button" onclick="crEl(\'cr-fino\').value = dataTra(' + g + '); aggiornaAvvisoAuto()">' + g + ' giorni</button>').join('') +
+          '<button type="button" onclick="crEl(\'cr-sconto\').value = \'\'; crEl(\'cr-fino\').value = \'\'; aggiornaAvvisoAuto()">Togli promozione</button></div>' +
+        (esiste() ? '<div class="largo"><label class="cr-check"><input type="checkbox" id="cr-rinnova"> 🆕 Rimetti tra i <b>Nuovi arrivi</b> (data di caricamento di oggi, per ' + GIORNI_NOVITA + ' giorni)</label></div>'
+                  : '<div class="largo cr-info" style="margin:0">🆕 La data di caricamento (oggi) viene scritta da sola: il prodotto sarà tra i <b>Nuovi arrivi</b> per ' + GIORNI_NOVITA + ' giorni.</div>') +
+        '<div class="largo"><label class="cr-check"><input type="checkbox" id="cr-avviso" onchange="crEl(\'cr-avviso-box\').hidden = !this.checked; aggiornaAvvisoAuto(); aggiornaPulsanteCarico()"> 💬 Crea un <b>avviso popup</b> per i clienti</label></div>' +
+        '<div class="largo cr-avviso-box" id="cr-avviso-box" hidden><div class="cr-griglia">' +
+          '<div class="largo"><label for="cr-av-tit">Titolo</label><input type="text" id="cr-av-tit" oninput="this.dataset.manuale = 1"></div>' +
+          '<div class="largo"><label for="cr-av-txt">Testo</label><textarea id="cr-av-txt" rows="2" oninput="this.dataset.manuale = 1"></textarea></div>' +
+          '<div><label for="cr-av-al">Mostra fino al</label><input type="date" id="cr-av-al"></div>' +
+          '<div><label for="cr-av-freq">Mostra</label><select id="cr-av-freq"><option value="una">Una volta</option><option value="giorno">Ogni giorno</option><option value="visita">A ogni visita</option></select></div>' +
+          '<div class="largo cr-info" style="margin:0">Usa la prima foto del prodotto e il pulsante «Vedi il prodotto», che apre il catalogo già filtrato su questo codice.</div>' +
+        '</div></div>' +
+        '<div class="largo cr-scorciatoie"><button type="button" onclick="copiaLinkProdotto()">🔗 Copia link del prodotto</button><button type="button" onclick="whatsappProdotto()">🟢 Messaggio WhatsApp</button></div>' +
+      '</div></div>' +
       '<div class="cr-esito" id="cr-esito"></div>' +
       '<div class="cr-piede"><button class="cr-btn sec" onclick="chiudiCarico()">Chiudi</button>' +
         '<button class="cr-btn" id="cr-salva" onclick="salvaCarico()"></button></div>';
+    CR.iniziali = leggiCampi();
     aggiornaNetto();
     aggiornaPulsanteCarico();
   }
 
-  // toglie emoji e simboli iniziali (es. "✅ LUPETTO…" → "LUPETTO…")
-  function pulisciTesto(t) {
-    return String(t || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '').replace(/\s+/g, ' ').trim();
+  // Nome catalogo: scelto tra quelli esistenti oppure nuovo (non viene più preso dal brand)
+  function valoreCatalogo() {
+    const sel = crEl('cr-catalogo-sel');
+    if (!sel) return '';
+    if (sel.value !== '__nuovo__') return sel.value;
+    const n = crEl('cr-catalogo-nuovo').value.trim();
+    // se il nuovo nome esiste già (maiuscole/minuscole diverse) uso quello esistente
+    return (CR.cataloghi || []).find(x => x.toLowerCase() === n.toLowerCase()) || n;
+  }
+  function leggiCampi() {
+    return {
+      codice: crEl('cr-cod').value.trim(), nome: crEl('cr-nome').value.trim(), descrizione: crEl('cr-descr').value.trim(),
+      categoria: crEl('cr-categoria').value.trim(), catalogo: valoreCatalogo(),
+      prezzo: Number(crEl('cr-prezzo').value) || 0, pezziCollo: Number(crEl('cr-collo').value) || 1,
+      tipo: crEl('cr-tipo').value.trim(), materiale: crEl('cr-mat').value.trim(), ordinabile: crEl('cr-ordinabile').checked,
+      sconto: Number(crEl('cr-sconto').value) || 0, scontoFino: crEl('cr-fino').value
+    };
+  }
+  // Testo automatico dell'avviso (finché non lo scrivi tu)
+  function aggiornaAvvisoAuto() {
+    if (!crEl('cr-av-tit')) return;
+    const nome = crEl('cr-nome').value.trim() || CR.codice;
+    const sc = Number(crEl('cr-sconto').value) || 0, fino = crEl('cr-fino').value;
+    const t = crEl('cr-av-tit'), x = crEl('cr-av-txt'), al = crEl('cr-av-al');
+    if (!t.dataset.manuale) t.value = sc ? '🔥 -' + sc + '% su ' + nome : (esiste() ? '⭐ ' + nome : '🆕 Nuovo arrivo: ' + nome);
+    if (!x.dataset.manuale) x.value = sc ? 'Approfitta dello sconto' + (fino ? ' fino al ' + fmtData(fino) : '') + '! Ordina direttamente dal catalogo.' : 'Scoprilo ora nel catalogo e ordina in un clic.';
+    if (!al.dataset.manuale) al.value = sc && fino ? fino : dataTra(7);
   }
   function aggiornaNetto() {
     const p = Number(crEl('cr-prezzo').value) || 0;
     crEl('cr-netto').textContent = p ? '(€ ' + (p / DIVISORE_IVA).toFixed(2) + ' + IVA)' : '';
   }
   function crScelte() { return [...document.querySelectorAll('.cr-sel:checked:not(:disabled)')].map(x => CR.varianti[+x.dataset.i]); }
-  function aggiornaPulsanteCarico() {
-    const b = crEl('cr-salva'); if (!b) return;
-    const n = crScelte().length;
-    const fotoOk = (CR.foto && CR.foto.trovate) || CR.senzaFoto;
-    b.disabled = !n || !fotoOk;
-    b.textContent = !n ? 'Nessuna variante da caricare' : !fotoOk ? 'Prima carica le foto' : '✅ Carica ' + n + (n === 1 ? ' variante' : ' varianti') + ' nel catalogo';
+
+  // Cosa verrà salvato: varianti nuove, campi cambiati, foto cambiate, nuovi arrivi, avviso
+  function pianoSalvataggio() {
+    const ora = leggiCampi(), ini = CR.iniziali || {};
+    const modifiche = {};
+    Object.keys(ora).forEach(k => { if (String(ora[k]) !== String(ini[k])) modifiche[k] = ora[k]; });
+    const aggiorna = variantiMie().map(v => {
+      const fin = fotoVariante(v);
+      return JSON.stringify(fin) !== JSON.stringify(v.immaginiCatalogo || []) ? { ean: v.ean, immagini: fin } : { ean: v.ean };
+    });
+    const fotoCambiate = aggiorna.filter(a => a.immagini).length;
+    const rinnova = !!(crEl('cr-rinnova') && crEl('cr-rinnova').checked);
+    const avviso = crEl('cr-avviso') && crEl('cr-avviso').checked;
+    const toccaEsistenti = esiste() && (Object.keys(modifiche).length || fotoCambiate || rinnova);
+    return { ora, modifiche, aggiorna: toccaEsistenti ? aggiorna : [], fotoCambiate, rinnova, avviso, nuove: crScelte(), toccaEsistenti };
   }
+  function aggiornaPulsanteCarico() {
+    const b = crEl('cr-salva'); if (!b || !CR) return;
+    const pz = pianoSalvataggio();
+    const fotoOk = CR.fotoSel.size > 0 || CR.senzaFoto;
+    const parti = [];
+    if (pz.nuove.length) parti.push('carica ' + pz.nuove.length + (pz.nuove.length === 1 ? ' variante' : ' varianti'));
+    if (pz.toccaEsistenti) parti.push('aggiorna il prodotto');
+    if (pz.avviso) parti.push('crea l\'avviso');
+    b.disabled = !parti.length || (pz.nuove.length && !fotoOk);
+    b.textContent = !parti.length ? (esiste() ? 'Nessuna modifica da salvare' : 'Nessuna variante da caricare')
+      : pz.nuove.length && !fotoOk ? 'Prima carica le foto' : '💾 ' + parti.join(' + ').replace(/^./, c => c.toUpperCase());
+  }
+  document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#cr-corpo')) aggiornaPulsanteCarico(); });
+  document.addEventListener('change', e => { if (e.target.closest && e.target.closest('#cr-corpo')) aggiornaPulsanteCarico(); });
+
   function apriGestioneImmagini() {
     const u = new URL(CR.appImmagini);
     const v0 = (CR.varianti || [])[0] || {};
@@ -810,42 +945,69 @@
     if (v0.brand) u.searchParams.set('brand', v0.brand);
     window.open(u.toString(), '_blank');
   }
+  function linkProdotto() {
+    const u = new URL(window.location.href.split('?')[0].split('#')[0]);
+    u.searchParams.set('q', crEl('cr-cod') ? crEl('cr-cod').value.trim() : CR.codice);
+    return u.toString();
+  }
+  async function copiaLinkProdotto() {
+    const l = linkProdotto();
+    try { await navigator.clipboard.writeText(l); avviso('Link copiato: chi lo apre vede questo prodotto (con il suo link personale, anche i prezzi).'); }
+    catch (e) { prompt('Copia il link:', l); }
+  }
+  function whatsappProdotto() {
+    const c = leggiCampi();
+    const testo = (c.sconto ? '🔥 *-' + c.sconto + '%* ' : '🆕 ') + '*' + (c.nome || c.codice) + '*' +
+      (c.sconto && c.scontoFino ? '\nOfferta valida fino al ' + fmtData(c.scontoFino) : '') +
+      '\n👉 Guardalo nel catalogo: ' + linkProdotto();
+    window.open('https://wa.me/?text=' + encodeURIComponent(testo), '_blank');
+  }
 
   async function salvaCarico() {
     const es = crEl('cr-esito');
-    const scelte = crScelte();
-    const comune = {
-      codice: crEl('cr-cod').value.trim(), ricerca: CR.ricerca || CR.codice,
-      sconto: Number(crEl('cr-sconto').value) || 0, scontoFino: crEl('cr-fino').value, nome: crEl('cr-nome').value.trim(), descrizione: crEl('cr-descr').value.trim(),
-      categoria: crEl('cr-categoria').value.trim(), catalogo: crEl('cr-catalogo').value.trim(),
-      prezzo: Number(crEl('cr-prezzo').value) || 0, pezziCollo: Number(crEl('cr-collo').value) || 1,
-      tipo: crEl('cr-tipo').value.trim(), materiale: crEl('cr-mat').value.trim(), ordinabile: crEl('cr-ordinabile').checked,
-      immagini: (CR.foto && CR.foto.tutte) || []
-    };
+    const pz = pianoSalvataggio(), c = pz.ora;
     es.className = 'cr-esito err';
-    if (!comune.codice) { es.textContent = 'Scrivi il codice prodotto.'; crEl('cr-cod').focus(); return; }
-    if (comune.sconto && (comune.sconto < 1 || comune.sconto > 99)) { es.textContent = 'Lo sconto deve essere tra 1 e 99%.'; crEl('cr-sconto').focus(); return; }
-    if (!comune.sconto && comune.scontoFino) comune.scontoFino = '';
-    if (!comune.categoria) { es.textContent = 'Scrivi la categoria.'; crEl('cr-categoria').focus(); return; }
-    if (!comune.catalogo) { es.textContent = 'Scrivi il nome del catalogo.'; crEl('cr-catalogo').focus(); return; }
-    if (!comune.prezzo && !confirm('Il prezzo è vuoto: caricare comunque?')) return;
-    const b = crEl('cr-salva'); b.disabled = true; b.textContent = 'Carico…'; es.className = 'cr-esito'; es.textContent = '';
+    if (!c.codice) { es.textContent = 'Scrivi il codice prodotto.'; crEl('cr-cod').focus(); return; }
+    if (c.sconto && (c.sconto < 1 || c.sconto > 99)) { es.textContent = 'Lo sconto deve essere tra 1 e 99%.'; crEl('cr-sconto').focus(); return; }
+    if (!c.sconto) c.scontoFino = '';
+    if ((pz.nuove.length || pz.toccaEsistenti) && !c.categoria) { es.textContent = 'Scrivi la categoria.'; crEl('cr-categoria').focus(); return; }
+    if ((pz.nuove.length || pz.toccaEsistenti) && !c.catalogo) { es.textContent = 'Scegli il nome del catalogo (o aggiungine uno nuovo).'; (crEl('cr-catalogo-sel').value === '__nuovo__' ? crEl('cr-catalogo-nuovo') : crEl('cr-catalogo-sel')).focus(); return; }
+    if (pz.nuove.length && !c.prezzo && !confirm('Il prezzo è vuoto: caricare comunque?')) return;
+    if (pz.modifiche.prezzo !== undefined && pz.toccaEsistenti) {
+      const prezzi = [...new Set(variantiMie().map(v => v.prezzoCatalogo))];
+      if (prezzi.length > 1 && !confirm('Le varianti hanno prezzi diversi (' + prezzi.join(' / ') + '). Mettere ' + c.prezzo + ' a tutte?')) return;
+    }
+    const foto0 = [...CR.fotoSel][0] || '';
+    const body = {
+      action: 'caricaProdotti', cli: CLIENT_CODE,
+      comune: Object.assign({}, c, { codiceCatalogo: CR.codiceCatalogo || '', ricerca: CR.ricerca || CR.codice }),
+      righe: pz.nuove.map(v => ({ ean: v.ean, misura: v.misura, colore: v.colore, immagini: fotoVariante(v) })),
+      aggiorna: pz.aggiorna, modifiche: pz.toccaEsistenti ? pz.modifiche : {}, rinnovaData: pz.rinnova
+    };
+    if (pz.avviso) body.avviso = {
+      titolo: crEl('cr-av-tit').value.trim(), testo: crEl('cr-av-txt').value.trim(), immagine: foto0,
+      al: crEl('cr-av-al').value, frequenza: crEl('cr-av-freq').value, pulsante: 'Vedi il prodotto', link: '?q=' + c.codice
+    };
+    if (pz.avviso && !body.avviso.titolo) { es.textContent = 'Scrivi il titolo dell\'avviso.'; crEl('cr-av-tit').focus(); return; }
+    const b = crEl('cr-salva'); b.disabled = true; b.textContent = 'Salvo…'; es.className = 'cr-esito'; es.textContent = '';
     try {
-      const r = await fetch(API_URL, {
-        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'caricaProdotti', cli: CLIENT_CODE, comune,
-          righe: scelte.map(v => ({ ean: v.ean, misura: v.misura, colore: v.colore, immagini: fotoVariante(v) })) })
-      });
+      const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
       const j = await r.json();
-      if (!j.ok) throw new Error(j.error || 'Caricamento non riuscito');
-      scelte.forEach(v => { v.giaPresente = true; });
-      disegnaCarico();
+      if (!j.ok) throw new Error(j.error || 'Salvataggio non riuscito');
+      const fatto = [];
+      if (j.aggiunti) fatto.push(j.aggiunti + (j.aggiunti === 1 ? ' variante aggiunta' : ' varianti aggiunte'));
+      if (j.aggiornati) fatto.push(j.aggiornati + (j.aggiornati === 1 ? ' variante aggiornata' : ' varianti aggiornate'));
+      if (j.avviso) fatto.push('avviso popup creato');
+      // ricarico la scheda dal server, così vedo lo stato vero
+      crEl('cr-codice').value = c.codice;
+      await cercaCarico();
       const es2 = crEl('cr-esito');
-      es2.className = 'cr-esito ok';
-      es2.innerHTML = '✅ ' + j.aggiunti + (j.aggiunti === 1 ? ' variante aggiunta' : ' varianti aggiunte') + ' al foglio CATALOGO.' +
-        (j.saltati && j.saltati.length ? '<br><small>Saltati: ' + escHtml(j.saltati.join(', ')) + '</small>' : '') +
-        '<br><small>Il catalogo si aggiorna da solo; puoi cercare un altro codice.</small>';
-      crEl('cr-codice').select();
+      if (es2) {
+        es2.className = 'cr-esito ok';
+        es2.innerHTML = '✅ ' + (fatto.join(' · ') || 'Nessuna modifica') + '.' +
+          (j.saltati && j.saltati.length ? '<br><small>Saltati: ' + escHtml(j.saltati.join(', ')) + '</small>' : '') +
+          '<br><small>Il catalogo si aggiorna da solo.</small>';
+      }
       try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
       loadProducts();
     } catch (e) {
@@ -855,6 +1017,10 @@
   }
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && crEl('carico-pop').classList.contains('show')) chiudiCarico(); });
 
+  // toglie emoji e simboli iniziali (es. "✅ LUPETTO…" → "LUPETTO…")
+  function pulisciTesto(t) {
+    return String(t || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '').replace(/\s+/g, ' ').trim();
+  }
   // ===== INVITO A LASCIARE L'EMAIL =====
   // Compare (in basso, senza bloccare) ai clienti con link personale che non hanno ancora un'email
   // nel foglio CLIENTI. "Non ora" lo rimanda di una settimana; registrata l'email non compare più.
@@ -1655,6 +1821,7 @@
           <div class="img-wrap" data-k="${escHtml(gk)}">
             <img class="card-img" src="${escHtml(img)}" loading="lazy" decoding="async" alt="${safeCaption}" onerror="this.onerror=null;this.src='https://via.placeholder.com/300x200?text=Foto+Mancante'">
             ${galHtml(gk, imgs.length)}
+            <button class="card-edit" title="Richiama: foto, dati, promozioni" onclick="event.stopPropagation(); apriCarico('${escHtml(String(g.codiceProdotto || g.variants[0].id)).replace(/'/g, '&#39;')}')">✏️</button>
             ${g.tipo ? `<span class="tipo-badge">${escHtml(g.tipo)}</span>` : ''}
             ${g.nuovo && !g.terminato ? `<span class="nuovo-badge${g.tipo ? ' sotto' : ''}">🆕 NUOVO ARRIVO</span>` : ''}
             ${g.terminato ? '<div class="terminato-band">Terminato</div>' : ''}
