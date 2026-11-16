@@ -983,7 +983,9 @@
   function apriGestioneImmagini() {
     const u = new URL(CR.appImmagini);
     const v0 = (CR.varianti || [])[0] || {};
-    u.searchParams.set('codice', CR.codice || '');
+    // il codice che si sta modificando (campo "Codice prodotto"), così Gestione immagini apre già filtrata
+    u.searchParams.set('codice', (crEl('cr-cod') && crEl('cr-cod').value.trim()) || CR.codice || '');
+    if (CR.ricerca && CR.ricerca !== CR.codice) u.searchParams.set('cerca', CR.ricerca);
     if (v0.brand) u.searchParams.set('brand', v0.brand);
     window.open(u.toString(), '_blank');
   }
