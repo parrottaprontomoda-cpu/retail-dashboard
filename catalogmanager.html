@@ -754,6 +754,8 @@
       '<div class="cr-info"><b>' + escHtml(CR.codice) + '</b>' + (v0.brand ? ' · ' + escHtml(v0.brand) : '') + ' · ' + V.length + ' varianti' +
         (V.length - nuove ? ' (' + (V.length - nuove) + ' già nel catalogo)' : '') + (CR.esistente ? ' · dati ripresi dal catalogo' : '') + '</div>' +
       fotoHtml +
+      (CR.colonne && /non trovata/.test(CR.colonne.MISURA || '') ? '<div class="cr-nofoto">⚠️ In BIGDATA non ho riconosciuto la colonna della <b>misura</b>: scrivi il suo numero in <code>BIG_COL.MISURA</code> (in cima a Carico.gs, es. 8 per la colonna H).</div>' : '') +
+      (CR.colonne && /non trovata/.test(CR.colonne.COLORE || '') ? '<div class="cr-nofoto">⚠️ In BIGDATA non ho riconosciuto la colonna del <b>colore</b>: scrivi il suo numero in <code>BIG_COL.COLORE</code>.</div>' : '') +
       '<table class="cr-tab"><thead><tr><th><input type="checkbox" id="cr-tutti" checked onchange="document.querySelectorAll(\'.cr-sel:not(:disabled)\').forEach(x => x.checked = this.checked); aggiornaPulsanteCarico()"></th>' +
         '<th>Foto</th><th>EAN</th><th>Colore</th><th>Misura</th><th></th></tr></thead><tbody>' +
       V.map((v, i) => {
@@ -764,14 +766,18 @@
           '<td>' + (v.giaPresente ? '<small>già presente</small>' : '') + '</td></tr>';
       }).join('') + '</tbody></table>' +
       '<div class="cr-griglia">' +
-        '<div class="largo"><label for="cr-nome">Nome</label><input type="text" id="cr-nome" value="' + escHtml(e.nome || d.nome || v0.descrizione || '') + '"></div>' +
-        '<div class="largo"><label for="cr-descr">Descrizione</label><textarea id="cr-descr" rows="2">' + escHtml(e.descrizione || d.descrizione || '') + '</textarea></div>' +
+        '<div class="largo"><label for="cr-cod">Codice prodotto <small>(raggruppa tutte le varianti in una sola scheda del catalogo)</small></label><input type="text" id="cr-cod" value="' + escHtml(CR.codice || '') + '"></div>' +
+        '<div class="largo"><label for="cr-nome">Nome prodotto <small>(titolo della scheda)</small></label><input type="text" id="cr-nome" value="' + escHtml(e.nome || pulisciTesto(d.descrizione) || v0.descrizione || '') + '"></div>' +
+        '<div class="largo"><label for="cr-descr">Descrizione <small>(facoltativa, sotto il titolo)</small></label><textarea id="cr-descr" rows="2">' + escHtml(e.descrizione || (v0.descrizione && pulisciTesto(d.descrizione) && v0.descrizione !== pulisciTesto(d.descrizione) ? v0.descrizione : '')) + '</textarea></div>' +
         '<div><label for="cr-categoria">Categoria *</label><input type="text" id="cr-categoria" list="cr-l-cat" value="' + escHtml(e.categoria || '') + '"><datalist id="cr-l-cat">' + opz(CR.categorie) + '</datalist></div>' +
         '<div><label for="cr-catalogo">Nome catalogo *</label><input type="text" id="cr-catalogo" list="cr-l-catal" value="' + escHtml(e.catalogo || v0.brand || '') + '"><datalist id="cr-l-catal">' + opz(CR.cataloghi) + '</datalist></div>' +
         '<div><label for="cr-prezzo">Prezzo IVA inclusa <small id="cr-netto"></small></label><input type="number" id="cr-prezzo" step="0.01" min="0" value="' + (e.prezzo || v0.prezzo || '') + '" oninput="aggiornaNetto()"></div>' +
         '<div><label for="cr-collo">Pezzi per collo</label><input type="number" id="cr-collo" min="1" step="1" value="' + (e.pezziCollo || v0.confezione || 1) + '"></div>' +
         '<div><label for="cr-tipo">Tipo</label><input type="text" id="cr-tipo" list="cr-l-tipo" value="' + escHtml(e.tipo || d.tipo || '') + '"><datalist id="cr-l-tipo">' + opz(CR.tipi) + '</datalist></div>' +
         '<div><label for="cr-mat">Materiale</label><input type="text" id="cr-mat" list="cr-l-mat" value="' + escHtml(e.materiale || d.materiale || '') + '"><datalist id="cr-l-mat">' + opz(CR.materiali) + '</datalist></div>' +
+        '<div><label for="cr-sconto">Promozione: sconto % <small>(vuoto = nessuna)</small></label><input type="number" id="cr-sconto" min="0" max="99" step="1" value="' + (e.sconto || '') + '"></div>' +
+        '<div><label for="cr-fino">Promozione valida fino al <small>(vuoto = senza scadenza)</small></label><input type="date" id="cr-fino" value="' + escHtml(e.scontoFino || '') + '"></div>' +
+        '<div class="largo cr-info" style="margin:0">🆕 La data di caricamento (oggi) viene scritta da sola: il prodotto comparirà tra i <b>Nuovi arrivi</b> per ' + GIORNI_NOVITA + ' giorni.</div>' +
         '<div class="largo"><label class="cr-check"><input type="checkbox" id="cr-ordinabile"' + (e.ordinabile ? ' checked' : '') + '> Ordinabile anche senza giacenza (prevendita)</label></div>' +
       '</div>' +
       '<div class="cr-esito" id="cr-esito"></div>' +
@@ -781,6 +787,10 @@
     aggiornaPulsanteCarico();
   }
 
+  // toglie emoji e simboli iniziali (es. "✅ LUPETTO…" → "LUPETTO…")
+  function pulisciTesto(t) {
+    return String(t || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, '').replace(/\s+/g, ' ').trim();
+  }
   function aggiornaNetto() {
     const p = Number(crEl('cr-prezzo').value) || 0;
     crEl('cr-netto').textContent = p ? '(€ ' + (p / DIVISORE_IVA).toFixed(2) + ' + IVA)' : '';
@@ -805,13 +815,17 @@
     const es = crEl('cr-esito');
     const scelte = crScelte();
     const comune = {
-      codice: CR.codice, nome: crEl('cr-nome').value.trim(), descrizione: crEl('cr-descr').value.trim(),
+      codice: crEl('cr-cod').value.trim(), ricerca: CR.ricerca || CR.codice,
+      sconto: Number(crEl('cr-sconto').value) || 0, scontoFino: crEl('cr-fino').value, nome: crEl('cr-nome').value.trim(), descrizione: crEl('cr-descr').value.trim(),
       categoria: crEl('cr-categoria').value.trim(), catalogo: crEl('cr-catalogo').value.trim(),
       prezzo: Number(crEl('cr-prezzo').value) || 0, pezziCollo: Number(crEl('cr-collo').value) || 1,
       tipo: crEl('cr-tipo').value.trim(), materiale: crEl('cr-mat').value.trim(), ordinabile: crEl('cr-ordinabile').checked,
       immagini: (CR.foto && CR.foto.tutte) || []
     };
     es.className = 'cr-esito err';
+    if (!comune.codice) { es.textContent = 'Scrivi il codice prodotto.'; crEl('cr-cod').focus(); return; }
+    if (comune.sconto && (comune.sconto < 1 || comune.sconto > 99)) { es.textContent = 'Lo sconto deve essere tra 1 e 99%.'; crEl('cr-sconto').focus(); return; }
+    if (!comune.sconto && comune.scontoFino) comune.scontoFino = '';
     if (!comune.categoria) { es.textContent = 'Scrivi la categoria.'; crEl('cr-categoria').focus(); return; }
     if (!comune.catalogo) { es.textContent = 'Scrivi il nome del catalogo.'; crEl('cr-catalogo').focus(); return; }
     if (!comune.prezzo && !confirm('Il prezzo è vuoto: caricare comunque?')) return;
