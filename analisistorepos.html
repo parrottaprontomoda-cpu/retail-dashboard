@@ -2739,6 +2739,9 @@ ${userPrompt}`;
     #pcModal .pc-desc { white-space:normal; min-width:220px; }
     #pcModal .pc-store-head { max-width:130px; white-space:normal; font-size:0.78rem; }
     #pcModal .pc-tot { background:#eef4ff; }
+    #pcModal .pc-grid td, #pcModal .pc-grid th { min-width:54px; }
+    #pcModal .pc-grid tfoot td, #pcModal .pc-grid tfoot th { border-top:2px solid #6f42c1; }
+    #pcModal .pc-grid tbody tr:hover td, #pcModal .pc-grid tbody tr:hover th { background:#f1f5ff; }
 </style>
 
 <!-- Finestra Posizione Codici -->
@@ -2846,10 +2849,18 @@ ${userPrompt}`;
                         </div>
                         <div class="row g-2 mb-4" id="pcDetKpi"></div>
 
-                        <h6 class="fw-bold text-secondary"><i class="fas fa-th me-2"></i>Posizione per taglia / colore (EAN)</h6>
-                        <div class="table-responsive mb-4">
-                            <table class="table table-sm table-hover align-middle text-center" id="pcDetVariants"></table>
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                            <h6 class="fw-bold text-secondary mb-0"><i class="fas fa-th me-2"></i>Griglia taglie / colori</h6>
+                            <div class="btn-group btn-group-sm flex-wrap" role="group" id="pcGridLoc"></div>
                         </div>
+                        <div id="pcGridWrap" class="mb-3"></div>
+
+                        <details class="mb-4">
+                            <summary class="small fw-bold text-secondary" style="cursor:pointer;">Dettaglio per EAN (tutte le sedi in colonna)</summary>
+                            <div class="table-responsive mt-2">
+                                <table class="table table-sm table-hover align-middle text-center" id="pcDetVariants"></table>
+                            </div>
+                        </details>
 
                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
                             <h6 class="fw-bold text-secondary mb-0"><i class="fas fa-exchange-alt me-2"></i>Movimenti (più recenti in alto)</h6>
@@ -3374,6 +3385,8 @@ ${userPrompt}`;
         });
         document.getElementById('pcDetVariants').innerHTML = vh + '</tbody>';
 
+        renderGrid();
+
         // Filtro movimenti
         const fSel = document.getElementById('pcMovFilter');
         const prev = fSel.value;
@@ -3381,6 +3394,100 @@ ${userPrompt}`;
             stores.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
         fSel.value = Array.from(fSel.options).some(o => o.value === prev) ? prev : '';
         renderMovs();
+    }
+
+    // ---------------- griglia taglie (colonne) x colori (righe) ----------------
+    const PC_ORD_TAGLIE = { 'XXXS': 1, 'XXS': 2, 'XS': 3, 'S': 4, 'M': 5, 'L': 6, 'XL': 7, 'XXL': 8, '2XL': 8, 'XXXL': 9, '3XL': 9, '4XL': 10, '5XL': 11, '6XL': 12 };
+    function gridVal(x) {
+        const s = up(x).replace(/[.,]0+$/, '');
+        return (!s || ['-', 'ASS', 'ASSORTITO', 'N.D.', 'ND', '#N/D', 'NON DISPO'].includes(s)) ? 'ASS' : s;
+    }
+    function ordTaglia(m) {
+        if (m === 'ASS') return [9, 0, ''];
+        if (['U', 'TU', 'UNICA', 'UNI', 'TAGLIA UNICA'].includes(m)) return [8, 0, ''];
+        const parts = m.split(/[\/\-\s]+/).filter(Boolean);
+        for (let i = parts.length - 1; i >= 0; i--) if (PC_ORD_TAGLIE[parts[i]]) return [1, PC_ORD_TAGLIE[parts[i]], m];
+        const n = parseFloat(String(parts[0] || '').replace(',', '.'));
+        if (isFinite(n)) return [2, n, m];
+        return [5, 0, m];
+    }
+    const cmpTaglia = (a, b) => { const x = ordTaglia(a), y = ordTaglia(b); return (x[0] - y[0]) || (x[1] - y[1]) || x[2].localeCompare(y[2], 'it', { numeric: true }); };
+    const lblVar = v => v === 'ASS' ? '<span class="text-muted fst-italic">Assortito</span>' : esc(v);
+
+    function locQty(v, loc, stores) {
+        if (loc === 'MAG') return v.central;
+        if (loc === 'NET') return v.central + stores.reduce((a, s) => a + (v.inS[s] || 0) - (v.soldS[s] || 0), 0);
+        if (loc === 'NEG') return stores.reduce((a, s) => a + (v.inS[s] || 0) - (v.soldS[s] || 0), 0);
+        return (v.inS[loc] || 0) - (v.soldS[loc] || 0);
+    }
+    function locName(loc) {
+        return { NET: 'Totale rete', MAG: 'Magazzino centrale', NEG: 'Tutti i negozi', ALL: 'Tutte le sedi' }[loc] || loc;
+    }
+
+    function gridHtml(c, loc, stores) {
+        // somma le varianti con la stessa taglia e lo stesso colore (EAN diversi, righe senza EAN)
+        const cell = {}, sizes = new Set(), colors = new Set();
+        Object.values(c.variants).forEach(v => {
+            const m = gridVal(v.mis), k = gridVal(v.col);
+            const q = locQty(v, loc, stores);
+            sizes.add(m); colors.add(k);
+            const key = k + '\u0001' + m;
+            cell[key] = (cell[key] || 0) + q;
+        });
+        const S = Array.from(sizes).sort(cmpTaglia);
+        const K = Array.from(colors).sort((a, b) => (a === 'ASS') - (b === 'ASS') || a.localeCompare(b, 'it'));
+        const colTot = {}; let grand = 0;
+        let h = '<table class="table table-sm table-bordered align-middle text-center mb-0 pc-grid"><thead class="table-light"><tr>' +
+            '<th class="text-start" style="min-width:140px;">Colore ↓ / Taglia →</th>' +
+            S.map(m => `<th>${lblVar(m)}</th>`).join('') + '<th class="pc-tot">Totale</th></tr></thead><tbody>';
+        K.forEach(k => {
+            let rowTot = 0;
+            h += `<tr><th class="text-start bg-light">${lblVar(k)}</th>`;
+            S.forEach(m => {
+                const key = k + '\u0001' + m;
+                if (!(key in cell)) { h += '<td class="text-muted bg-body-tertiary"></td>'; return; }
+                const q = cell[key];
+                rowTot += q; colTot[m] = (colTot[m] || 0) + q;
+                h += qCell(q);
+            });
+            grand += rowTot;
+            h += qCell(rowTot, 'pc-tot') + '</tr>';
+        });
+        h += '</tbody><tfoot><tr class="fw-bold"><th class="text-start pc-tot">Totale</th>' +
+            S.map(m => qCell(colTot[m] || 0, 'pc-tot')).join('') + qCell(grand, 'pc-tot fs-6') + '</tr></tfoot></table>';
+        return { html: h, total: grand };
+    }
+
+    function renderGrid() {
+        const c = st.current && st.data.codes[st.current];
+        if (!c) return;
+        const stores = st.data.stores;
+        const locs = ['NET', 'MAG', 'NEG'].concat(stores).concat(['ALL']);
+        let loc = st.gridLoc || (localStorage.getItem('pcGridLoc') || 'NET');
+        if (!locs.includes(loc)) loc = 'NET';
+        st.gridLoc = loc;
+
+        document.getElementById('pcGridLoc').innerHTML = locs.map(l =>
+            `<button type="button" class="btn ${l === loc ? 'btn-primary' : 'btn-outline-primary'}" data-loc="${esc(l)}">${esc(locName(l))}</button>`).join('');
+        document.querySelectorAll('#pcGridLoc button').forEach(b => b.addEventListener('click', () => {
+            st.gridLoc = b.getAttribute('data-loc');
+            try { localStorage.setItem('pcGridLoc', st.gridLoc); } catch (e) {}
+            renderGrid();
+        }));
+
+        const wrap = document.getElementById('pcGridWrap');
+        const box = (l, g) => `<div class="card mb-3"><div class="card-header py-1 d-flex justify-content-between align-items-center">
+            <span class="fw-bold">${esc(locName(l))}</span>
+            <span class="badge ${g.total < 0 ? 'bg-danger' : 'bg-primary'} fs-6">${fmtQ(g.total)} capi</span></div>
+            <div class="card-body p-0"><div class="table-responsive">${g.html}</div></div></div>`;
+        if (loc === 'ALL') {
+            wrap.innerHTML = ['MAG'].concat(stores).map(l => {
+                const g = gridHtml(c, l, stores);
+                return box(l, g);
+            }).join('') + box('NET', gridHtml(c, 'NET', stores));
+        } else {
+            wrap.innerHTML = box(loc, gridHtml(c, loc, stores));
+        }
     }
 
     function renderMovs() {
