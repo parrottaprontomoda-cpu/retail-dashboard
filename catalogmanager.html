@@ -862,6 +862,9 @@
         (nuove ? ' · <b>' + nuove + ' nuove varianti</b> in BIGDATA' : '') + '. Le modifiche valgono per tutte le varianti.</div>'
       : '';
 
+    CR.vCat = vociEsistenti(CR.categorie, 'categoria', e.categoria);
+    CR.vTipo = vociEsistenti(CR.tipi, 'tipo', e.tipo || d.tipo);
+    CR.vMat = vociEsistenti(CR.materiali, 'materiale', e.materiale || d.materiale);
     corpo.innerHTML =
       '<div class="cr-info"><b>' + escHtml(CR.codice) + '</b>' + (v0.brand ? ' · ' + escHtml(v0.brand) : '') + ' · ' + V.length + ' varianti</div>' +
       stato + avvisiCol + fotoHtml +
@@ -878,15 +881,15 @@
         '<div class="largo"><label for="cr-cod">Codice prodotto <small>(raggruppa tutte le varianti in una sola scheda del catalogo)</small></label><input type="text" id="cr-cod" value="' + escHtml(CR.codice || '') + '"></div>' +
         '<div class="largo"><label for="cr-nome">Nome prodotto <small>(titolo della scheda)</small></label><input type="text" id="cr-nome" value="' + escHtml(e.nome || pulisciTesto(d.descrizione) || v0.descrizione || '') + '"></div>' +
         '<div class="largo"><label for="cr-descr">Descrizione <small>(facoltativa, sotto il titolo)</small></label><textarea id="cr-descr" rows="2">' + escHtml(esiste() ? (e.descrizione || '') : (v0.descrizione && pulisciTesto(d.descrizione) && v0.descrizione !== pulisciTesto(d.descrizione) ? v0.descrizione : '')) + '</textarea></div>' +
-        '<div><label for="cr-categoria">Categoria *</label><input type="text" id="cr-categoria" list="cr-l-cat" value="' + escHtml(e.categoria || '') + '"><datalist id="cr-l-cat">' + opz(CR.categorie) + '</datalist></div>' +
+        campoElenco('cr-categoria', 'Categoria *', CR.vCat, e.categoria, '— scegli —') +
         '<div><label for="cr-catalogo-sel">Nome catalogo *</label><select id="cr-catalogo-sel" onchange="crEl(\'cr-catalogo-nuovo\').hidden = this.value !== \'__nuovo__\'; if (this.value === \'__nuovo__\') crEl(\'cr-catalogo-nuovo\').focus()">' +
           '<option value="">— scegli —</option>' + (CR.cataloghi || []).map(x => '<option value="' + escHtml(x) + '"' + (x === e.catalogo ? ' selected' : '') + '>' + escHtml(x) + '</option>').join('') +
           '<option value="__nuovo__">＋ Nuovo catalogo…</option></select>' +
           '<input type="text" id="cr-catalogo-nuovo" placeholder="Nome del nuovo catalogo" hidden style="margin-top:6px"></div>' +
         '<div><label for="cr-prezzo">Prezzo IVA inclusa <small id="cr-netto"></small></label><input type="number" id="cr-prezzo" step="0.01" min="0" value="' + (e.prezzo || v0.prezzo || '') + '" oninput="aggiornaNetto()"></div>' +
         '<div><label for="cr-collo">Pezzi per collo</label><input type="number" id="cr-collo" min="1" step="1" value="' + (e.pezziCollo || v0.confezione || 1) + '"></div>' +
-        '<div><label for="cr-tipo">Tipo</label><input type="text" id="cr-tipo" list="cr-l-tipo" value="' + escHtml(e.tipo || d.tipo || '') + '"><datalist id="cr-l-tipo">' + opz(CR.tipi) + '</datalist></div>' +
-        '<div><label for="cr-mat">Materiale</label><input type="text" id="cr-mat" list="cr-l-mat" value="' + escHtml(e.materiale || d.materiale || '') + '"><datalist id="cr-l-mat">' + opz(CR.materiali) + '</datalist></div>' +
+        campoElenco('cr-tipo', 'Tipo', CR.vTipo, e.tipo || d.tipo, '— nessuno —') +
+        campoElenco('cr-mat', 'Materiale', CR.vMat, e.materiale || d.materiale, '— nessuno —') +
         '<div class="largo"><label class="cr-check"><input type="checkbox" id="cr-ordinabile"' + (e.ordinabile ? ' checked' : '') + '> Ordinabile anche senza giacenza (prevendita)</label></div>' +
       '</div>' +
 
@@ -917,6 +920,38 @@
   }
 
   // Nome catalogo: scelto tra quelli esistenti oppure nuovo (non viene più preso dal brand)
+  // ===== Campi a elenco (Categoria / Tipo / Materiale): voci già esistenti + possibilità di aggiungerne una nuova =====
+  const NUOVA_VOCE = '__nuovo__';
+  function vociEsistenti(dalServer, campo, corrente) {
+    const mappa = new Map();
+    const aggiungi = v => { const t = catKey(v); if (t && !mappa.has(t.toLowerCase())) mappa.set(t.toLowerCase(), t); };
+    (dalServer || []).forEach(aggiungi);
+    (PRODUCTS || []).forEach(p => aggiungi(p[campo]));
+    aggiungi(corrente);
+    return [...mappa.values()].sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+  }
+  function campoElenco(id, etichetta, lista, corrente, vuoto) {
+    const cur = catKey(corrente);
+    const trovato = lista.find(x => x.toLowerCase() === cur.toLowerCase()) || '';
+    return '<div><label for="' + id + '">' + etichetta + '</label>' +
+      '<select id="' + id + '" onchange="crEl(\'' + id + '-nuovo\').hidden = this.value !== \'' + NUOVA_VOCE + '\'; if (this.value === \'' + NUOVA_VOCE + '\') crEl(\'' + id + '-nuovo\').focus()">' +
+        '<option value="">' + vuoto + '</option>' +
+        lista.map(x => '<option value="' + escHtml(x) + '"' + (x === trovato ? ' selected' : '') + '>' + escHtml(x) + '</option>').join('') +
+        '<option value="' + NUOVA_VOCE + '">＋ Nuova voce…</option></select>' +
+      '<input type="text" id="' + id + '-nuovo" placeholder="Scrivi la nuova voce" hidden style="margin-top:6px"></div>';
+  }
+  // Valore scelto: dall'elenco oppure scritto a mano (se esiste già con maiuscole diverse uso quella esistente)
+  function valoreElenco(id, lista) {
+    const sel = crEl(id);
+    if (!sel) return '';
+    if (sel.value !== NUOVA_VOCE) return sel.value;
+    const n = catKey(crEl(id + '-nuovo').value);
+    return (lista || []).find(x => x.toLowerCase() === n.toLowerCase()) || n;
+  }
+  function campoElencoFocus(id) {
+    const sel = crEl(id);
+    return sel && sel.value === NUOVA_VOCE ? crEl(id + '-nuovo') : sel;
+  }
   function valoreCatalogo() {
     const sel = crEl('cr-catalogo-sel');
     if (!sel) return '';
@@ -928,9 +963,9 @@
   function leggiCampi() {
     return {
       codice: crEl('cr-cod').value.trim(), nome: crEl('cr-nome').value.trim(), descrizione: crEl('cr-descr').value.trim(),
-      categoria: crEl('cr-categoria').value.trim(), catalogo: valoreCatalogo(),
+      categoria: valoreElenco('cr-categoria', CR.vCat), catalogo: valoreCatalogo(),
       prezzo: Number(crEl('cr-prezzo').value) || 0, pezziCollo: Number(crEl('cr-collo').value) || 1,
-      tipo: crEl('cr-tipo').value.trim(), materiale: crEl('cr-mat').value.trim(), ordinabile: crEl('cr-ordinabile').checked,
+      tipo: valoreElenco('cr-tipo', CR.vTipo), materiale: valoreElenco('cr-mat', CR.vMat), ordinabile: crEl('cr-ordinabile').checked,
       sconto: Number(crEl('cr-sconto').value) || 0, scontoFino: crEl('cr-fino').value
     };
   }
@@ -1014,7 +1049,7 @@
     if (!c.codice) { es.textContent = 'Scrivi il codice prodotto.'; crEl('cr-cod').focus(); return; }
     if (c.sconto && (c.sconto < 1 || c.sconto > 99)) { es.textContent = 'Lo sconto deve essere tra 1 e 99%.'; crEl('cr-sconto').focus(); return; }
     if (!c.sconto) c.scontoFino = '';
-    if ((pz.nuove.length || pz.toccaEsistenti) && !c.categoria) { es.textContent = 'Scrivi la categoria.'; crEl('cr-categoria').focus(); return; }
+    if ((pz.nuove.length || pz.toccaEsistenti) && !c.categoria) { es.textContent = 'Scegli la categoria (o aggiungine una nuova).'; campoElencoFocus('cr-categoria').focus(); return; }
     if ((pz.nuove.length || pz.toccaEsistenti) && !c.catalogo) { es.textContent = 'Scegli il nome del catalogo (o aggiungine uno nuovo).'; (crEl('cr-catalogo-sel').value === '__nuovo__' ? crEl('cr-catalogo-nuovo') : crEl('cr-catalogo-sel')).focus(); return; }
     if (pz.nuove.length && !c.prezzo && !confirm('Il prezzo è vuoto: caricare comunque?')) return;
     if (pz.modifiche.prezzo !== undefined && pz.toccaEsistenti) {
