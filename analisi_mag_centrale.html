@@ -472,6 +472,9 @@
     // Colonne copiate dall'ultimo movimento esistente della stessa variante.
     // Tutte le altre colonne restano vuote (tranne data, quantità, ID, colore, misura, TOT).
     const RETTIFICA_COLONNE_DA_COPIARE = ['COD', 'DESCRIZIONE', 'forn', 'OPER', 'PREZZO'];
+    // Colonne del foglio NOTE (per lettera) compilate nelle righe di rettifica:
+    const RETTIFICA_COL_EAN = 'K';      // EAN della variante, preso dai movimenti della stessa variante
+    const RETTIFICA_COL_VALORE = 'O';   // valore = rettifica × valore unitario (O ÷ N dei movimenti della variante)
 
     // ---- CONFEZIONI (pezzi per confezione) ----
     const PZCONF_STORAGE_KEY = 'riassortimento_pz_conf_v1';
@@ -705,10 +708,12 @@
     function gvizRowsToObjects(resp) {
         const cols = resp.table.cols.map((c, i) => c && c.label ? c.label : 'Colonna_' + i);
         return resp.table.rows.map(r => {
-            let o = {};
+            let o = {}, raw = {};
             (r.c || []).forEach((cell, i) => {
                 o[cols[i]] = (cell && cell.f !== undefined && cell.f !== null) ? cell.f : (cell && cell.v !== null && cell.v !== undefined ? cell.v : '');
+                raw[cols[i]] = (cell && cell.v !== null && cell.v !== undefined) ? cell.v : '';
             });
+            Object.defineProperty(o, '_raw', { value: raw, enumerable: true });
             return o;
         });
     }
@@ -1540,13 +1545,17 @@
             const rows = gvizRowsToObjects(resp).map(normalizeRow);
             if (!rows.length) { body.innerHTML = `<p class="text-danger">Nessun movimento trovato per il codice <strong>${esc(cod)}</strong>.</p>`; return; }
 
-            const I = { cod, desc: rows[0]['DESCRIZIONE'] || 'N/D', colors: [], sizes: [], sys: {}, tpl: {}, tplAny: rows[rows.length - 1], real: {}, rows: [] };
+            const I = { cod, desc: rows[0]['DESCRIZIONE'] || 'N/D', colors: [], sizes: [], sys: {}, tpl: {}, tplAny: rows[rows.length - 1], real: {}, rows: [], ean: {}, unit: {}, unitAny: 0 };
             rows.forEach(r => {
                 const c = r._colore || 'N/D', s = r._misura || 'N/D', k = c + '||' + s;
                 if (!I.colors.includes(c)) I.colors.push(c);
                 if (!I.sizes.includes(s)) I.sizes.push(s);
                 I.sys[k] = (I.sys[k] || 0) + r._qta_num;
                 I.tpl[k] = r; // resta l'ultimo movimento della variante
+                const ean = eanOf(r);
+                if (ean) I.ean[k] = ean;                      // ultimo EAN non vuoto della variante
+                const uv = unitValueOf(r);
+                if (uv) { I.unit[k] = uv; I.unitAny = uv; }
             });
             Object.keys(I.sys).forEach(k => I.sys[k] = round3(I.sys[k]));
             I.colors.sort((a, b) => String(a).localeCompare(String(b)));
@@ -1630,6 +1639,27 @@
         renderInvGrid();
     });
 
+    function headerOfLetter(letter) {
+        return Object.keys(globalColIds).find(h => globalColIds[h] === letter) || '';
+    }
+    function eanOf(r) {
+        const h = headerOfLetter(RETTIFICA_COL_EAN); if (!h) return '';
+        let v = r._raw ? r._raw[h] : r[h];
+        if (typeof v === 'number') v = v.toFixed(0);
+        v = String(v ?? '').trim();
+        if (/^\d+\.0+$/.test(v)) v = v.replace(/\.0+$/, '');
+        return v;
+    }
+    // valore unitario della riga = colonna O ÷ colonna N (stesso segno e prezzo usati nel foglio)
+    function unitValueOf(r) {
+        const hO = headerOfLetter(RETTIFICA_COL_VALORE);
+        const q = r._qta_num;
+        if (!hO || !q) return 0;
+        const raw = r._raw ? r._raw[hO] : r[hO];
+        const val = typeof raw === 'number' ? raw : parseEuro(raw);
+        return val ? val / q : 0;
+    }
+
     function buildCorrectionRow(tpl, I, c, s, diff, idRett, dataStr) {
         const row = {};
         globalCols.forEach(h => row[h] = '');
@@ -1643,8 +1673,17 @@
         set(COL.idril, idRett);
         set(COL.colore, c === 'N/D' ? '' : c);
         set(COL.misura, s === 'N/D' ? '' : s);
-        const prezzo = tpl ? Math.abs(parseEuro(tpl['PREZZO'])) : 0;
-        if (prezzo) set('TOT', Math.round(diff * prezzo * 100) / 100);
+        const k = c + '||' + s;
+        // EAN: solo dalla stessa variante (mai da un'altra taglia/colore)
+        const hEan = headerOfLetter(RETTIFICA_COL_EAN);
+        if (hEan) set(hEan, I.ean[k] || '');
+        // Valore in colonna O
+        const hVal = headerOfLetter(RETTIFICA_COL_VALORE);
+        let unit = I.unit[k] || I.unitAny || 0;
+        if (!unit && tpl) unit = Math.abs(parseEuro(tpl['PREZZO']));
+        if (hVal && unit) set(hVal, Math.round(diff * unit * 100) / 100);
+        row._ean = I.ean[k] || '';
+        row._valore = hVal && unit ? Math.round(diff * unit * 100) / 100 : '';
         return row;
     }
 
@@ -1663,8 +1702,9 @@
             const sys = I.sys[k] || 0, diff = round3(real - sys);
             realStockOverrides[I.cod + '||' + k] = real; // il riassortimento userà la giacenza reale
             if (diff === 0) return;
-            out.push(buildCorrectionRow(I.tpl[k] || I.tplAny, I, c, s, diff, idRett, dataStr));
-            preview.push({ c, s, sys, real, diff });
+            const row = buildCorrectionRow(I.tpl[k] || I.tplAny, I, c, s, diff, idRett, dataStr);
+            out.push(row);
+            preview.push({ c, s, sys, real, diff, ean: row._ean, val: row._valore });
         });
         I.rows = out;
 
@@ -1672,15 +1712,18 @@
         if (!out.length) {
             html += '<p class="text-success">Nessuna differenza: la giacenza contabile corrisponde a quella reale.</p>';
         } else {
-            let tot = 0;
+            let tot = 0, totVal = 0, noEan = 0;
+            const eur = v => '€ ' + Number(v).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             html += `<table class="table table-sm table-bordered bg-white" style="font-size:0.85rem"><thead class="table-secondary"><tr>
-                <th>Codice</th><th>Colore</th><th>Misura</th><th>Sistema</th><th>Reale</th><th>Rettifica (${esc(COL.qta)})</th></tr></thead><tbody>`;
+                <th>Codice</th><th>EAN (col. ${RETTIFICA_COL_EAN})</th><th>Colore</th><th>Misura</th><th>Sistema</th><th>Reale</th><th>Rettifica (${esc(COL.qta)})</th><th>Valore (col. ${RETTIFICA_COL_VALORE})</th></tr></thead><tbody>`;
             preview.forEach(p => {
-                tot += p.diff;
-                html += `<tr><td>${esc(I.cod)}</td><td>${esc(p.c)}</td><td>${esc(p.s)}</td><td>${p.sys}</td><td>${p.real}</td>
-                    <td class="fw-bold ${p.diff > 0 ? 'text-success' : 'text-danger'}">${p.diff > 0 ? '+' : ''}${p.diff}</td></tr>`;
+                tot += p.diff; if (p.val !== '') totVal += p.val; if (!p.ean) noEan++;
+                html += `<tr><td>${esc(I.cod)}</td><td>${p.ean ? esc(p.ean) : '<span class="badge bg-warning text-dark">mancante</span>'}</td><td>${esc(p.c)}</td><td>${esc(p.s)}</td><td>${p.sys}</td><td>${p.real}</td>
+                    <td class="fw-bold ${p.diff > 0 ? 'text-success' : 'text-danger'}">${p.diff > 0 ? '+' : ''}${p.diff}</td>
+                    <td>${p.val !== '' ? eur(p.val) : '<span class="badge bg-warning text-dark">mancante</span>'}</td></tr>`;
             });
-            html += `</tbody><tfoot><tr><th colspan="5" class="text-end">Totale rettifica</th><th>${round3(tot)}</th></tr></tfoot></table>
+            html += `</tbody><tfoot><tr><th colspan="6" class="text-end">Totale rettifica</th><th>${round3(tot)}</th><th>${eur(totVal)}</th></tr></tfoot></table>
+                ${noEan ? `<div class="alert alert-warning small py-2">${noEan} righe senza EAN: la variante non ha mai avuto un movimento con EAN in colonna ${RETTIFICA_COL_EAN}. Inseriscilo a mano dopo aver incollato.</div>` : ''}
                 <div class="alert alert-info small mb-0">Premi <strong>Copia righe</strong> e incollale nella prima riga libera del foglio NOTE (colonna A), oppure esporta in Excel.
                 Positivo = carico, negativo = scarico. Le righe hanno destinazione "${esc(RETTIFICA_DESTINAZIONE)}" e sono escluse dalle vendite nel riassortimento.</div>`;
         }
