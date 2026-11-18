@@ -474,7 +474,8 @@
     const RETTIFICA_COLONNE_DA_COPIARE = ['COD', 'DESCRIZIONE', 'forn', 'OPER', 'PREZZO'];
     // Colonne del foglio NOTE (per lettera) compilate nelle righe di rettifica:
     const RETTIFICA_COL_EAN = 'K';      // EAN della variante, preso dai movimenti della stessa variante
-    const RETTIFICA_COL_VALORE = 'O';   // valore = rettifica × valore unitario (O ÷ N dei movimenti della variante)
+    const RETTIFICA_COL_PREZZO = 'G';   // valorizzazione unitaria della giacenza, copiata dai movimenti della variante
+    const RETTIFICA_COL_VALORE = 'O';   // totale valore della variazione = rettifica (N) × valorizzazione (G)
 
     // ---- CONFEZIONI (pezzi per confezione) ----
     const PZCONF_STORAGE_KEY = 'riassortimento_pz_conf_v1';
@@ -1650,14 +1651,14 @@
         if (/^\d+\.0+$/.test(v)) v = v.replace(/\.0+$/, '');
         return v;
     }
-    // valore unitario della riga = colonna O ÷ colonna N (stesso segno e prezzo usati nel foglio)
+    // valorizzazione unitaria della riga: colonna G (in mancanza, O ÷ N)
     function unitValueOf(r) {
-        const hO = headerOfLetter(RETTIFICA_COL_VALORE);
-        const q = r._qta_num;
-        if (!hO || !q) return 0;
-        const raw = r._raw ? r._raw[hO] : r[hO];
-        const val = typeof raw === 'number' ? raw : parseEuro(raw);
-        return val ? val / q : 0;
+        const num = h => { const raw = r._raw ? r._raw[h] : r[h]; return typeof raw === 'number' ? raw : parseEuro(raw); };
+        const hG = headerOfLetter(RETTIFICA_COL_PREZZO);
+        if (hG) { const g = num(hG); if (g) return Math.abs(g); }
+        const hO = headerOfLetter(RETTIFICA_COL_VALORE), q = r._qta_num;
+        if (hO && q) { const o = num(hO); if (o) return Math.abs(o / q); }
+        return 0;
     }
 
     function buildCorrectionRow(tpl, I, c, s, diff, idRett, dataStr) {
@@ -1681,7 +1682,10 @@
         const hVal = headerOfLetter(RETTIFICA_COL_VALORE);
         let unit = I.unit[k] || I.unitAny || 0;
         if (!unit && tpl) unit = Math.abs(parseEuro(tpl['PREZZO']));
+        const hPrz = headerOfLetter(RETTIFICA_COL_PREZZO);
+        if (hPrz && unit) set(hPrz, Math.round(unit * 10000) / 10000);
         if (hVal && unit) set(hVal, Math.round(diff * unit * 100) / 100);
+        row._prezzo = unit || '';
         row._ean = I.ean[k] || '';
         row._valore = hVal && unit ? Math.round(diff * unit * 100) / 100 : '';
         return row;
@@ -1704,7 +1708,7 @@
             if (diff === 0) return;
             const row = buildCorrectionRow(I.tpl[k] || I.tplAny, I, c, s, diff, idRett, dataStr);
             out.push(row);
-            preview.push({ c, s, sys, real, diff, ean: row._ean, val: row._valore });
+            preview.push({ c, s, sys, real, diff, ean: row._ean, val: row._valore, prz: row._prezzo });
         });
         I.rows = out;
 
@@ -1715,14 +1719,15 @@
             let tot = 0, totVal = 0, noEan = 0;
             const eur = v => '€ ' + Number(v).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             html += `<table class="table table-sm table-bordered bg-white" style="font-size:0.85rem"><thead class="table-secondary"><tr>
-                <th>Codice</th><th>EAN (col. ${RETTIFICA_COL_EAN})</th><th>Colore</th><th>Misura</th><th>Sistema</th><th>Reale</th><th>Rettifica (${esc(COL.qta)})</th><th>Valore (col. ${RETTIFICA_COL_VALORE})</th></tr></thead><tbody>`;
+                <th>Codice</th><th>EAN (col. ${RETTIFICA_COL_EAN})</th><th>Colore</th><th>Misura</th><th>Sistema</th><th>Reale</th><th>Rettifica (${esc(COL.qta)})</th><th>Valorizz. (col. ${RETTIFICA_COL_PREZZO})</th><th>Totale (col. ${RETTIFICA_COL_VALORE})</th></tr></thead><tbody>`;
             preview.forEach(p => {
                 tot += p.diff; if (p.val !== '') totVal += p.val; if (!p.ean) noEan++;
                 html += `<tr><td>${esc(I.cod)}</td><td>${p.ean ? esc(p.ean) : '<span class="badge bg-warning text-dark">mancante</span>'}</td><td>${esc(p.c)}</td><td>${esc(p.s)}</td><td>${p.sys}</td><td>${p.real}</td>
                     <td class="fw-bold ${p.diff > 0 ? 'text-success' : 'text-danger'}">${p.diff > 0 ? '+' : ''}${p.diff}</td>
+                    <td>${p.prz !== '' ? eur(p.prz) : '-'}</td>
                     <td>${p.val !== '' ? eur(p.val) : '<span class="badge bg-warning text-dark">mancante</span>'}</td></tr>`;
             });
-            html += `</tbody><tfoot><tr><th colspan="6" class="text-end">Totale rettifica</th><th>${round3(tot)}</th><th>${eur(totVal)}</th></tr></tfoot></table>
+            html += `</tbody><tfoot><tr><th colspan="6" class="text-end">Totale rettifica</th><th>${round3(tot)}</th><th></th><th>${eur(totVal)}</th></tr></tfoot></table>
                 ${noEan ? `<div class="alert alert-warning small py-2">${noEan} righe senza EAN: la variante non ha mai avuto un movimento con EAN in colonna ${RETTIFICA_COL_EAN}. Inseriscilo a mano dopo aver incollato.</div>` : ''}
                 <div class="alert alert-info small mb-0">Premi <strong>Copia righe</strong> e incollale nella prima riga libera del foglio NOTE (colonna A), oppure esporta in Excel.
                 Positivo = carico, negativo = scarico. Le righe hanno destinazione "${esc(RETTIFICA_DESTINAZIONE)}" e sono escluse dalle vendite nel riassortimento.</div>`;
