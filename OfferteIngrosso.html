@@ -348,7 +348,7 @@
                         <span class="small ms-2" id="sEsito"></span>
                         <hr>
                         <h6 class="fw-bold"><i class="fas fa-store me-2"></i>Catalogo prodotti</h6>
-                        <p class="small text-muted mb-2">Nei messaggi delle offerte viene inserito il link personale del cliente al catalogo (segnaposto {CATALOGO}), già filtrato sul brand dell'offerta.</p>
+                        <p class="small text-muted mb-2">Nei messaggi delle offerte viene inserito il link personale del cliente al catalogo (segnaposto {CATALOGO}), già filtrato sul brand dell'offerta. Il collegamento viene salvato nel foglio <b>IMPOSTAZIONI</b>: basta inserirlo una volta e vale su tutti i computer e cellulari.</p>
                         <label class="form-label small fw-bold">URL App web del catalogo (termina con /exec)</label>
                         <input id="sCatApi" class="form-control mb-2" placeholder="https://script.google.com/macros/s/.../exec">
                         <label class="form-label small fw-bold">Codice ADMIN del catalogo</label>
@@ -535,6 +535,7 @@
         <select id="lkModo" class="form-select form-select-sm mb-2" onchange="cambiaLinkForm()">
             <option value="auto">Automatico: cataloghi dei prodotti dell'immagine o dei brand</option>
             <option value="cataloghi">Scelgo io i cataloghi</option>
+            <option value="prodotti">Scelgo io i prodotti</option>
             <option value="personalizzato">Incollo un link</option>
             <option value="tutto">Tutto il catalogo</option>
             <option value="nessuno">Nessun link</option>
@@ -542,6 +543,13 @@
         <div id="lkBoxCat" style="display:none">
             <input id="lkCerca" class="form-control form-control-sm mb-1" placeholder="Cerca catalogo..." oninput="renderLinkForm()">
             <div id="lkCataloghi" class="border rounded p-2 small mb-1" style="max-height:200px;overflow:auto"></div>
+        </div>
+        <div id="lkBoxProd" style="display:none">
+            <div class="d-flex flex-wrap gap-2 mb-1">
+                <button type="button" class="btn btn-sm btn-primary" onclick="apriPickerProdotti('link')"><i class="fas fa-shirt me-1"></i>Scegli i prodotti del link</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="usaProdottiImmagine()">Usa i prodotti dell'immagine</button>
+            </div>
+            <div id="lkProdotti" class="small mb-1"></div>
         </div>
         <div id="lkBoxLink" style="display:none">
             <input id="lkLink" class="form-control form-control-sm" inputmode="url" placeholder="Incolla qui il link (es. dal tasto Condividi del catalogo)" oninput="cambiaLinkForm(true)">
@@ -615,7 +623,7 @@
 
 <div class="modal fade" id="mProdPromo" tabindex="-1" style="z-index:1070"><div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
     <div class="modal-header" style="background:#2b6cb0;color:#fff;">
-        <h5 class="modal-title fw-bold"><i class="fas fa-images me-2"></i>Scegli i prodotti per l'immagine (fino a 4)</h5>
+        <h5 class="modal-title fw-bold"><i class="fas fa-images me-2"></i><span id="ppTitolo">Scegli i prodotti per l'immagine (fino a 4)</span></h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
     </div>
     <div class="modal-body">
@@ -859,6 +867,8 @@ async function carica(force, completo) {
         collegatiOra = 0;
         renderTutto();
         salvaCacheLocale();
+        PROMO_CFG = {};          // le impostazioni delle offerte si rileggono dal foglio aggiornato
+        sincronizzaCatalogo();
         importaEmailCatalogo();
         const v = DATA.vendite || {};
         const vend = v.completo ? ` · vendite rilette per intero (${esc(v.motivo)})` : (v.nuove ? ` · <b>+${v.nuove.toLocaleString('it-IT')}</b> nuove righe vendite` : ' · nessuna nuova riga vendite');
@@ -929,13 +939,21 @@ const PROMO_FONT = "'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 const PROMO_EMOJI = "'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif";
 
 let PROMO_CFG = {};    // id offerta → { modo, prodotti: [codici], foto: dataUrl|null }
-let FORM_PROMO = { modo: 'prodotti', prodotti: [], foto: null, linkModo: 'auto', cataloghi: [], link: '', cambiato: false, fotoCambiata: false };
+let FORM_PROMO = { modo: 'prodotti', prodotti: [], foto: null, linkModo: 'auto', cataloghi: [], link: '', prodLink: [], cambiato: false, fotoCambiata: false };
 let PROD_CAT = null;   // prodotti del catalogo con foto (per scegliere e per la scelta automatica)
 let FOTO_PROD = {};    // codice prodotto → dataUrl della foto
 let PROMO_BLOB = null; // immagine pronta per l'offerta aperta nella Campagna
 
-const catalogoCollegato = () => !!(ls.get('oi_cat_api') && ls.get('oi_cat_admin'));
-const urlCatalogo = (azione, extra) => ls.get('oi_cat_api') + '?action=' + azione + '&cli=' + encodeURIComponent(ls.get('oi_cat_admin') || '') + (extra || '');
+// Collegamento al catalogo: salvato nel foglio IMPOSTAZIONI (CAT_API, CAT_ADMIN, CAT_AUTO), quindi uguale
+// su tutti i computer. Il valore del browser serve solo finché i dati del foglio non sono ancora arrivati.
+const cfgFoglio = k => (DATA && DATA.cfg && DATA.cfg[k] !== undefined && DATA.cfg[k] !== null) ? String(DATA.cfg[k]).trim() : '';
+const catApi = () => cfgFoglio('CAT_API') || ls.get('oi_cat_api') || '';
+const catAdmin = () => cfgFoglio('CAT_ADMIN') || ls.get('oi_cat_admin') || '';
+const catAuto = () => (cfgFoglio('CAT_AUTO') || ls.get('oi_cat_auto') || '1') !== '0';
+const catalogoCollegato = () => !!(catApi() && catAdmin());
+// Un codice fatto di sole cifre (es. 0123) nel foglio diventerebbe un numero e perderebbe gli zeri: l'apostrofo lo tiene come testo
+const comeTesto = v => /^\d+$/.test(String(v || '')) ? "'" + v : v;
+const urlCatalogo = (azione, extra) => catApi() + '?action=' + azione + '&cli=' + encodeURIComponent(catAdmin()) + (extra || '');
 
 function caricaImmagine(src) {
     return new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = src; });
@@ -1215,9 +1233,18 @@ async function risorsePromo(o, cfg) {
 }
 
 // ---------- Impostazioni salvate per offerta ----------
+// Scelte (prodotti dell'immagine, tipo di link, cataloghi, prodotti del link) salvate nel foglio IMPOSTAZIONI
+// con chiave PROMO_<id offerta>: le legge ogni computer. La foto caricata a mano resta sul server del catalogo.
+function promoDalFoglio(id) {
+    const v = cfgFoglio('PROMO_' + id);
+    if (!v) return null;
+    try { const o = JSON.parse(v); return o && typeof o === 'object' ? o : null; } catch (e) { return null; }
+}
+
 async function impostazioniPromo(id) {
     if (!id) return { modo: 'prodotti', prodotti: [], foto: null };
     if (PROMO_CFG[id]) return PROMO_CFG[id];
+    const sceltaFoglio = promoDalFoglio(id);
     let cfg = null;
     if (catalogoCollegato()) {
         try {
@@ -1225,13 +1252,21 @@ async function impostazioniPromo(id) {
             if (j.ok) {
                 const imp = j.impostazioni || {};
                 cfg = { modo: imp.modo || (j.dataUrl ? 'foto' : 'prodotti'), prodotti: imp.prodotti || [], foto: j.dataUrl || null,
-                        linkModo: imp.linkModo || 'auto', cataloghi: imp.cataloghi || [], link: imp.link || '',
+                        linkModo: imp.linkModo || 'auto', cataloghi: imp.cataloghi || [], link: imp.link || '', prodLink: imp.prodLink || [],
                         bannerLink: j.bannerLink || '', bannerFirma: j.bannerFirma || '' };
                 try { if (window.localforage) await localforage.setItem('oi_promo2_' + id, cfg); } catch (e) {}
             }
         } catch (e) {}
     }
-    if (!cfg) { try { if (window.localforage) cfg = await localforage.getItem('oi_promo2_' + id); } catch (e) {} }
+    if (!cfg && !sceltaFoglio) { try { if (window.localforage) cfg = await localforage.getItem('oi_promo2_' + id); } catch (e) {} }
+    // le scelte salvate nel foglio sono quelle valide per tutti: prevalgono
+    if (sceltaFoglio) {
+        cfg = Object.assign({ modo: 'prodotti', prodotti: [], foto: null }, cfg || {}, {
+            modo: sceltaFoglio.modo || (cfg && cfg.modo) || 'prodotti', prodotti: sceltaFoglio.prodotti || [],
+            linkModo: sceltaFoglio.linkModo || 'auto', cataloghi: sceltaFoglio.cataloghi || [], link: sceltaFoglio.link || '',
+            prodLink: sceltaFoglio.prodLink || [] });
+        if (cfg.modo === 'foto' && !cfg.foto) cfg.modo = 'prodotti';   // foto non raggiungibile da qui: uso i prodotti
+    }
     PROMO_CFG[id] = cfg || { modo: 'prodotti', prodotti: [], foto: null };
     return PROMO_CFG[id];
 }
@@ -1239,20 +1274,29 @@ async function impostazioniPromo(id) {
 async function salvaPromo(id, cfg, fotoCambiata) {
     // Unisco alle impostazioni precedenti: ciò che non viene indicato (es. le scelte del link) resta com'era
     const prima = PROMO_CFG[id] || {};
-    PROMO_CFG[id] = Object.assign({ modo: 'prodotti', prodotti: [], foto: null, linkModo: 'auto', cataloghi: [], link: '' }, prima,
+    PROMO_CFG[id] = Object.assign({ modo: 'prodotti', prodotti: [], foto: null, linkModo: 'auto', cataloghi: [], link: '', prodLink: [] }, prima,
         { modo: cfg.modo || prima.modo || 'prodotti', prodotti: cfg.prodotti || prima.prodotti || [], foto: cfg.foto === undefined ? (prima.foto || null) : (cfg.foto || null) },
-        cfg.linkModo !== undefined ? { linkModo: cfg.linkModo, cataloghi: cfg.cataloghi || [], link: cfg.link || '' } : {});
+        cfg.linkModo !== undefined ? { linkModo: cfg.linkModo, cataloghi: cfg.cataloghi || [], link: cfg.link || '', prodLink: cfg.prodLink || [] } : {});
     cfg = PROMO_CFG[id];   // l'immagine su Drive (bannerLink) resta e si aggiorna da sola se cambia
     PROMO_BLOB = null;
     try { if (window.localforage) await localforage.setItem('oi_promo2_' + id, PROMO_CFG[id]); } catch (e) {}
-    if (!catalogoCollegato()) { toast('Immagine salvata solo su questo dispositivo: collega il catalogo nelle Impostazioni.', 'warning'); return; }
+    // 1) nel foglio IMPOSTAZIONI: le scelte valgono per tutti i computer
+    const scelte = { modo: cfg.modo, prodotti: cfg.prodotti || [], linkModo: cfg.linkModo || 'auto', cataloghi: cfg.cataloghi || [], link: cfg.link || '', prodLink: cfg.prodLink || [] };
     try {
-        const body = { action: 'salvaPromoOfferta', cli: ls.get('oi_cat_admin'), id: id,
-            impostazioni: { modo: cfg.modo, prodotti: cfg.prodotti || [], linkModo: cfg.linkModo || 'auto', cataloghi: cfg.cataloghi || [], link: cfg.link || '' },
+        const imp = {}; imp['PROMO_' + id] = JSON.stringify(scelte);
+        await api('saveSettings', { settings: imp });
+        if (DATA && DATA.cfg) Object.assign(DATA.cfg, imp);
+        salvaCacheLocale();
+    } catch (e) { toast('Scelte dell\'offerta non salvate nel foglio: ' + esc(e.message), 'warning'); }
+    // 2) sul server del catalogo: serve per la foto caricata a mano e per l'immagine pubblicata
+    if (!catalogoCollegato()) return;
+    try {
+        const body = { action: 'salvaPromoOfferta', cli: catAdmin(), id: id,
+            impostazioni: scelte,
             fotoCambiata: !!fotoCambiata, dataUrl: fotoCambiata ? cfg.foto : null };
-        const j = await (await fetch(ls.get('oi_cat_api'), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })).json();
+        const j = await (await fetch(catApi(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })).json();
         if (!j.ok) throw new Error(j.error || 'errore');
-    } catch (e) { toast('Immagine salvata solo su questo dispositivo: ' + esc(e.message), 'warning'); }
+    } catch (e) { toast('Foto dell\'immagine non salvata sul catalogo: ' + esc(e.message) + '. Le scelte di prodotti e link sono comunque nel foglio.', 'warning'); }
 }
 
 // Riduce una foto a max N pixel (le foto dei telefoni pesano molto)
@@ -1337,16 +1381,19 @@ async function caricaFotoPromo(input, dove) {
 
 // ---------- Scelta dei prodotti dal catalogo ----------
 let PICKER = { dove: 'form', sel: [] };
+const MAX_PICKER = () => PICKER.dove === 'link' ? 12 : 4;
 
 async function apriPickerProdotti(dove) {
     try { await caricaElencoProdotti(); }
     catch (e) { toast(esc(e.message), 'warning'); return; }
     let sel = [];
-    if (dove === 'form') sel = FORM_PROMO.prodotti.length ? FORM_PROMO.prodotti.slice() : prodottiAutomatici(leggiForm());
+    if (dove === 'link') sel = (FORM_PROMO.prodLink || []).slice();
+    else if (dove === 'form') sel = FORM_PROMO.prodotti.length ? FORM_PROMO.prodotti.slice() : prodottiAutomatici(leggiForm());
     else { const o = offertaCampagna(); if (!o) return; const cfg = await impostazioniPromo(o.id); sel = (cfg.prodotti || []).length ? cfg.prodotti.slice() : prodottiAutomatici(o); }
     PICKER = { dove: dove, sel: sel };
     const cataloghi = [...new Set(PROD_CAT.map(p => p.catalogo).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
-    const o = dove === 'form' ? leggiForm() : offertaCampagna();
+    const o = dove === 'form' || dove === 'link' ? leggiForm() : offertaCampagna();
+    $('ppTitolo').textContent = dove === 'link' ? 'Scegli i prodotti che il link deve aprire (fino a ' + MAX_PICKER() + ')' : 'Scegli i prodotti per l\'immagine (fino a 4)';
     const pref = (o && o.brand || []).map(normNomeJS);
     const preferito = cataloghi.find(c => pref.indexOf(normNomeJS(c)) >= 0) || '';
     $('ppCatalogo').innerHTML = '<option value="">Tutti i cataloghi</option>' + cataloghi.map(c => `<option${c === preferito ? ' selected' : ''}>${esc(c)}</option>`).join('');
@@ -1361,8 +1408,9 @@ function renderPicker() {
         (!q || normNomeJS([p.nome, p.cod, p.descrizione, p.categoria, p.tipo, p.catalogo].join(' ')).indexOf(q) >= 0));
     $('ppConta').textContent = lista.length + ' prodotti' + (lista.length > 120 ? ' (primi 120: usa la ricerca)' : '');
     $('ppScelti').innerHTML = PICKER.sel.length
-        ? '<b>Scelti (' + PICKER.sel.length + '/4):</b> ' + PICKER.sel.map(c => { const p = PROD_CAT.find(x => x.cod === c); return esc(p ? p.nome : c); }).join(', ')
-        : '<span class="text-muted">Clicca sulle foto per sceglierle (fino a 4). Nessuna scelta = prodotti automatici dai brand dell\'offerta.</span>';
+        ? '<b>Scelti (' + PICKER.sel.length + '/' + MAX_PICKER() + '):</b> ' + PICKER.sel.map(c => { const p = PROD_CAT.find(x => x.cod === c); return esc(p ? p.nome : c); }).join(', ')
+        : (PICKER.dove === 'link' ? '<span class="text-muted">Clicca sui prodotti che il cliente deve vedere aprendo il link.</span>'
+           : '<span class="text-muted">Clicca sulle foto per sceglierle (fino a 4). Nessuna scelta = prodotti automatici dai brand dell\'offerta.</span>');
     $('ppGriglia').innerHTML = lista.slice(0, 120).map(p => {
         const i = PICKER.sel.indexOf(p.cod);
         return `<div class="col-6 col-sm-4 col-md-3 col-lg-2">
@@ -1380,14 +1428,17 @@ document.addEventListener('click', e => {
     if (!it) return;
     const cod = it.getAttribute('data-cod'), i = PICKER.sel.indexOf(cod);
     if (i >= 0) PICKER.sel.splice(i, 1);
-    else if (PICKER.sel.length >= 4) { toast('Puoi scegliere al massimo 4 prodotti.', 'warning'); return; }
+    else if (PICKER.sel.length >= MAX_PICKER()) { toast('Puoi scegliere al massimo ' + MAX_PICKER() + ' prodotti.', 'warning'); return; }
     else PICKER.sel.push(cod);
     renderPicker();
 });
 
 async function confermaPicker() {
     bootstrap.Modal.getInstance($('mProdPromo')).hide();
-    if (PICKER.dove === 'form') {
+    if (PICKER.dove === 'link') {
+        Object.assign(FORM_PROMO, { prodLink: PICKER.sel.slice(), linkModo: 'prodotti', cambiato: true });
+        renderLinkForm();
+    } else if (PICKER.dove === 'form') {
         Object.assign(FORM_PROMO, { prodotti: PICKER.sel.slice(), modo: 'prodotti', cambiato: true });
         disegnaPromoForm();
     } else {
@@ -1444,9 +1495,9 @@ async function pubblicaBanner(o, cfg, ris) {
     PUBBLICAZIONE[o.id] = firma;
     if (stato) stato.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Carico l\'immagine su Drive…';
     try {
-        const body = { action: 'pubblicaBannerOfferta', cli: ls.get('oi_cat_admin'), id: o.id, titolo: o.titolo, firma: firma,
+        const body = { action: 'pubblicaBannerOfferta', cli: catAdmin(), id: o.id, titolo: o.titolo, firma: firma,
             dataUrl: $('cmpPromo').toDataURL('image/jpeg', 0.88) };
-        const j = await (await fetch(ls.get('oi_cat_api'), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })).json();
+        const j = await (await fetch(catApi(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })).json();
         if (!j.ok) throw new Error(j.error || 'errore del server');
         const linkPrima = cfg.bannerLink;
         cfg.bannerLink = j.link; cfg.bannerFirma = firma;
@@ -1527,7 +1578,7 @@ function condividiImmagine(cod) {
 let CAT = { pagina: '', clienti: {} };
 
 async function caricaMappaCatalogo(mostraEsito) {
-    const api = ls.get('oi_cat_api'), admin = ls.get('oi_cat_admin');
+    const api = catApi(), admin = catAdmin();
     if (!api || !admin) { CAT = { pagina: '', clienti: {} }; return; }
     try {
         const r = await fetch(api + '?action=mappaclienti&cli=' + encodeURIComponent(admin));
@@ -1579,12 +1630,33 @@ async function importaEmailCatalogo() {
     }
 }
 
-function salvaCatalogo() {
-    ls.set('oi_cat_api', $('sCatApi').value.trim());
-    ls.set('oi_cat_admin', $('sCatAdmin').value.trim());
-    ls.set('oi_cat_auto', $('sCatAuto').checked ? '1' : '0');
-    $('sCatEsito').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Prova in corso...';
+async function salvaCatalogo() {
+    const imp = { CAT_API: $('sCatApi').value.trim(), CAT_ADMIN: $('sCatAdmin').value.trim(), CAT_AUTO: $('sCatAuto').checked ? '1' : '0' };
+    ls.set('oi_cat_api', imp.CAT_API); ls.set('oi_cat_admin', imp.CAT_ADMIN); ls.set('oi_cat_auto', imp.CAT_AUTO);
+    $('sCatEsito').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvataggio nel foglio e prova...';
+    try {
+        await api('saveSettings', { settings: Object.assign({}, imp, { CAT_ADMIN: comeTesto(imp.CAT_ADMIN) }) });
+        if (DATA && DATA.cfg) Object.assign(DATA.cfg, imp);
+        salvaCacheLocale();
+    } catch (e) { toast('Collegamento salvato solo su questo computer: ' + esc(e.message), 'warning'); }
+    PROD_CAT = null;
     caricaMappaCatalogo(true);
+}
+
+// Dopo ogni lettura dei Fogli: compila i campi del catalogo con i valori condivisi e, se questo computer
+// aveva un collegamento che nel foglio non c'è ancora, lo copia nel foglio così vale per tutti.
+let CAT_CHIAVE = '';
+async function sincronizzaCatalogo() {
+    if (!DATA || !DATA.cfg) return;
+    if (!cfgFoglio('CAT_API') && ls.get('oi_cat_api') && ls.get('oi_cat_admin')) {
+        const imp = { CAT_API: ls.get('oi_cat_api'), CAT_ADMIN: ls.get('oi_cat_admin'), CAT_AUTO: ls.get('oi_cat_auto') === '0' ? '0' : '1' };
+        try { await api('saveSettings', { settings: Object.assign({}, imp, { CAT_ADMIN: comeTesto(imp.CAT_ADMIN) }) }); Object.assign(DATA.cfg, imp); salvaCacheLocale(); } catch (e) {}
+    }
+    if (document.activeElement !== $('sCatApi') && document.activeElement !== $('sCatAdmin')) {
+        $('sCatApi').value = catApi(); $('sCatAdmin').value = catAdmin(); $('sCatAuto').checked = catAuto();
+    }
+    const chiave = catApi() + '|' + catAdmin();
+    if (chiave !== CAT_CHIAVE && catalogoCollegato()) { CAT_CHIAVE = chiave; PROD_CAT = null; caricaMappaCatalogo(false); }
 }
 
 // Link personale del cliente al catalogo; se l'offerta riguarda un brand, il catalogo si apre già filtrato
@@ -1609,6 +1681,7 @@ function cataloghiOfferta(o, c, cfgForm) {
     const cfg = cfgForm || PROMO_CFG[o.id] || {};
     const lm = cfg.linkModo || 'auto';
     if (lm === 'cataloghi') return (cfg.cataloghi || []).slice();
+    if (lm === 'prodotti') return PROD_CAT ? [...new Set((cfg.prodLink || []).map(cod => { const p = PROD_CAT.find(x => x.cod === cod); return p && p.catalogo; }).filter(Boolean))] : [];
     if (lm !== 'auto') return [];
     if (cfg.modo === 'prodotti' && (cfg.prodotti || []).length && PROD_CAT) {
         const daProdotti = [...new Set(cfg.prodotti.map(cod => { const p = PROD_CAT.find(x => x.cod === cod); return p && p.catalogo; }).filter(Boolean))];
@@ -1620,7 +1693,7 @@ function cataloghiOfferta(o, c, cfgForm) {
     const out = [];
     brand.forEach(b => cataloghiDaBrand(b).forEach(x => { if (out.indexOf(x) < 0) out.push(x); }));
     if (out.length) return out;
-    return PROD_CAT ? [] : [brandPerMessaggio(o, c)];   // elenco cataloghi non ancora letto: uso il nome del brand
+    return PROD_CAT ? [] : [c ? brandPerMessaggio(o, c) : brand[0]];   // elenco cataloghi non ancora letto: uso il nome del brand
 }
 
 // Link incollato a mano: se è una pagina del catalogo la rifaccio con il codice personale del cliente
@@ -1655,6 +1728,8 @@ function linkCatalogo(o, c, cfgForm) {
     let url = CAT.pagina + '?c=' + encodeURIComponent(cod) + '&condiviso=1';
     const cats = cataloghiOfferta(o, c, cfg);
     if (cats.length) url += '&catalogo=' + encodeURIComponent(cats.join('|'));
+    // prodotti scelti: il catalogo mostra solo questi (codice prodotto); il filtro catalogo resta come riserva
+    if (lm === 'prodotti' && (cfg.prodLink || []).length) url += '&prodotto=' + encodeURIComponent(cfg.prodLink.join('|'));
     return url;
 }
 
@@ -1673,6 +1748,12 @@ function descriviLink(o, cfg) {
         return ['Link del catalogo con il codice personale di ogni cliente' + (f.length ? ', filtrato per ' + f.join(', ') : ' (nessun filtro: tutto il catalogo)') + '.', true];
     }
     if (lm === 'tutto') return ['Il link apre <b>tutto il catalogo</b>.', true];
+    if (lm === 'prodotti') {
+        const sc = cfg.prodLink || [];
+        if (!sc.length) return ['Scegli almeno un prodotto da aprire con il link.', false];
+        const nomi = sc.map(cod => { const p = (PROD_CAT || []).find(x => x.cod === cod); return p ? p.nome : cod; });
+        return ['Il link apre il catalogo sui prodotti: <b>' + esc(nomi.join(', ')) + '</b>', true];
+    }
     const cats = cataloghiOfferta(o, null, cfg);
     if (cats.length) return ['Il link apre il catalogo filtrato su: <b>' + esc(cats.join(', ')) + '</b>', true];
     return [lm === 'cataloghi' ? 'Spunta almeno un catalogo.' : 'Il link apre tutto il catalogo: scegli i prodotti per l\'immagine, indica un brand, oppure scegli i cataloghi qui sopra.', false];
@@ -1685,6 +1766,14 @@ function renderLinkForm() {
     $('lkModo').value = lm;
     $('lkBoxCat').style.display = lm === 'cataloghi' ? '' : 'none';
     $('lkBoxLink').style.display = lm === 'personalizzato' ? '' : 'none';
+    $('lkBoxProd').style.display = lm === 'prodotti' ? '' : 'none';
+    if (lm === 'prodotti') {
+        const sc = FORM_PROMO.prodLink || [];
+        $('lkProdotti').innerHTML = !sc.length ? '<span class="text-muted">Nessun prodotto scelto.</span>'
+            : sc.map((cod, i) => { const p = (PROD_CAT || []).find(x => x.cod === cod);
+                return `<span class="badge bg-light text-dark border me-1 mb-1 fw-normal">${p && p.img ? `<img src="${esc(p.img)}" style="height:22px;width:22px;object-fit:cover;border-radius:3px" class="me-1">` : ''}${esc(p ? p.nome : cod)} <small class="text-muted">${esc(p ? p.catalogo : '')}</small>
+                    <button type="button" class="btn btn-link btn-sm p-0 ms-1 text-danger" title="Togli" onclick="togliProdLink(${i})"><i class="fas fa-times"></i></button></span>`; }).join('');
+    }
     if (lm === 'cataloghi') {
         if (!PROD_CAT) $('lkCataloghi').innerHTML = catalogoCollegato() ? '<i class="fas fa-spinner fa-spin me-1"></i>Carico i cataloghi…' : 'Collega il catalogo nelle Impostazioni.';
         else {
@@ -1701,6 +1790,15 @@ function renderLinkForm() {
     }
     const [testo, ok] = descriviLink(leggiForm(), FORM_PROMO);
     $('lkAnteprima').innerHTML = `<span class="${ok ? 'text-success' : 'text-warning'}"><i class="fas fa-link me-1"></i>${testo}</span>`;
+}
+
+function togliProdLink(i) { FORM_PROMO.prodLink.splice(i, 1); FORM_PROMO.cambiato = true; renderLinkForm(); }
+
+function usaProdottiImmagine() {
+    const o = leggiForm();
+    const cod = (FORM_PROMO.prodotti || []).length ? FORM_PROMO.prodotti.slice() : prodottiAutomatici(o);
+    if (!cod.length) { toast('L\'immagine non ha prodotti: scegli i prodotti del link.', 'warning'); return; }
+    FORM_PROMO.prodLink = cod; FORM_PROMO.cambiato = true; renderLinkForm();
 }
 
 function cambiaLinkForm(soloTesto) {
@@ -1735,7 +1833,7 @@ function componiMessaggio(o, c) {
           : t.indexOf('{AZIENDA}') >= 0 ? t.replace('{AZIENDA}', '{IMMAGINE}\n{AZIENDA}') : t + '\n{IMMAGINE}';
     }
     // Offerte salvate prima del collegamento: il link si aggiunge prima della firma
-    if (link && t.indexOf('{CATALOGO}') < 0 && ls.get('oi_cat_auto') !== '0') {
+    if (link && t.indexOf('{CATALOGO}') < 0 && catAuto()) {
         t = t.indexOf('{AZIENDA}') >= 0 ? t.replace('{AZIENDA}', '{CATALOGO}\n{AZIENDA}') : t + '\n{CATALOGO}';
     }
     // Righe fatte solo di un segnaposto vuoto (es. cliente senza link al catalogo): le tolgo del tutto
@@ -2935,7 +3033,7 @@ function apriOfferta(id, preset) {
     }
     anteprimaIdonei();
     // Immagine promozionale: impostazioni già salvate per questa offerta (se c'è) e anteprima
-    FORM_PROMO = { modo: 'prodotti', prodotti: [], foto: null, linkModo: 'auto', cataloghi: [], link: '', cambiato: false, fotoCambiata: false };
+    FORM_PROMO = { modo: 'prodotti', prodotti: [], foto: null, linkModo: 'auto', cataloghi: [], link: '', prodLink: [], cambiato: false, fotoCambiata: false };
     $('lkCerca').value = ''; $('lkLink').value = '';
     renderLinkForm();
     caricaElencoProdotti().then(renderLinkForm).catch(() => {});
@@ -2944,7 +3042,7 @@ function apriOfferta(id, preset) {
     if (o) impostazioniPromo(o.id).then(cfg => {
         if ($('oId').value === o.id && !FORM_PROMO.cambiato) {
             Object.assign(FORM_PROMO, { modo: cfg.modo || 'prodotti', prodotti: (cfg.prodotti || []).slice(), foto: cfg.foto || null,
-                linkModo: cfg.linkModo || 'auto', cataloghi: (cfg.cataloghi || []).slice(), link: cfg.link || '' });
+                linkModo: cfg.linkModo || 'auto', cataloghi: (cfg.cataloghi || []).slice(), link: cfg.link || '', prodLink: (cfg.prodLink || []).slice() });
             $('lkLink').value = FORM_PROMO.link;
             renderLinkForm();
             disegnaPromoForm();
@@ -3094,14 +3192,17 @@ function renderCampagna() {
         </div></div>`;
     if (!PROMO_BLOB || PROMO_BLOB.id !== o.id) PROMO_BLOB = null;
     const cats = cataloghiOfferta(o, null);
+    const firmaLink = cfg => { cfg = cfg || {}; return [cfg.linkModo || 'auto', (cfg.prodLink || []).join('|'), cfg.link || '', cataloghiOfferta(o, null).join('|')].join('§'); };
+    const firmaPrima = firmaLink(PROMO_CFG[o.id]);
     const [testoLink, okLink] = descriviLink(o, PROMO_CFG[o.id] || {});
     $('cmpInfo').insertAdjacentHTML('beforeend', `<div class="mt-2 small ${okLink ? 'text-success' : 'text-warning'}"><i class="fas fa-link me-1"></i>${testoLink}` +
         ` <a href="#" onclick="apriOfferta('${esc(o.id)}');return false;">cambia</a></div>`);
     // Le scelte dell'immagine (e l'elenco dei cataloghi) arrivano dal server: appena pronte rigenero i messaggi con il filtro giusto
     const pronto = !!PROMO_CFG[o.id] && !!PROD_CAT;
-    preparaPromoCampagna(o).then(() => {
-        if (!pronto && PROMO_CFG[o.id] && $('cmpOfferta').value === o.id && cataloghiOfferta(o, null).join('|') !== cats.join('|')) renderCampagna();
-    });
+    const ricontrolla = () => { if (PROMO_CFG[o.id] && $('cmpOfferta').value === o.id && firmaLink(PROMO_CFG[o.id]) !== firmaPrima) renderCampagna(); };
+    // le scelte del link (dal foglio) e l'elenco dei prodotti non dipendono dall'immagine: appena arrivano rigenero i messaggi
+    if (!pronto) Promise.all([impostazioniPromo(o.id), caricaElencoProdotti().catch(() => null)]).then(ricontrolla).catch(() => {});
+    preparaPromoCampagna(o).then(() => { if (!pronto) ricontrolla(); });
     const val = DATA.clienti.map(c => ({ c: c, v: valuta(o, c) }));
     const extra = clientiAggiunti(o.id);
     const idonei = val.filter(x => x.v.idoneo).sort((a, b) => b.c.potenziale - a.c.potenziale);
@@ -3427,10 +3528,10 @@ function leggiLinkCollega() {
     try { localStorage.removeItem('oi_gemini'); } catch (e) {}   // la chiave Gemini ora sta sul server
     $('sUrl').value = ls.get('oi_url') || '';
     $('sToken').value = ls.get('oi_token') || '';
-    $('sCatApi').value = ls.get('oi_cat_api') || '';
-    $('sCatAdmin').value = ls.get('oi_cat_admin') || '';
-    $('sCatAuto').checked = ls.get('oi_cat_auto') !== '0';
-    caricaMappaCatalogo(false);
+    $('sCatApi').value = catApi();
+    $('sCatAdmin').value = catAdmin();
+    $('sCatAuto').checked = catAuto();
+    if (catalogoCollegato()) { CAT_CHIAVE = catApi() + '|' + catAdmin(); caricaMappaCatalogo(false); }
     // L'anteprima del banner si aggiorna mentre compili l'offerta
     ['oTitolo', 'oTipo', 'oDescr', 'oSconto', 'oAl', 'oBrand'].forEach(id => {
         $(id).addEventListener('input', disegnaPromoForm);
