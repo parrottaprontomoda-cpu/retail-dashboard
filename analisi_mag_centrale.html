@@ -49,6 +49,9 @@
         .inv-input { width: 70px; margin: 2px auto; }
         .inv-input.changed { border-color: #fd7e14; background: #fff4e6; }
         .inv-diff { font-size: 0.72rem; min-height: 1em; }
+        .inv-var + .inv-var { border-top: 1px dashed #ccc; margin-top: 4px; padding-top: 4px; }
+        .inv-ean { font-size: 0.62rem; color: #495057; white-space: nowrap; font-family: monospace; }
+        .inv-var .badge { font-size: 0.55rem; }
 
         /* ========================================================= */
         /* STAMPA MULTI-PAGINA DEL MODAL APERTO (packing / riassort.) */
@@ -485,6 +488,16 @@
     const BIGDATA_SHEET_ID = '1vrGaAt-XQvXGyQCmlEH22PxOBiGbJQRMGtjvZGv1kEg';
     const BIGDATA_SHEET_NAME = 'ARCHIVIO';
     const BIGDATA_COL_EAN = 'C', BIGDATA_COL_CODICE = 'D', BIGDATA_COL_PZCONF = 'U';
+    // Inventario: varianti (EAN) lette da BIGDATA/ARCHIVIO
+    const BIGDATA_COL_MISURA = 'H';     // intestazione "MIS"
+    // Lettera della colonna COLORE in ARCHIVIO. Vuota = ricerca automatica per intestazione (COLORE, COL, TINTA...)
+    const BIGDATA_COL_COLORE = '';
+    // Lettera della colonna DESCRIZIONE e del costo LISN. Vuote = ricerca automatica per intestazione
+    const BIGDATA_COL_DESCR = '';
+    const BIGDATA_COL_COSTO = '';
+    const BIGDATA_RE_COLORE = /^(COLORE|COLORI|COLOR|COLOUR|COL\.?|TINTA|VARIANTE)$/i;
+    const BIGDATA_RE_DESCR = /^DESCR/i;
+    const BIGDATA_RE_COSTO = /^LISN$/i;
     // Riserva: CSV pubblicato del foglio ARCHIVIO (usato se la lettura diretta non riesce)
     const BIGDATA_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSHT9l5A5bEG3XLrLBDxmGUsxKQ0cn5Dyzxrn5Kw9X1JWi3m9I1KL4OpABZS0Z9chtBaADYgRqOQ5K2/pub?gid=1916620500&single=true&output=csv';
     let bigdataPz = null;        // codice/EAN -> pezzi per confezione
@@ -1534,37 +1547,204 @@
         loadInventario(cod);
     });
 
+    // ---------- Lettura varianti (EAN) da BIGDATA ----------
+    let bigdataMeta = null;   // tipi e intestazioni delle colonne di ARCHIVIO
+    async function loadBigdataMeta() {
+        if (bigdataMeta) return bigdataMeta;
+        const resp = await gvizQuery('SELECT * LIMIT 1', BIGDATA_SHEET_ID, BIGDATA_SHEET_NAME);
+        const m = { types: {}, labels: {} };
+        resp.table.cols.forEach(c => { m.types[c.id] = c.type; m.labels[c.id] = String(c.label || '').trim(); });
+        const find = re => Object.keys(m.labels).find(l => ![BIGDATA_COL_EAN, BIGDATA_COL_CODICE].includes(l) && re.test(m.labels[l])) || '';
+        m.colColore = BIGDATA_COL_COLORE || find(BIGDATA_RE_COLORE);
+        m.colDescr = BIGDATA_COL_DESCR || find(BIGDATA_RE_DESCR);
+        m.colCosto = BIGDATA_COL_COSTO || find(BIGDATA_RE_COSTO);
+        bigdataMeta = m;
+        return m;
+    }
+    function normCode(x) {
+        if (typeof x === 'number') return x.toFixed(0);
+        let v = String(x ?? '').trim();
+        if (/^\d+\.0+$/.test(v)) v = v.replace(/\.0+$/, '');
+        return v;
+    }
+    // chiave di confronto EAN: solo lettere/cifre, senza zeri iniziali
+    function eanKey(e) { return normCode(e).toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^0+/, ''); }
+    function sameCode(a, b) { const kb = pzKeys(b); return pzKeys(a).some(k => kb.includes(k)); }
+    function bdLit(letter, v) {
+        if (bigdataMeta && bigdataMeta.types[letter] === 'number') {
+            const n = Number(String(v).trim().replace(',', '.'));
+            return String(v).trim() !== '' && !isNaN(n) ? n : null;
+        }
+        return gvizLit(v);
+    }
+    function bdRow(get, cols) {
+        return {
+            ean: normCode(get(BIGDATA_COL_EAN)),
+            codice: normCode(get(BIGDATA_COL_CODICE)),
+            colore: String(get(cols.colore) ?? '').trim(),
+            misura: normCode(get(BIGDATA_COL_MISURA)),
+            desc: String(get(cols.descr) ?? '').trim(),
+            costo: (() => { const x = get(cols.costo); return Math.abs(typeof x === 'number' ? x : parseEuro(x)); })()
+        };
+    }
+
+    async function loadBigdataVariants(cod) {
+        const out = { rows: [], source: '', error: '', colColore: '' };
+        let errs = [];
+        try {
+            const meta = await loadBigdataMeta();
+            out.colColore = meta.colColore;
+            const conds = [];
+            const lD = bdLit(BIGDATA_COL_CODICE, cod); if (lD !== null) conds.push(`${BIGDATA_COL_CODICE} = ${lD}`);
+            const lC = bdLit(BIGDATA_COL_EAN, cod); if (lC !== null) conds.push(`${BIGDATA_COL_EAN} = ${lC}`);
+            if (conds.length) {
+                const resp = await gvizQuery(`SELECT * WHERE ${conds.join(' OR ')}`, BIGDATA_SHEET_ID, BIGDATA_SHEET_NAME);
+                const idx = {}; resp.table.cols.forEach((c, i) => idx[c.id] = i);
+                const cols = { colore: meta.colColore, descr: meta.colDescr, costo: meta.colCosto };
+                resp.table.rows.forEach(r => {
+                    const get = L => { if (!L || idx[L] === undefined) return ''; const x = (r.c || [])[idx[L]]; if (!x) return ''; return (x.v !== null && x.v !== undefined) ? x.v : (x.f ?? ''); };
+                    out.rows.push(bdRow(get, cols));
+                });
+                out.source = 'lettura diretta';
+            }
+        } catch (e) { console.warn('BIGDATA varianti gviz:', e); errs.push('lettura diretta: ' + e.message); }
+
+        // Riserva: CSV pubblicato (anche quando la colonna D ha tipi misti e la query non trova il codice)
+        if (!out.rows.length && BIGDATA_CSV_URL) {
+            try {
+                const res = await fetch(BIGDATA_CSV_URL, { cache: 'no-store' });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const text = await res.text();
+                let header = null;
+                const iC = colIndex(BIGDATA_COL_EAN), iD = colIndex(BIGDATA_COL_CODICE);
+                const byHeader = (re, fixed) => fixed ? colIndex(fixed) : header.findIndex((h, i) => i !== iC && i !== iD && re.test(String(h).trim()));
+                let idx = null;
+                parseCsv(text, r => {
+                    if (!header) {
+                        header = r;
+                        const m = bigdataMeta || {};
+                        idx = {
+                            colore: byHeader(BIGDATA_RE_COLORE, m.colColore || BIGDATA_COL_COLORE),
+                            descr: byHeader(BIGDATA_RE_DESCR, m.colDescr || BIGDATA_COL_DESCR),
+                            costo: byHeader(BIGDATA_RE_COSTO, m.colCosto || BIGDATA_COL_COSTO)
+                        };
+                        if (!out.colColore && idx.colore >= 0) out.colColore = String(header[idx.colore] || '');
+                        return;
+                    }
+                    if (!sameCode(r[iD], cod) && !sameCode(r[iC], cod)) return;
+                    const pos = { colore: idx.colore, descr: idx.descr, costo: idx.costo };
+                    out.rows.push(bdRow(L => {
+                        if (L === BIGDATA_COL_EAN) return r[iC];
+                        if (L === BIGDATA_COL_CODICE) return r[iD];
+                        if (L === BIGDATA_COL_MISURA) return r[colIndex(BIGDATA_COL_MISURA)];
+                        return typeof L === 'number' && L >= 0 ? r[L] : '';
+                    }, pos));
+                });
+                if (out.rows.length) out.source = 'CSV';
+            } catch (e) { console.warn('BIGDATA varianti CSV:', e); errs.push('CSV: ' + e.message); }
+        }
+        if (!out.rows.length && errs.length) out.error = 'Impossibile leggere gli EAN da BIGDATA (' + errs.join(' · ') + ').';
+        return out;
+    }
+
+    function eanLitNote(e) {
+        const h = headerOfLetter(RETTIFICA_COL_EAN);
+        if (globalColTypes[h] === 'number') { const n = Number(e); return isNaN(n) ? null : n; }
+        return gvizLit(e);
+    }
+
+    // Giacenze reali inserite in questa sessione, per variante: "COD||chiaveVariante" -> qta
+    let invRealSession = {};
+
     async function loadInventario(cod) {
         if (!globalColIds['COD']) { alert("Nel foglio NOTE non trovo la colonna 'COD'."); return; }
         const body = document.getElementById('invBody');
-        body.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-warning"></div><p class="mt-2 text-muted">Calcolo giacenze su tutto lo storico...</p></div>';
+        body.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-warning"></div><p class="mt-2 text-muted">Lettura EAN da BIGDATA e calcolo giacenze su tutto lo storico...</p></div>';
         document.getElementById('inv-copia').disabled = true;
         document.getElementById('inv-excel').disabled = true;
         try {
-            const lit = codLit(cod);
-            const resp = await gvizQuery(`SELECT * WHERE ${globalColIds['COD']} = ${lit}`);
-            const rows = gvizRowsToObjects(resp).map(normalizeRow);
-            if (!rows.length) { body.innerHTML = `<p class="text-danger">Nessun movimento trovato per il codice <strong>${esc(cod)}</strong>.</p>`; return; }
+            const [bd, respCod] = await Promise.all([
+                loadBigdataVariants(cod),
+                gvizQuery(`SELECT * WHERE ${globalColIds['COD']} = ${codLit(cod)}`)
+            ]);
+            const rows = gvizRowsToObjects(respCod).map(normalizeRow);
 
-            const I = { cod, desc: rows[0]['DESCRIZIONE'] || 'N/D', colors: [], sizes: [], sys: {}, tpl: {}, tplAny: rows[rows.length - 1], real: {}, rows: [], ean: {}, unit: {}, unitAny: 0 };
-            rows.forEach(r => {
-                const c = r._colore || 'N/D', s = r._misura || 'N/D', k = c + '||' + s;
-                if (!I.colors.includes(c)) I.colors.push(c);
-                if (!I.sizes.includes(s)) I.sizes.push(s);
-                I.sys[k] = (I.sys[k] || 0) + r._qta_num;
-                I.tpl[k] = r; // resta l'ultimo movimento della variante
-                const ean = eanOf(r);
-                if (ean) I.ean[k] = ean;                      // ultimo EAN non vuoto della variante
+            // EAN dell'articolo presenti in BIGDATA (uno per variante)
+            const bdByKey = {};
+            bd.rows.forEach(b => { const k = eanKey(b.ean); if (k && !bdByKey[k]) bdByKey[k] = b; });
+
+            // Movimenti con un EAN di BIGDATA ma registrati con un codice articolo diverso o vuoto
+            const hK = headerOfLetter(RETTIFICA_COL_EAN);
+            const bdEans = Object.values(bdByKey).map(b => b.ean);
+            if (hK && bdEans.length) {
+                for (let i = 0; i < bdEans.length; i += 40) {
+                    const conds = bdEans.slice(i, i + 40).map(e => eanLitNote(e)).filter(l => l !== null).map(l => `${globalColIds[hK]} = ${l}`);
+                    if (!conds.length) continue;
+                    try {
+                        const resp = await gvizQuery(`SELECT * WHERE ${conds.join(' OR ')}`);
+                        gvizRowsToObjects(resp).map(normalizeRow).forEach(r => { if (!sameCode(r['COD'], cod)) rows.push(r); });
+                    } catch (e) { console.warn('Movimenti per EAN:', e); }
+                }
+            }
+
+            if (!rows.length && !bd.rows.length) {
+                body.innerHTML = `<p class="text-danger">Nessun movimento e nessun EAN in BIGDATA per il codice <strong>${esc(cod)}</strong>.</p>`
+                    + (bd.error ? `<div class="alert alert-warning small">${esc(bd.error)}</div>` : '');
+                return;
+            }
+
+            const up = x => String(x ?? '').trim().toUpperCase();
+            const bd0 = bd.rows.find(b => b.desc) || {};
+            const I = {
+                cod, desc: (rows[0] && rows[0]['DESCRIZIONE']) || bd0.desc || 'N/D',
+                vars: {}, colors: [], sizes: [], real: {}, rows: [],
+                tplAny: rows.length ? rows[rows.length - 1] : null, unitAny: 0,
+                bdSource: bd.source, bdError: bd.error, bdColColore: bd.colColore, nBd: 0, nNoBd: 0, nNoEan: 0
+            };
+            const newVar = (key, o) => (I.vars[key] = Object.assign({ key, ean: '', c: '', s: '', sys: 0, inBd: false, tpl: null, unit: 0, costo: 0, noteC: '', noteS: '', nMov: 0, placeholder: false }, o));
+
+            // 1) tutte le varianti di BIGDATA, anche senza movimenti
+            Object.entries(bdByKey).forEach(([k, b]) => newVar('E:' + k, { ean: b.ean, c: b.colore, s: b.misura, inBd: true, costo: b.costo }));
+            I.nBd = Object.keys(bdByKey).length;
+
+            const addMov = (v, r) => {
+                v.sys += r._qta_num; v.tpl = r; v.nMov++;
+                if (!v.c && r._colore) v.c = r._colore;          // colore mancante in BIGDATA: da Elenco Note
+                if (!v.s && r._misura) v.s = r._misura;          // misura mancante in BIGDATA: da Elenco Note
+                if (!v.noteC && r._colore) v.noteC = r._colore;
+                if (!v.noteS && r._misura) v.noteS = r._misura;
                 const uv = unitValueOf(r);
-                if (uv) { I.unit[k] = uv; I.unitAny = uv; }
+                if (uv) { v.unit = uv; I.unitAny = uv; }
+            };
+            // 2) movimenti con EAN
+            const senzaEan = [];
+            rows.forEach(r => {
+                const e = eanOf(r), k = eanKey(e);
+                if (!k) { senzaEan.push(r); return; }
+                const v = I.vars['E:' + k] || newVar('E:' + k, { ean: normCode(e), c: r._colore, s: r._misura });
+                addMov(v, r);
             });
-            Object.keys(I.sys).forEach(k => I.sys[k] = round3(I.sys[k]));
-            I.colors.sort((a, b) => String(a).localeCompare(String(b)));
-            I.sizes.sort(sortSizes);
+            // 3) movimenti senza EAN: abbinati alla variante BIGDATA con lo stesso colore e misura
+            senzaEan.forEach(r => {
+                const cand = Object.values(I.vars).filter(x => x.ean && up(x.c) === up(r._colore) && up(x.s) === up(r._misura));
+                let v = cand.length === 1 ? cand[0] : null;
+                if (!v) {
+                    const key = 'V:' + up(r._colore) + '||' + up(r._misura);
+                    v = I.vars[key] || newVar(key, { c: r._colore, s: r._misura });
+                }
+                addMov(v, r);
+            });
+
+            Object.values(I.vars).forEach(v => {
+                v.c = v.c || 'N/D'; v.s = v.s || 'N/D'; v.sys = round3(v.sys);
+                if (!v.ean) I.nNoEan++; else if (!v.inBd) I.nNoBd++;
+            });
+            invRebuildAxes(I);
+
             // ripropone eventuali giacenze reali già inserite in questa sessione
-            Object.entries(realStockOverrides).forEach(([k, v]) => {
-                const [cc, c, s] = k.split('||');
-                if (cc === cod) I.real[c + '||' + s] = v;
+            Object.entries(invRealSession).forEach(([k, val]) => {
+                const i = k.indexOf('||');
+                if (k.slice(0, i) === cod && I.vars[k.slice(i + 2)]) I.real[k.slice(i + 2)] = val;
             });
             currentInvent = I;
             renderInvGrid();
@@ -1574,10 +1754,37 @@
         }
     }
 
+    function invRebuildAxes(I) {
+        const colors = I.colors.slice(), sizes = I.sizes.slice();
+        Object.values(I.vars).forEach(v => {
+            if (!colors.includes(v.c)) colors.push(v.c);
+            if (!sizes.includes(v.s)) sizes.push(v.s);
+        });
+        I.colors = colors.sort((a, b) => String(a).localeCompare(String(b)));
+        I.sizes = sizes.sort(sortSizes);
+        // casella vuota della griglia = variante senza EAN da poter contare
+        I.colors.forEach(c => I.sizes.forEach(s => {
+            if (!invVarsIn(I, c, s).length) {
+                const key = 'V:' + String(c).toUpperCase() + '||' + String(s).toUpperCase();
+                if (!I.vars[key]) I.vars[key] = { key, ean: '', c, s, sys: 0, inBd: false, tpl: null, unit: 0, costo: 0, noteC: '', noteS: '', nMov: 0, placeholder: true };
+            }
+        }));
+    }
+    function invVarsIn(I, c, s) {
+        return Object.values(I.vars).filter(v => v.c === c && v.s === s)
+            .sort((a, b) => (b.inBd - a.inBd) || String(a.ean).localeCompare(String(b.ean)));
+    }
+
     function renderInvGrid() {
         const I = currentInvent; if (!I) return;
         let html = `<h5 class="mb-1"><strong>${esc(I.cod)}</strong> - ${esc(I.desc)}</h5>
-            <p class="small text-muted">"Sist." = giacenza contabile calcolata su <strong>tutto lo storico</strong> di Elenco Note. Inserisci la quantità contata solo nelle caselle da correggere; lascia vuote le altre.</p>
+            <p class="small text-muted mb-1">Le varianti sono gli <strong>EAN di BIGDATA</strong> (colonna ${BIGDATA_COL_EAN}); colore e misura vengono da BIGDATA o, se mancanti, da Elenco Note.
+            "Sist." = giacenza contabile di ogni EAN su <strong>tutto lo storico</strong> di Elenco Note. Inserisci la quantità contata solo nelle caselle da correggere; lascia vuote le altre.</p>
+            <p class="small mb-2"><span class="badge bg-success">${I.nBd} EAN da BIGDATA</span>${I.bdSource ? ` <span class="text-muted">(${esc(I.bdSource)})</span>` : ''}
+            ${I.nNoBd ? ` <span class="badge bg-warning text-dark">${I.nNoBd} EAN solo in Elenco Note</span>` : ''}
+            ${I.nNoEan ? ` <span class="badge bg-secondary">${I.nNoEan} varianti con movimenti senza EAN</span>` : ''}
+            ${I.nBd && !I.bdColColore ? ' <span class="text-danger">· colonna colore non trovata in BIGDATA: colori presi da Elenco Note (imposta BIGDATA_COL_COLORE)</span>' : ''}</p>
+            ${I.bdError ? `<div class="alert alert-warning small py-2">${esc(I.bdError)} Uso colori e misure di Elenco Note.</div>` : ''}
             <div class="table-responsive"><table class="table table-bordered table-sm matrix-table" style="width:max-content;min-width:60%"><thead class="table-dark"><tr>
             <th class="color-col text-white">Colore \\ Misura</th>`;
         I.sizes.forEach(s => html += `<th>${esc(s)}</th>`);
@@ -1585,10 +1792,19 @@
         I.colors.forEach(c => {
             html += `<tr><td class="color-col">${esc(c)}</td>`;
             I.sizes.forEach(s => {
-                const k = c + '||' + s, g = I.sys[k] || 0, real = I.real[k];
-                html += `<td><div class="small text-muted">sist. <b class="${g < 0 ? 'text-danger' : ''}">${g}</b></div>
-                    <input type="number" step="1" class="form-control form-control-sm text-center inv-input" data-k="${encodeURIComponent(k)}" value="${real !== undefined ? real : ''}" placeholder="${g}">
-                    <div class="inv-diff" data-k="${encodeURIComponent(k)}"></div></td>`;
+                html += '<td>';
+                invVarsIn(I, c, s).forEach(v => {
+                    const real = I.real[v.key], k = encodeURIComponent(v.key);
+                    let tag = '';
+                    if (v.ean && !v.inBd) tag = ' <span class="badge bg-warning text-dark" title="EAN presente nei movimenti ma non in BIGDATA">no BIGDATA</span>';
+                    else if (!v.ean && !v.placeholder) tag = '<span class="badge bg-secondary" title="Movimenti senza EAN non abbinabili a un EAN di BIGDATA">senza EAN</span>';
+                    html += `<div class="inv-var">
+                        ${v.ean || tag ? `<div class="inv-ean" title="${v.nMov} movimenti">${esc(v.ean)}${tag}</div>` : ''}
+                        <div class="small text-muted">sist. <b class="${v.sys < 0 ? 'text-danger' : ''}">${v.sys}</b></div>
+                        <input type="number" step="1" class="form-control form-control-sm text-center inv-input" data-k="${k}" value="${real !== undefined ? real : ''}" placeholder="${v.sys}">
+                        <div class="inv-diff" data-k="${k}"></div></div>`;
+                });
+                html += '</td>';
             });
             html += `<td class="tot-col inv-rsys" data-c="${encodeURIComponent(c)}"></td><td class="tot-col inv-rreal" data-c="${encodeURIComponent(c)}"></td></tr>`;
         });
@@ -1598,7 +1814,7 @@
                 <div class="col-4"><label class="small fw-bold">Nuova misura</label><input id="inv-new-size" class="form-control form-control-sm" placeholder="Es. XL"></div>
                 <div class="col-3"><button id="inv-add" class="btn btn-sm btn-outline-dark w-100"><i class="fas fa-plus"></i> Aggiungi</button></div>
             </div>
-            <div class="small text-muted mb-3">Usa "Aggiungi" se trovi in magazzino un colore o una misura che non risulta mai movimentato.</div>
+            <div class="small text-muted mb-3">Usa "Aggiungi" se trovi in magazzino un colore o una misura che non risulta né in BIGDATA né nei movimenti.</div>
             <div id="invRows"></div>`;
         document.getElementById('invBody').innerHTML = html;
         updateInvDiffs();
@@ -1607,16 +1823,16 @@
     function updateInvDiffs() {
         const I = currentInvent; if (!I) return;
         document.querySelectorAll('#invBody .inv-diff').forEach(el => {
-            const k = decodeURIComponent(el.dataset.k), real = I.real[k], g = I.sys[k] || 0;
+            const key = decodeURIComponent(el.dataset.k), v = I.vars[key], real = I.real[key];
             const input = el.parentElement.querySelector('.inv-input');
-            if (real === undefined) { el.innerHTML = ''; input.classList.remove('changed'); return; }
-            const d = round3(real - g);
+            if (!v || real === undefined) { el.innerHTML = ''; input.classList.remove('changed'); return; }
+            const d = round3(real - v.sys);
             input.classList.toggle('changed', d !== 0);
             el.innerHTML = d === 0 ? '<span class="text-muted">ok</span>' : `<span class="fw-bold ${d > 0 ? 'text-success' : 'text-danger'}">${d > 0 ? '+' : ''}${d}</span>`;
         });
         I.colors.forEach(c => {
             let ts = 0, tr = 0;
-            I.sizes.forEach(s => { const k = c + '||' + s, g = I.sys[k] || 0; ts += g; tr += (I.real[k] !== undefined ? I.real[k] : g); });
+            Object.values(I.vars).filter(v => v.c === c).forEach(v => { ts += v.sys; tr += (I.real[v.key] !== undefined ? I.real[v.key] : v.sys); });
             const ce = encodeURIComponent(c);
             const a = document.querySelector(`#invBody .inv-rsys[data-c="${ce}"]`), b = document.querySelector(`#invBody .inv-rreal[data-c="${ce}"]`);
             if (a) a.textContent = round3(ts);
@@ -1635,8 +1851,9 @@
         const I = currentInvent; if (!I) return;
         const c = $('#inv-new-col').val().trim().toUpperCase(), s = $('#inv-new-size').val().trim().toUpperCase();
         if (!c && !s) return;
-        if (c && !I.colors.includes(c)) { I.colors.push(c); I.colors.sort((a, b) => String(a).localeCompare(String(b))); }
-        if (s && !I.sizes.includes(s)) { I.sizes.push(s); I.sizes.sort(sortSizes); }
+        if (c && !I.colors.includes(c)) I.colors.push(c);
+        if (s && !I.sizes.includes(s)) I.sizes.push(s);
+        invRebuildAxes(I);
         renderInvGrid();
     });
 
@@ -1661,10 +1878,10 @@
         return 0;
     }
 
-    function buildCorrectionRow(tpl, I, c, s, diff, idRett, dataStr) {
+    function buildCorrectionRow(tpl, I, v, diff, idRett, dataStr) {
         const row = {};
         globalCols.forEach(h => row[h] = '');
-        const set = (h, v) => { if (h && Object.prototype.hasOwnProperty.call(row, h)) row[h] = v; };
+        const set = (h, val) => { if (h && Object.prototype.hasOwnProperty.call(row, h)) row[h] = val; };
         if (tpl) RETTIFICA_COLONNE_DA_COPIARE.forEach(h => set(h, tpl[h] ?? ''));
         set('COD', I.cod);
         set('DESCRIZIONE', I.desc);
@@ -1672,21 +1889,21 @@
         if (globalCols.includes('CLI')) set('CLI', RETTIFICA_DESTINAZIONE); else set('MAG', RETTIFICA_DESTINAZIONE);
         set(COL.qta, diff);
         set(COL.idril, idRett);
-        set(COL.colore, c === 'N/D' ? '' : c);
-        set(COL.misura, s === 'N/D' ? '' : s);
-        const k = c + '||' + s;
-        // EAN: solo dalla stessa variante (mai da un'altra taglia/colore)
+        set(COL.colore, v.c === 'N/D' ? '' : v.c);
+        set(COL.misura, v.s === 'N/D' ? '' : v.s);
+        // EAN: quello della variante (BIGDATA o movimenti della stessa variante)
         const hEan = headerOfLetter(RETTIFICA_COL_EAN);
-        if (hEan) set(hEan, I.ean[k] || '');
-        // Valore in colonna O
+        if (hEan) set(hEan, v.ean || '');
+        // Valorizzazione (G) e valore (O)
         const hVal = headerOfLetter(RETTIFICA_COL_VALORE);
-        let unit = I.unit[k] || I.unitAny || 0;
+        let unit = v.unit || I.unitAny || 0;
         if (!unit && tpl) unit = Math.abs(parseEuro(tpl['PREZZO']));
+        if (!unit) unit = v.costo || 0;    // ultima riserva: costo LISN di BIGDATA
         const hPrz = headerOfLetter(RETTIFICA_COL_PREZZO);
         if (hPrz && unit) set(hPrz, Math.round(unit * 10000) / 10000);
         if (hVal && unit) set(hVal, Math.round(diff * unit * 100) / 100);
         row._prezzo = unit || '';
-        row._ean = I.ean[k] || '';
+        row._ean = v.ean || '';
         row._valore = hVal && unit ? Math.round(diff * unit * 100) / 100 : '';
         return row;
     }
@@ -1700,15 +1917,24 @@
         const dataStr = `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
         const idRett = `RETT-${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}-${pad2(now.getHours())}${pad2(now.getMinutes())}`;
 
-        const out = [], preview = [];
-        Object.entries(I.real).forEach(([k, real]) => {
-            const [c, s] = k.split('||');
-            const sys = I.sys[k] || 0, diff = round3(real - sys);
-            realStockOverrides[I.cod + '||' + k] = real; // il riassortimento userà la giacenza reale
+        const out = [], preview = [], celle = {};
+        Object.entries(I.real).forEach(([key, real]) => {
+            const v = I.vars[key]; if (!v) return;
+            invRealSession[I.cod + '||' + key] = real;
+            celle[v.c + '||' + v.s] = true;
+            const diff = round3(real - v.sys);
             if (diff === 0) return;
-            const row = buildCorrectionRow(I.tpl[k] || I.tplAny, I, c, s, diff, idRett, dataStr);
+            const row = buildCorrectionRow(v.tpl || I.tplAny, I, v, diff, idRett, dataStr);
             out.push(row);
-            preview.push({ c, s, sys, real, diff, ean: row._ean, val: row._valore, prz: row._prezzo });
+            preview.push({ c: v.c, s: v.s, sys: v.sys, real, diff, ean: row._ean, inBd: v.inBd, val: row._valore, prz: row._prezzo });
+        });
+        // il riassortimento userà la giacenza reale (somma degli EAN di ogni colore/misura)
+        Object.keys(celle).forEach(cs => {
+            const [c, s] = cs.split('||');
+            const vs = invVarsIn(I, c, s);
+            const tot = round3(vs.reduce((a, v) => a + (I.real[v.key] !== undefined ? I.real[v.key] : v.sys), 0));
+            const v0 = vs.find(v => v.noteC || v.noteS) || {};
+            realStockOverrides[I.cod + '||' + (v0.noteC || c) + '||' + (v0.noteS || s)] = tot;
         });
         I.rows = out;
 
@@ -1722,13 +1948,13 @@
                 <th>Codice</th><th>EAN (col. ${RETTIFICA_COL_EAN})</th><th>Colore</th><th>Misura</th><th>Sistema</th><th>Reale</th><th>Rettifica (${esc(COL.qta)})</th><th>Valorizz. (col. ${RETTIFICA_COL_PREZZO})</th><th>Totale (col. ${RETTIFICA_COL_VALORE})</th></tr></thead><tbody>`;
             preview.forEach(p => {
                 tot += p.diff; if (p.val !== '') totVal += p.val; if (!p.ean) noEan++;
-                html += `<tr><td>${esc(I.cod)}</td><td>${p.ean ? esc(p.ean) : '<span class="badge bg-warning text-dark">mancante</span>'}</td><td>${esc(p.c)}</td><td>${esc(p.s)}</td><td>${p.sys}</td><td>${p.real}</td>
+                html += `<tr><td>${esc(I.cod)}</td><td>${p.ean ? esc(p.ean) + (p.inBd ? '' : ' <span class="badge bg-warning text-dark">no BIGDATA</span>') : '<span class="badge bg-warning text-dark">mancante</span>'}</td><td>${esc(p.c)}</td><td>${esc(p.s)}</td><td>${p.sys}</td><td>${p.real}</td>
                     <td class="fw-bold ${p.diff > 0 ? 'text-success' : 'text-danger'}">${p.diff > 0 ? '+' : ''}${p.diff}</td>
                     <td>${p.prz !== '' ? eur(p.prz) : '-'}</td>
                     <td>${p.val !== '' ? eur(p.val) : '<span class="badge bg-warning text-dark">mancante</span>'}</td></tr>`;
             });
             html += `</tbody><tfoot><tr><th colspan="6" class="text-end">Totale rettifica</th><th>${round3(tot)}</th><th></th><th>${eur(totVal)}</th></tr></tfoot></table>
-                ${noEan ? `<div class="alert alert-warning small py-2">${noEan} righe senza EAN: la variante non ha mai avuto un movimento con EAN in colonna ${RETTIFICA_COL_EAN}. Inseriscilo a mano dopo aver incollato.</div>` : ''}
+                ${noEan ? `<div class="alert alert-warning small py-2">${noEan} righe senza EAN: la variante non è in BIGDATA e non ha mai avuto un movimento con EAN in colonna ${RETTIFICA_COL_EAN}. Inseriscilo a mano dopo aver incollato.</div>` : ''}
                 <div class="alert alert-info small mb-0">Premi <strong>Copia righe</strong> e incollale nella prima riga libera del foglio NOTE (colonna A), oppure esporta in Excel.
                 Positivo = carico, negativo = scarico. Le righe hanno destinazione "${esc(RETTIFICA_DESTINAZIONE)}" e sono escluse dalle vendite nel riassortimento.</div>`;
         }
