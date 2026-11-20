@@ -1588,62 +1588,100 @@
         };
     }
 
-    async function loadBigdataVariants(cod) {
-        const out = { rows: [], source: '', error: '', colColore: '' };
-        let errs = [];
-        try {
-            const meta = await loadBigdataMeta();
-            out.colColore = meta.colColore;
-            const conds = [];
-            const lD = bdLit(BIGDATA_COL_CODICE, cod); if (lD !== null) conds.push(`${BIGDATA_COL_CODICE} = ${lD}`);
-            const lC = bdLit(BIGDATA_COL_EAN, cod); if (lC !== null) conds.push(`${BIGDATA_COL_EAN} = ${lC}`);
-            if (conds.length) {
-                const resp = await gvizQuery(`SELECT * WHERE ${conds.join(' OR ')}`, BIGDATA_SHEET_ID, BIGDATA_SHEET_NAME);
-                const idx = {}; resp.table.cols.forEach((c, i) => idx[c.id] = i);
-                const cols = { colore: meta.colColore, descr: meta.colDescr, costo: meta.colCosto };
-                resp.table.rows.forEach(r => {
-                    const get = L => { if (!L || idx[L] === undefined) return ''; const x = (r.c || [])[idx[L]]; if (!x) return ''; return (x.v !== null && x.v !== undefined) ? x.v : (x.f ?? ''); };
-                    out.rows.push(bdRow(get, cols));
-                });
-                out.source = 'lettura diretta';
-            }
-        } catch (e) { console.warn('BIGDATA varianti gviz:', e); errs.push('lettura diretta: ' + e.message); }
+    // Copia del CSV di BIGDATA tenuta in memoria per la sessione (scaricata una sola volta)
+    let bigdataCsvCache = null;      // { header, rows, time }
+    let bigdataGvizBlocked = false;  // il file non è pubblico: la lettura diretta non funziona
+    async function getBigdataCsv(force = false) {
+        if (bigdataCsvCache && !force) return bigdataCsvCache;
+        const res = await fetch(BIGDATA_CSV_URL, { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const text = await res.text();
+        let header = null; const rows = [];
+        parseCsv(text, r => { if (!header) header = r; else rows.push(r); });
+        bigdataCsvCache = { header: header || [], rows, time: Date.now() };
+        return bigdataCsvCache;
+    }
 
-        // Riserva: CSV pubblicato (anche quando la colonna D ha tipi misti e la query non trova il codice)
+    // cod = codice articolo di Elenco Note; noteEans = EAN trovati nei movimenti dell'articolo
+    async function loadBigdataVariants(cod, noteEans = []) {
+        const out = { rows: [], source: '', error: '', colColore: '', matchInfo: '' };
+        let errs = [];
+        if (!bigdataGvizBlocked) {
+            try {
+                const meta = await loadBigdataMeta();
+                out.colColore = meta.colColore;
+                const conds = [];
+                const lD = bdLit(BIGDATA_COL_CODICE, cod); if (lD !== null) conds.push(`${BIGDATA_COL_CODICE} = ${lD}`);
+                const lC = bdLit(BIGDATA_COL_EAN, cod); if (lC !== null) conds.push(`${BIGDATA_COL_EAN} = ${lC}`);
+                if (conds.length) {
+                    const resp = await gvizQuery(`SELECT * WHERE ${conds.join(' OR ')}`, BIGDATA_SHEET_ID, BIGDATA_SHEET_NAME);
+                    const idx = {}; resp.table.cols.forEach((c, i) => idx[c.id] = i);
+                    const cols = { colore: meta.colColore, descr: meta.colDescr, costo: meta.colCosto };
+                    resp.table.rows.forEach(r => {
+                        const get = L => { if (!L || idx[L] === undefined) return ''; const x = (r.c || [])[idx[L]]; if (!x) return ''; return (x.v !== null && x.v !== undefined) ? x.v : (x.f ?? ''); };
+                        out.rows.push(bdRow(get, cols));
+                    });
+                    out.source = 'lettura diretta';
+                }
+            } catch (e) {
+                console.warn('BIGDATA varianti gviz:', e);
+                if (/OAuth|not publicly viewable|Errore di rete/i.test(e.message)) bigdataGvizBlocked = true;
+                else errs.push('lettura diretta: ' + e.message);
+            }
+        }
+
+        // CSV pubblicato di ARCHIVIO
         if (!out.rows.length && BIGDATA_CSV_URL) {
             try {
-                const res = await fetch(BIGDATA_CSV_URL, { cache: 'no-store' });
-                if (!res.ok) throw new Error('HTTP ' + res.status);
-                const text = await res.text();
-                let header = null;
-                const iC = colIndex(BIGDATA_COL_EAN), iD = colIndex(BIGDATA_COL_CODICE);
+                const { header, rows } = await getBigdataCsv();
+                const iC = colIndex(BIGDATA_COL_EAN), iD = colIndex(BIGDATA_COL_CODICE), iU = colIndex(BIGDATA_COL_PZCONF), iH = colIndex(BIGDATA_COL_MISURA);
                 const byHeader = (re, fixed) => fixed ? colIndex(fixed) : header.findIndex((h, i) => i !== iC && i !== iD && re.test(String(h).trim()));
-                let idx = null;
-                parseCsv(text, r => {
-                    if (!header) {
-                        header = r;
-                        const m = bigdataMeta || {};
-                        idx = {
-                            colore: byHeader(BIGDATA_RE_COLORE, m.colColore || BIGDATA_COL_COLORE),
-                            descr: byHeader(BIGDATA_RE_DESCR, m.colDescr || BIGDATA_COL_DESCR),
-                            costo: byHeader(BIGDATA_RE_COSTO, m.colCosto || BIGDATA_COL_COSTO)
-                        };
-                        if (!out.colColore && idx.colore >= 0) out.colColore = String(header[idx.colore] || '');
-                        return;
+                const m = bigdataMeta || {};
+                const pos = {
+                    colore: byHeader(BIGDATA_RE_COLORE, m.colColore || BIGDATA_COL_COLORE),
+                    descr: byHeader(BIGDATA_RE_DESCR, m.colDescr || BIGDATA_COL_DESCR),
+                    costo: byHeader(BIGDATA_RE_COSTO, m.colCosto || BIGDATA_COL_COSTO)
+                };
+                if (pos.colore >= 0) out.colColore = String(header[pos.colore] || '');
+                const colLetter = i => { let s = ''; i = +i + 1; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+                const hName = i => colLetter(i) + (header[i] ? ' "' + String(header[i]).trim() + '"' : '');
+
+                let found = [];
+                // 1) codice articolo in colonna D o C
+                found = rows.filter(r => sameCode(r[iD], cod) || sameCode(r[iC], cod));
+                if (found.length) out.matchInfo = `codice trovato in colonna ${BIGDATA_COL_CODICE}/${BIGDATA_COL_EAN}`;
+                // 2) EAN dei movimenti cercati in colonna C (e F, codice alternativo), poi tutte le righe con lo stesso codice D
+                if (!found.length && noteEans.length) {
+                    const eks = new Set(noteEans.map(eanKey).filter(Boolean));
+                    const iF = colIndex('F');
+                    const hit = rows.filter(r => eks.has(eanKey(r[iC])) || eks.has(eanKey(r[iF])));
+                    const dCodes = [...new Set(hit.map(r => normCode(r[iD])).filter(Boolean))];
+                    found = dCodes.length ? rows.filter(r => dCodes.some(d => sameCode(r[iD], d))) : hit;
+                    if (found.length) out.matchInfo = `trovato tramite gli EAN dei movimenti (codice BIGDATA ${dCodes.join(', ') || '-'})`;
+                }
+                // 3) codice articolo in qualunque altra colonna (es. codice interno): prendo tutte le righe con quel valore in quella colonna
+                if (!found.length) {
+                    const colHits = {};
+                    rows.forEach(r => r.forEach((v, i) => { if (i !== iU && i !== iH && String(v).trim().length >= 4 && sameCode(v, cod)) colHits[i] = (colHits[i] || 0) + 1; }));
+                    const best = Object.keys(colHits).sort((a, b) => colHits[b] - colHits[a])[0];
+                    if (best !== undefined) {
+                        found = rows.filter(r => sameCode(r[best], cod));
+                        out.matchInfo = `codice trovato in colonna ${hName(+best)}`;
                     }
-                    if (!sameCode(r[iD], cod) && !sameCode(r[iC], cod)) return;
-                    const pos = { colore: idx.colore, descr: idx.descr, costo: idx.costo };
-                    out.rows.push(bdRow(L => {
-                        if (L === BIGDATA_COL_EAN) return r[iC];
-                        if (L === BIGDATA_COL_CODICE) return r[iD];
-                        if (L === BIGDATA_COL_MISURA) return r[colIndex(BIGDATA_COL_MISURA)];
-                        return typeof L === 'number' && L >= 0 ? r[L] : '';
-                    }, pos));
-                });
-                if (out.rows.length) out.source = 'CSV';
+                }
+                found.forEach(r => out.rows.push(bdRow(L => {
+                    if (L === BIGDATA_COL_EAN) return r[iC];
+                    if (L === BIGDATA_COL_CODICE) return r[iD];
+                    if (L === BIGDATA_COL_MISURA) return r[iH];
+                    return typeof L === 'number' && L >= 0 ? r[L] : '';
+                }, pos)));
+                if (out.rows.length) out.source = 'CSV pubblicato';
+                else errs.push(`codice ${cod} non trovato nelle ${rows.length} righe del CSV di ARCHIVIO (né in colonna ${BIGDATA_COL_CODICE}/${BIGDATA_COL_EAN}, né tramite gli EAN dei movimenti)`);
             } catch (e) { console.warn('BIGDATA varianti CSV:', e); errs.push('CSV: ' + e.message); }
+        } else if (!out.rows.length && bigdataGvizBlocked) {
+            errs.push('il file BIGDATA non è pubblico e manca il link CSV');
         }
-        if (!out.rows.length && errs.length) out.error = 'Impossibile leggere gli EAN da BIGDATA (' + errs.join(' · ') + ').';
+        if (!out.rows.length && errs.length) out.error = 'EAN non letti da BIGDATA: ' + errs.join(' · ') + '.';
         return out;
     }
 
@@ -1663,11 +1701,10 @@
         document.getElementById('inv-copia').disabled = true;
         document.getElementById('inv-excel').disabled = true;
         try {
-            const [bd, respCod] = await Promise.all([
-                loadBigdataVariants(cod),
-                gvizQuery(`SELECT * WHERE ${globalColIds['COD']} = ${codLit(cod)}`)
-            ]);
+            const respCod = await gvizQuery(`SELECT * WHERE ${globalColIds['COD']} = ${codLit(cod)}`);
             const rows = gvizRowsToObjects(respCod).map(normalizeRow);
+            const noteEans = [...new Set(rows.map(eanOf).filter(Boolean))];
+            const bd = await loadBigdataVariants(cod, noteEans);
 
             // EAN dell'articolo presenti in BIGDATA (uno per variante)
             const bdByKey = {};
@@ -1699,7 +1736,7 @@
                 cod, desc: (rows[0] && rows[0]['DESCRIZIONE']) || bd0.desc || 'N/D',
                 vars: {}, colors: [], sizes: [], real: {}, rows: [],
                 tplAny: rows.length ? rows[rows.length - 1] : null, unitAny: 0,
-                bdSource: bd.source, bdError: bd.error, bdColColore: bd.colColore, nBd: 0, nNoBd: 0, nNoEan: 0
+                bdSource: bd.source, bdError: bd.error, bdMatch: bd.matchInfo, bdColColore: bd.colColore, nBd: 0, nNoBd: 0, nNoEan: 0
             };
             const newVar = (key, o) => (I.vars[key] = Object.assign({ key, ean: '', c: '', s: '', sys: 0, inBd: false, tpl: null, unit: 0, costo: 0, noteC: '', noteS: '', nMov: 0, placeholder: false }, o));
 
@@ -1780,11 +1817,11 @@
         let html = `<h5 class="mb-1"><strong>${esc(I.cod)}</strong> - ${esc(I.desc)}</h5>
             <p class="small text-muted mb-1">Le varianti sono gli <strong>EAN di BIGDATA</strong> (colonna ${BIGDATA_COL_EAN}); colore e misura vengono da BIGDATA o, se mancanti, da Elenco Note.
             "Sist." = giacenza contabile di ogni EAN su <strong>tutto lo storico</strong> di Elenco Note. Inserisci la quantità contata solo nelle caselle da correggere; lascia vuote le altre.</p>
-            <p class="small mb-2"><span class="badge bg-success">${I.nBd} EAN da BIGDATA</span>${I.bdSource ? ` <span class="text-muted">(${esc(I.bdSource)})</span>` : ''}
+            <p class="small mb-2"><span class="badge bg-success">${I.nBd} EAN da BIGDATA</span>${I.bdSource ? ` <span class="text-muted">(${esc(I.bdSource)}${I.bdMatch ? ', ' + esc(I.bdMatch) : ''})</span>` : ''}
             ${I.nNoBd ? ` <span class="badge bg-warning text-dark">${I.nNoBd} EAN solo in Elenco Note</span>` : ''}
             ${I.nNoEan ? ` <span class="badge bg-secondary">${I.nNoEan} varianti con movimenti senza EAN</span>` : ''}
             ${I.nBd && !I.bdColColore ? ' <span class="text-danger">· colonna colore non trovata in BIGDATA: colori presi da Elenco Note (imposta BIGDATA_COL_COLORE)</span>' : ''}</p>
-            ${I.bdError ? `<div class="alert alert-warning small py-2">${esc(I.bdError)} Uso colori e misure di Elenco Note.</div>` : ''}
+            ${I.bdError ? `<div class="alert alert-warning small py-2">${esc(I.bdError)} Uso colori e misure di Elenco Note. <button class="btn btn-sm btn-outline-secondary py-0 ms-2" id="inv-bd-reload"><i class="fas fa-sync-alt me-1"></i> Riscarica BIGDATA</button></div>` : ''}
             <div class="table-responsive"><table class="table table-bordered table-sm matrix-table" style="width:max-content;min-width:60%"><thead class="table-dark"><tr>
             <th class="color-col text-white">Colore \\ Misura</th>`;
         I.sizes.forEach(s => html += `<th>${esc(s)}</th>`);
@@ -1845,6 +1882,13 @@
         if (this.value === '') delete currentInvent.real[k];
         else currentInvent.real[k] = parseFloat(this.value.replace(',', '.')) || 0;
         updateInvDiffs();
+    });
+
+    $('#invBody').on('click', '#inv-bd-reload', async function() {
+        const I = currentInvent; if (!I) return;
+        this.disabled = true; this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Download...';
+        try { await getBigdataCsv(true); } catch (e) { alert('Errore download BIGDATA: ' + e.message); }
+        loadInventario(I.cod);
     });
 
     $('#invBody').on('click', '#inv-add', function() {
