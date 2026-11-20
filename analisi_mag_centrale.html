@@ -1744,8 +1744,9 @@
             Object.entries(bdByKey).forEach(([k, b]) => newVar('E:' + k, { ean: b.ean, c: b.colore, s: b.misura, inBd: true, costo: b.costo }));
             I.nBd = Object.keys(bdByKey).length;
 
-            const addMov = (v, r) => {
+            const addMov = (v, r, noEan = false) => {
                 v.sys += r._qta_num; v.tpl = r; v.nMov++;
+                if (noEan) { v.sysNoEan = (v.sysNoEan || 0) + r._qta_num; v.nMovNoEan = (v.nMovNoEan || 0) + 1; }
                 if (!v.c && r._colore) v.c = r._colore;          // colore mancante in BIGDATA: da Elenco Note
                 if (!v.s && r._misura) v.s = r._misura;          // misura mancante in BIGDATA: da Elenco Note
                 if (!v.noteC && r._colore) v.noteC = r._colore;
@@ -1769,13 +1770,17 @@
                     const key = 'V:' + up(r._colore) + '||' + up(r._misura);
                     v = I.vars[key] || newVar(key, { c: r._colore, s: r._misura });
                 }
-                addMov(v, r);
+                addMov(v, r, true);
             });
 
             Object.values(I.vars).forEach(v => {
                 v.c = v.c || 'N/D'; v.s = v.s || 'N/D'; v.sys = round3(v.sys);
                 if (!v.ean) I.nNoEan++; else if (!v.inBd) I.nNoBd++;
+                if (!v.inBd) { I.hidSys = round3((I.hidSys || 0) + v.sys); I.hidMov = (I.hidMov || 0) + v.nMov; }
             });
+            I.extraC = []; I.extraS = [];
+            I.modeAsk = !invModePref() && I.nBd > 0 && (I.nNoBd + I.nNoEan) > 0;   // prima volta: chiede quale vista usare
+            I.mode = I.nBd === 0 ? 'all' : (invModePref() || 'bd');
             invRebuildAxes(I);
 
             // ripropone eventuali giacenze reali già inserite in questa sessione
@@ -1791,14 +1796,23 @@
         }
     }
 
+    // Vista inventario: 'bd' = solo EAN presenti in BIGDATA · 'all' = anche i dati rilevati su Elenco Note
+    const INV_MODE_KEY = 'inventario_vista_v1';
+    function invModePref() { try { return localStorage.getItem(INV_MODE_KEY) || ''; } catch (e) { return ''; } }
+    function invSetModePref(m) { try { localStorage.setItem(INV_MODE_KEY, m); } catch (e) {} }
+    function invVisible(I, v) { return I.mode === 'all' || (v.inBd && !v.placeholder); }
+
     function invRebuildAxes(I) {
-        const colors = I.colors.slice(), sizes = I.sizes.slice();
+        const all = I.mode === 'all';
+        const colors = all ? I.extraC.slice() : [], sizes = all ? I.extraS.slice() : [];
         Object.values(I.vars).forEach(v => {
+            if (v.placeholder || !invVisible(I, v)) return;
             if (!colors.includes(v.c)) colors.push(v.c);
             if (!sizes.includes(v.s)) sizes.push(v.s);
         });
         I.colors = colors.sort((a, b) => String(a).localeCompare(String(b)));
         I.sizes = sizes.sort(sortSizes);
+        if (!all) return;   // solo BIGDATA: nessuna casella aggiuntiva
         // casella vuota della griglia = variante senza EAN da poter contare
         I.colors.forEach(c => I.sizes.forEach(s => {
             if (!invVarsIn(I, c, s).length) {
@@ -1808,9 +1822,31 @@
         }));
     }
     function invVarsIn(I, c, s) {
-        return Object.values(I.vars).filter(v => v.c === c && v.s === s)
+        return Object.values(I.vars).filter(v => v.c === c && v.s === s && invVisible(I, v))
             .sort((a, b) => (b.inBd - a.inBd) || String(a.ean).localeCompare(String(b.ean)));
     }
+
+    function invModeBar(I) {
+        const nHid = I.nNoBd + I.nNoEan;
+        if (I.nBd === 0) return `<div class="alert alert-secondary small py-2">Nessun EAN in BIGDATA per questo articolo: mostro i dati rilevati su Elenco Note.</div>`;
+        const btns = `<div class="btn-group btn-group-sm" role="group">
+                <button class="btn ${I.mode === 'bd' ? 'btn-success' : 'btn-outline-success'} inv-mode" data-mode="bd"><i class="fas fa-database me-1"></i> Solo EAN BIGDATA (${I.nBd})</button>
+                <button class="btn ${I.mode === 'all' ? 'btn-dark' : 'btn-outline-dark'} inv-mode" data-mode="all"><i class="fas fa-list me-1"></i> Anche dati di Elenco Note${nHid ? ' (+' + nHid + ')' : ''}</button>
+            </div>`;
+        if (I.modeAsk) return `<div class="alert alert-info py-2 d-flex flex-wrap align-items-center gap-2">
+                <span class="small me-auto"><i class="fas fa-question-circle me-1"></i> In Elenco Note ci sono <strong>${nHid}</strong> varianti non presenti in BIGDATA (${I.hidMov || 0} movimenti, giacenza sist. ${I.hidSys || 0}). Vuoi usare <strong>solo gli EAN di BIGDATA</strong>?</span>${btns}</div>`;
+        let info = '';
+        if (I.mode === 'bd' && nHid) info = `<span class="small text-muted ms-2">Nascoste ${nHid} varianti rilevate solo su Elenco Note (${I.hidMov || 0} movimenti, giacenza sist. ${I.hidSys || 0}).</span>`;
+        return `<div class="d-flex flex-wrap align-items-center mb-2">${btns}${info}</div>`;
+    }
+
+    $('#invBody').on('click', '.inv-mode', function() {
+        const I = currentInvent; if (!I) return;
+        I.mode = this.dataset.mode; I.modeAsk = false;
+        invSetModePref(I.mode);
+        invRebuildAxes(I);
+        renderInvGrid();
+    });
 
     function renderInvGrid() {
         const I = currentInvent; if (!I) return;
@@ -1821,6 +1857,7 @@
             ${I.nNoBd ? ` <span class="badge bg-warning text-dark">${I.nNoBd} EAN solo in Elenco Note</span>` : ''}
             ${I.nNoEan ? ` <span class="badge bg-secondary">${I.nNoEan} varianti con movimenti senza EAN</span>` : ''}
             ${I.nBd && !I.bdColColore ? ' <span class="text-danger">· colonna colore non trovata in BIGDATA: colori presi da Elenco Note (imposta BIGDATA_COL_COLORE)</span>' : ''}</p>
+            ${invModeBar(I)}
             ${I.bdError ? `<div class="alert alert-warning small py-2">${esc(I.bdError)} Uso colori e misure di Elenco Note. <button class="btn btn-sm btn-outline-secondary py-0 ms-2" id="inv-bd-reload"><i class="fas fa-sync-alt me-1"></i> Riscarica BIGDATA</button></div>` : ''}
             <div class="table-responsive"><table class="table table-bordered table-sm matrix-table" style="width:max-content;min-width:60%"><thead class="table-dark"><tr>
             <th class="color-col text-white">Colore \\ Misura</th>`;
@@ -1830,13 +1867,15 @@
             html += `<tr><td class="color-col">${esc(c)}</td>`;
             I.sizes.forEach(s => {
                 html += '<td>';
-                invVarsIn(I, c, s).forEach(v => {
+                const vs = invVarsIn(I, c, s);
+                if (!vs.length) html += '<span style="color:#ccc" title="Nessun EAN in BIGDATA per questo colore/misura">·</span>';
+                vs.forEach(v => {
                     const real = I.real[v.key], k = encodeURIComponent(v.key);
                     let tag = '';
                     if (v.ean && !v.inBd) tag = ' <span class="badge bg-warning text-dark" title="EAN presente nei movimenti ma non in BIGDATA">no BIGDATA</span>';
                     else if (!v.ean && !v.placeholder) tag = '<span class="badge bg-secondary" title="Movimenti senza EAN non abbinabili a un EAN di BIGDATA">senza EAN</span>';
                     html += `<div class="inv-var">
-                        ${v.ean || tag ? `<div class="inv-ean" title="${v.nMov} movimenti">${esc(v.ean)}${tag}</div>` : ''}
+                        ${v.ean || tag ? `<div class="inv-ean" title="${v.nMov} movimenti${v.nMovNoEan ? ` (di cui ${v.nMovNoEan} senza EAN abbinati per colore/misura, ${round3(v.sysNoEan)} pz)` : ''}">${esc(v.ean)}${tag}</div>` : ''}
                         <div class="small text-muted">sist. <b class="${v.sys < 0 ? 'text-danger' : ''}">${v.sys}</b></div>
                         <input type="number" step="1" class="form-control form-control-sm text-center inv-input" data-k="${k}" value="${real !== undefined ? real : ''}" placeholder="${v.sys}">
                         <div class="inv-diff" data-k="${k}"></div></div>`;
@@ -1869,7 +1908,7 @@
         });
         I.colors.forEach(c => {
             let ts = 0, tr = 0;
-            Object.values(I.vars).filter(v => v.c === c).forEach(v => { ts += v.sys; tr += (I.real[v.key] !== undefined ? I.real[v.key] : v.sys); });
+            Object.values(I.vars).filter(v => v.c === c && invVisible(I, v)).forEach(v => { ts += v.sys; tr += (I.real[v.key] !== undefined ? I.real[v.key] : v.sys); });
             const ce = encodeURIComponent(c);
             const a = document.querySelector(`#invBody .inv-rsys[data-c="${ce}"]`), b = document.querySelector(`#invBody .inv-rreal[data-c="${ce}"]`);
             if (a) a.textContent = round3(ts);
@@ -1895,8 +1934,10 @@
         const I = currentInvent; if (!I) return;
         const c = $('#inv-new-col').val().trim().toUpperCase(), s = $('#inv-new-size').val().trim().toUpperCase();
         if (!c && !s) return;
-        if (c && !I.colors.includes(c)) I.colors.push(c);
-        if (s && !I.sizes.includes(s)) I.sizes.push(s);
+        if (I.mode !== 'all') { I.mode = 'all'; invSetModePref('all'); }
+        if (c && !I.extraC.includes(c)) I.extraC.push(c);
+        if (s && !I.extraS.includes(s)) I.extraS.push(s);
+        if (c && !s) I.sizes.forEach(z => { if (!I.extraS.includes(z)) I.extraS.push(z); });
         invRebuildAxes(I);
         renderInvGrid();
     });
@@ -1963,7 +2004,7 @@
 
         const out = [], preview = [], celle = {};
         Object.entries(I.real).forEach(([key, real]) => {
-            const v = I.vars[key]; if (!v) return;
+            const v = I.vars[key]; if (!v || !invVisible(I, v)) return;
             invRealSession[I.cod + '||' + key] = real;
             celle[v.c + '||' + v.s] = true;
             const diff = round3(real - v.sys);
