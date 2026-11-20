@@ -153,9 +153,11 @@
   .nuovo-badge { position: absolute; left: 8px; top: 8px; z-index: 3; background: #ff6f00; color: #fff; font-size: 10px; font-weight: 800;
     padding: 3px 8px; border-radius: 10px; pointer-events: none; letter-spacing: .3px; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
   .nuovo-badge.sotto { top: 34px; }
-  #nuovi-btn { color: #e65100; border-color: #ffcc80; }
-  #nuovi-btn.on { background: #ff6f00; color: #fff; border-color: #ff6f00; }
-  #nuovi-btn[hidden] { display: none; }
+  #offerte-btn { color: #c62828; border-color: #ef9a9a; font-weight: 700; }
+  #offerte-btn.on { background: #e53935; color: #fff; border-color: #e53935; }
+  #offerte-btn[hidden] { display: none; }
+  .offerte-strip { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: #ffebee; border: 1px solid #ef9a9a; border-radius: 10px; padding: 10px 14px; font-size: 13px; color: #b71c1c; }
+  .offerte-strip button { border: 1px solid #c62828; background: #fff; color: #c62828; border-radius: 16px; padding: 5px 12px; font-weight: 700; cursor: pointer; }
   .nuovi-strip { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: #fff3e0; border: 1px solid #ffcc80;
     border-radius: 12px; padding: 10px 12px; font-size: 14px; color: #8a3b00; }
   .nuovi-strip button { border: 1px solid #e65100; background: #fff; color: #e65100; border-radius: 16px; padding: 5px 12px; font-weight: 700; cursor: pointer; }
@@ -435,7 +437,7 @@
     <select id="f-categoria" data-field="categoria" aria-label="Categoria"></select>
     <select id="f-tipo" data-field="tipo" aria-label="Tipo"></select>
     <select id="f-materiale" data-field="materiale" aria-label="Materiale"></select>
-    <button id="nuovi-btn" onclick="toggleNuovi()" hidden>🆕 Nuovi arrivi</button>
+    <button id="offerte-btn" onclick="toggleOfferte()" hidden>🏷️ Offerte</button>
     <button id="reset-btn" onclick="resetFilters()" hidden>✕ Azzera</button>
     <button id="share-btn" onclick="shareCurrent()">🔗 Condividi</button>
   </div>
@@ -639,6 +641,20 @@
   let SOLO_NUOVI = false;   // filtro "Nuovi arrivi" attivo
   let NUOVI_AUTO = false;   // attivato da solo all'apertura (si spegne appena il cliente sceglie un filtro)
   let NUOVI_KEYS = new Set();
+  // ===== OFFERTE: prodotti con sconto a tempo attivo oggi, dal maggiore al minore =====
+  let SOLO_OFFERTE = false;
+  let OFFERTE_KEYS = new Set();
+  function calcolaOfferte() {
+    OFFERTE_KEYS = new Set(PRODUCTS.filter(p => p.disponibile && scontoAttivo(p) > 0).map(p => String(p.codiceProdotto || p.id)));
+  }
+  function toggleOfferte(forza) {
+    SOLO_OFFERTE = typeof forza === 'boolean' ? forza : !SOLO_OFFERTE;
+    if (SOLO_OFFERTE) { SOLO_NUOVI = false; NUOVI_AUTO = false; track('filtro', 'offerte', 'Offerte'); }
+    renderFilters();
+    updateFilters();
+    syncUrl();
+    window.scrollTo(0, 0);
+  }
 
   function eNuovo(p) {
     const d = String((p && p.dataCarico) || '');
@@ -667,6 +683,7 @@
 
   function matchesFilters(p) {
     if (SOLO_NUOVI && !NUOVI_KEYS.has(String(p.codiceProdotto || p.id))) return false;
+    if (SOLO_OFFERTE && !OFFERTE_KEYS.has(String(p.codiceProdotto || p.id))) return false;
     const matchCat = ACTIVE_CAT === 'Tutti' || norm(p.categoria) === norm(ACTIVE_CAT);
     const matchCatalog = ACTIVE_CATALOGS.size === 0 || ACTIVE_CATALOGS.has(p.catalogo);
     const matchTipo = !ACTIVE_TIPO || norm(p.tipo) === norm(ACTIVE_TIPO);
@@ -684,6 +701,7 @@
       if (ACTIVE_TIPO) u.searchParams.set('tipo', ACTIVE_TIPO); else u.searchParams.delete('tipo');
       if (ACTIVE_MAT) u.searchParams.set('materiale', ACTIVE_MAT); else u.searchParams.delete('materiale');
       if (SOLO_NUOVI && !NUOVI_AUTO) u.searchParams.set('nuovi', '1'); else u.searchParams.delete('nuovi');
+      if (SOLO_OFFERTE) u.searchParams.set('offerte', '1'); else u.searchParams.delete('offerte');
       if (u.href !== window.location.href) history.pushState(null, '', u);
     } catch (e) {}
   }
@@ -713,8 +731,10 @@
     if (p.get('q')) document.getElementById('search').value = p.get('q');
     // Nuovi arrivi: ?nuovi=1 li mostra; aprendo il catalogo senza filtri si parte da lì (se ce ne sono)
     calcolaNuovi();
-    const senzaFiltri = !['catalogo', 'categoria', 'tipo', 'materiale', 'nuovi', 'q'].some(k => p.get(k));
-    SOLO_NUOVI = p.get('nuovi') === '1' || (senzaFiltri && NUOVI_KEYS.size > 0);
+    calcolaOfferte();
+    const senzaFiltri = !['catalogo', 'categoria', 'tipo', 'materiale', 'nuovi', 'offerte', 'q'].some(k => p.get(k));
+    SOLO_OFFERTE = p.get('offerte') === '1' && OFFERTE_KEYS.size > 0;
+    SOLO_NUOVI = !SOLO_OFFERTE && (p.get('nuovi') === '1' || (senzaFiltri && NUOVI_KEYS.size > 0));
     NUOVI_AUTO = SOLO_NUOVI && p.get('nuovi') !== '1';
   }
   window.addEventListener('popstate', () => {
@@ -1392,7 +1412,7 @@
       setTimeout(() => setBanner('⚠️ Il server non invia Tipo/Materiale: ripubblica una nuova versione dell\'Apps Script'), 0);
     }
     PRODUCTS = list;
-    if (!firstApplyDone) { readStateFromUrl(); firstApplyDone = true; } else calcolaNuovi();
+    if (!firstApplyDone) { readStateFromUrl(); firstApplyDone = true; } else { calcolaNuovi(); calcolaOfferte(); }
 
     let tolti = 0, ridotti = 0;
     Object.keys(CART).forEach(id => {
@@ -1502,11 +1522,11 @@
     fillSelect('f-tipo', 'Tutti i tipi', countBy(base2.filter(p => !ACTIVE_MAT || norm(p.materiale) === norm(ACTIVE_MAT)), 'tipo'), ACTIVE_TIPO);
     fillSelect('f-materiale', 'Tutti i materiali', countBy(base2.filter(p => !ACTIVE_TIPO || norm(p.tipo) === norm(ACTIVE_TIPO)), 'materiale'), ACTIVE_MAT);
 
-    const anyActive = ACTIVE_CATALOGS.size > 0 || ACTIVE_CAT !== 'Tutti' || ACTIVE_TIPO || ACTIVE_MAT || document.getElementById('search').value.trim() || (SOLO_NUOVI && !NUOVI_AUTO);
-    const nb = document.getElementById('nuovi-btn');
-    nb.hidden = NUOVI_KEYS.size === 0;
-    nb.classList.toggle('on', SOLO_NUOVI);
-    nb.textContent = '🆕 Nuovi arrivi (' + NUOVI_KEYS.size + ')';
+    const anyActive = ACTIVE_CATALOGS.size > 0 || ACTIVE_CAT !== 'Tutti' || ACTIVE_TIPO || ACTIVE_MAT || document.getElementById('search').value.trim() || (SOLO_NUOVI && !NUOVI_AUTO) || SOLO_OFFERTE;
+    const ob = document.getElementById('offerte-btn');
+    ob.hidden = !PREZZI || OFFERTE_KEYS.size === 0;   // senza prezzi visibili le offerte non hanno senso
+    ob.classList.toggle('on', SOLO_OFFERTE);
+    ob.textContent = '🏷️ Offerte (' + OFFERTE_KEYS.size + ')';
     document.getElementById('reset-btn').hidden = !anyActive;
     fitTopBar();
   }
@@ -1534,7 +1554,7 @@
     ACTIVE_CAT = 'Tutti';
     ACTIVE_TIPO = '';
     ACTIVE_MAT = '';
-    SOLO_NUOVI = false; NUOVI_AUTO = false;
+    SOLO_NUOVI = false; NUOVI_AUTO = false; SOLO_OFFERTE = false;
     document.getElementById('search').value = '';
     renderFilters();
     updateFilters();
@@ -1550,6 +1570,7 @@
     if (ACTIVE_TIPO) params.push('tipo=' + encodeURIComponent(ACTIVE_TIPO));
     if (ACTIVE_MAT) params.push('materiale=' + encodeURIComponent(ACTIVE_MAT));
     if (SOLO_NUOVI) params.push('nuovi=1');
+    if (SOLO_OFFERTE) params.push('offerte=1');
     params.push('condiviso=1');
     return baseUrl + '?' + params.join('&');
   }
@@ -1615,16 +1636,18 @@
       if (document.getElementById('search').value.trim()) spegniNuoviAuto();
       renderFilters();
       updateFilters();
-      document.getElementById('reset-btn').hidden = !(ACTIVE_CATALOGS.size > 0 || ACTIVE_CAT !== 'Tutti' || ACTIVE_TIPO || ACTIVE_MAT || document.getElementById('search').value.trim());
+      document.getElementById('reset-btn').hidden = !(ACTIVE_CATALOGS.size > 0 || ACTIVE_CAT !== 'Tutti' || ACTIVE_TIPO || ACTIVE_MAT || SOLO_OFFERTE || document.getElementById('search').value.trim());
     }, 150);
   }
 
   function updateFilters(keepPage) {
     const prevDisplayed = currentDisplayed;
     filteredGroups = groupProducts(PRODUCTS.filter(matchesFilters));
+    // Offerte: dallo sconto maggiore al minore (a parità, resta l'ordine "ultimo caricato per primo")
+    if (SOLO_OFFERTE) filteredGroups = filteredGroups.map((g, i) => [g, i]).sort((a, b) => (scontoAttivo(b[0]) - scontoAttivo(a[0])) || (a[1] - b[1])).map(x => x[0]);
     // Senza un catalogo scelto, gli articoli dei "tuoi brand" vengono per primi
     const fav = brandPreferiti();
-    if (fav.length && ACTIVE_CATALOGS.size === 0) {
+    if (fav.length && ACTIVE_CATALOGS.size === 0 && !SOLO_OFFERTE) {
       const rank = g => { const i = fav.indexOf(g.catalogo); return i < 0 ? fav.length : i; };
       filteredGroups = filteredGroups.map((g, i) => [g, i]).sort((a, b) => (rank(a[0]) - rank(b[0])) || (a[1] - b[1])).map(x => x[0]);
     }
@@ -1969,10 +1992,13 @@
     const fav = brandPreferiti();
 
     let html = '';
+    if (SOLO_OFFERTE) {
+      html += `<div class="offerte-strip">🏷️ <b>Offerte attive</b> dal maggiore al minore sconto<button onclick="toggleOfferte(false)">Vedi tutto il catalogo</button></div>`;
+    }
     if (SOLO_NUOVI) {
       html += `<div class="nuovi-strip">🆕 <b>Nuovi arrivi</b> degli ultimi ${GIORNI_NOVITA} giorni<button onclick="toggleNuovi(false)">Vedi tutto il catalogo</button></div>`;
     }
-    if (fav.length && ACTIVE_CATALOGS.size === 0 && !SOLO_NUOVI) {
+    if (fav.length && ACTIVE_CATALOGS.size === 0 && !SOLO_NUOVI && !SOLO_OFFERTE) {
       html += `<div class="fav-strip"><strong>⭐ I tuoi brand:</strong>${fav.map(n => `<button class="fav-chip" data-brand="${escHtml(n)}">${escHtml(n)}</button>`).join('')}</div>`;
     }
 
