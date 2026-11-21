@@ -131,6 +131,13 @@
   #avviso { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 22px; font-size: 13px; z-index: 50; opacity: 0; pointer-events: none; transition: opacity .25s; max-width: 90vw; text-align: center; }
   #avviso.show { opacity: 1; }
   #stato { text-align: center; padding: 40px 16px; color: var(--mute); }
+  .ld { max-width: 420px; margin: 0 auto; }
+  .ld-t { font-size: 17px; font-weight: 800; color: var(--ink, #111); margin-bottom: 14px; }
+  .ld-bar { height: 8px; background: #e5e5e5; border-radius: 6px; overflow: hidden; }
+  .ld-bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 6px; transition: width .3s linear; }
+  .ld-s { margin: 10px 0 18px; font-size: 14px; } .ld-s b { font-size: 20px; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .ld-f { min-height: 44px; font-size: 15px; font-weight: 600; color: #333; line-height: 1.35; transition: opacity .25s; }
+  .ld-f.fuori { opacity: 0; }
   footer { text-align: center; font-size: 11.5px; color: var(--mute); padding: 20px 16px; }
 
   /* ---------- statistiche (solo amministratore) ---------- */
@@ -205,7 +212,12 @@
 <div id="per-te"></div>
 <div id="conta"></div>
 
-<div id="stato">Caricamento delle offerte…</div>
+<div id="stato"><div class="ld">
+  <div class="ld-t">Stiamo preparando le offerte per te</div>
+  <div class="ld-bar"><i id="ld-bar"></i></div>
+  <div class="ld-s" id="ld-s">Un attimo di pazienza…</div>
+  <div class="ld-f" id="ld-f"></div>
+</div></div>
 <div id="griglia"></div>
 
 <footer>Prezzi IVA inclusa · La disponibilità viene confermata da noi su WhatsApp prima del pagamento.</footer>
@@ -315,14 +327,46 @@
     $('stato').style.display = 'none';
     avviaConto();
   }
+  // ===== ATTESA DEL PRIMO CARICAMENTO: conto alla rovescia, barra e frasi (la durata è quella dell'ultima volta) =====
+  let ATT = null;
+  function avviaAttesa() {
+    if (ATT) return;
+    const t0 = Date.now();
+    const stima = Math.min(Math.max(parseFloat(lsGet('b2c_tload')) || 25, 8), 60);
+    const frasi = [
+      '🔥 Stiamo scegliendo per te le offerte Black Friday',
+      '🛍️ Ritiro gratuito nei nostri negozi, senza costi',
+      '🚚 Preferisci riceverlo a casa? Spedizione a soli ' + eur(CONFIG.spedizione),
+      '💬 Ordini su WhatsApp: ti rispondiamo noi, niente registrazioni',
+      '⏳ Gli sconti valgono solo fino alla fine dell\'offerta',
+      '👗 Pezzi contati: quando una taglia finisce, finisce',
+      '❤️ Peplo · Caramello · Parrotta Point: sempre vicino a te'
+    ];
+    let i = 0; const f = $('ld-f'); f.textContent = frasi[0];
+    ATT = { t0,
+      a: setInterval(() => {
+        const sec = (Date.now() - t0) / 1000, resto = Math.ceil(stima - sec);
+        $('ld-bar').style.width = Math.min(95, sec / stima * 95) + '%';
+        $('ld-s').innerHTML = resto > 0 ? 'Pronto tra circa <b>' + resto + '</b> secondi' : 'Ci siamo quasi… ancora un momento';
+      }, 250),
+      b: setInterval(() => { f.classList.add('fuori'); setTimeout(() => { i = (i + 1) % frasi.length; f.textContent = frasi[i]; f.classList.remove('fuori'); }, 250); }, 4000) };
+  }
+  function fermaAttesa(ok) {
+    if (!ATT) return;
+    clearInterval(ATT.a); clearInterval(ATT.b);
+    if (ok) lsSet('b2c_tload', String(Math.round((Date.now() - ATT.t0) / 1000)));
+    ATT = null;
+  }
+
   function carica() {
     let cache = null;
     try { cache = JSON.parse(lsGet(CACHE_KEY) || 'null'); } catch (e) {}
     if (cache && cache.products) applica(cache);   // subito qualcosa da vedere, poi aggiorno
+    else avviaAttesa();
     fetch(API_URL + '?action=b2c')
       .then(r => r.json())
-      .then(d => { if (!d.ok) throw new Error(d.error || 'errore'); lsSet(CACHE_KEY, JSON.stringify(d)); applica(d); if (APERTO) disegnaProdotto(); })
-      .catch(() => { if (!PRODOTTI.length) $('stato').innerHTML = 'Non riesco a caricare le offerte. Riprova tra poco o scrivici su <a href="https://wa.me/' + WHATSAPP + '">WhatsApp</a>.'; });
+      .then(d => { if (!d.ok) throw new Error(d.error || 'errore'); fermaAttesa(true); lsSet(CACHE_KEY, JSON.stringify(d)); applica(d); if (APERTO) disegnaProdotto(); })
+      .catch(() => { fermaAttesa(false); if (!PRODOTTI.length) $('stato').innerHTML = 'Non riesco a caricare le offerte. Riprova tra poco o scrivici su <a href="https://wa.me/' + WHATSAPP + '">WhatsApp</a>.'; });
   }
 
   // ===== RAGGRUPPAMENTO PER CODICE PRODOTTO =====
