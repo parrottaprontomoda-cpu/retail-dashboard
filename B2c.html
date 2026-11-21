@@ -70,6 +70,17 @@
   .punti { position: absolute; left: 0; right: 0; bottom: 8px; display: flex; justify-content: center; gap: 5px; }
   .punti i { width: 7px; height: 7px; border-radius: 50%; background: #ccc; } .punti i.on { background: var(--ink); }
   .foglio h2 { margin: 14px 40px 2px 0; font-size: 20px; line-height: 1.2; }
+  .htag { background: #f1f5f9; color: #334155; border: none; border-radius: 10px; padding: 4px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .htag:active { background: #e2e8f0; }
+  #filtro-tag { display: none; max-width: 1200px; margin: 8px auto 0; padding: 0 12px; }
+  #filtro-tag.show { display: block; }
+  #filtro-tag button { background: var(--accent); color: #fff; border: none; border-radius: 14px; padding: 6px 12px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  #per-te { display: none; max-width: 1200px; margin: 10px auto 0; padding: 0 12px; }
+  #per-te.show { display: block; }
+  #per-te h2 { font-size: 15px; margin: 0 0 8px; }
+  #per-te .riga-pt { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; }
+  #per-te .card { flex: 0 0 150px; scroll-snap-align: start; }
+  #per-te .taglia-pt { font-size: 11px; font-weight: 700; color: var(--ok); margin-top: 2px; }
   .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
   .tag { background: #eee; border-radius: 10px; padding: 3px 9px; font-size: 11.5px; font-weight: 600; }
   .foglio .prezzo .nuovo { font-size: 26px; }
@@ -123,8 +134,37 @@
   footer { text-align: center; font-size: 11.5px; color: var(--mute); padding: 20px 16px; }
 
   /* ---------- statistiche (solo amministratore) ---------- */
-  #btn-stat { display: none; position: fixed; right: 12px; top: 12px; z-index: 15; background: #fff; color: #111; border: none; border-radius: 16px; padding: 7px 12px; font-size: 12px; font-weight: 700; cursor: pointer; }
-  #btn-stat.show { display: block; }
+  #admin-bar { display: none; background: #2b2b2b; padding: 8px 10px; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  #admin-bar.show { display: flex; }
+  #admin-bar button { background: #fff; color: #111; border: none; border-radius: 16px; padding: 7px 13px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  /* modulo di caricamento */
+  .car-var { width: 100%; border-collapse: collapse; font-size: 13px; margin: 6px 0 10px; }
+  .car-var th, .car-var td { padding: 7px 4px; border-bottom: 1px solid #eee; text-align: left; vertical-align: middle; }
+  .car-var th { font-size: 11px; color: var(--mute); text-transform: uppercase; }
+  .car-var .ean { font-size: 12px; color: #444; font-variant-numeric: tabular-nums; }
+  .car-var .n { text-align: right; }
+  .stato { font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 8px; white-space: nowrap; }
+  .stato.nuova { background: #dcfce7; color: #166534; } .stato.b2c { background: #e0f2fe; color: #075985; }
+  .stato.b2b { background: #fef3c7; color: #92400e; } .stato.altro { background: #fee2e2; color: #991b1b; }
+  .car-sez { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--mute); margin: 16px 0 4px; }
+  .car-foto { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+  .car-foto .f { position: relative; width: 76px; height: 76px; border: 2px solid var(--line); border-radius: 10px; overflow: hidden; cursor: pointer; background: #fff; }
+  .car-foto .f.on { border-color: var(--ok); }
+  .car-foto .f img { width: 100%; height: 100%; object-fit: cover; opacity: .4; }
+  .car-foto .f.on img { opacity: 1; }
+  .car-foto .f .cop { position: absolute; left: 3px; top: 3px; background: var(--ok); color: #fff; font-size: 10px; font-weight: 700; border-radius: 6px; padding: 0 5px; }
+  .car-foto .f .stella { position: absolute; right: 2px; bottom: 2px; border: none; background: rgba(0,0,0,.6); color: #fff; border-radius: 6px; font-size: 11px; cursor: pointer; padding: 1px 5px; }
+  .griglia2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; } .griglia2 .largo { grid-column: 1 / -1; }
+  .car-scorciatoie { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .car-scorciatoie button { border: 1px solid var(--line); background: #fff; border-radius: 14px; padding: 5px 11px; font-size: 12px; cursor: pointer; }
+  .spunta { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; margin-top: 10px; }
+  .esito.ok { color: #166534; font-weight: 700; margin-top: 10px; font-size: 13.5px; }
+  .anteprima { font-size: 13px; color: var(--accent-d); font-weight: 700; margin-top: 6px; min-height: 18px; }
+  .tab-el { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .tab-el th, .tab-el td { padding: 8px 4px; border-bottom: 1px solid #eee; text-align: left; } .tab-el tr.r { cursor: pointer; } .tab-el tr.r:hover { background: #fafafa; }
+  .tab-el .n { text-align: right; font-variant-numeric: tabular-nums; } .tab-el small { display: block; color: var(--mute); }
+  .tab-el tr.off td { opacity: .5; }
+  @media (max-width: 520px) { .griglia2 { grid-template-columns: 1fr; } }
   .kpi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
   .kpi div { background: #f5f5f3; border-radius: 10px; padding: 10px 6px; text-align: center; font-size: 11px; color: var(--mute); }
   .kpi b { display: block; font-size: 20px; color: var(--ink); }
@@ -136,14 +176,17 @@
 </head>
 <body>
 
-<button id="btn-stat" onclick="apriStatistiche()">📊 Statistiche</button>
-
 <header>
   <div class="marchi">Peplo · Caramello · Parrotta Point</div>
   <h1>BLACK <span>FRIDAY</span></h1>
   <p class="sub">Le offerte da non perdere — ordina qui, ti rispondiamo su WhatsApp</p>
   <div id="conto"><small>La promozione finisce tra</small><b id="conto-t">--</b></div>
 </header>
+<div id="admin-bar">
+  <button onclick="apriCarico()">➕ Carica prodotto</button>
+  <button onclick="apriElenco()">📋 Offerte nel catalogo</button>
+  <button id="btn-stat" onclick="apriStatistiche()">📊 Statistiche</button>
+</div>
 <div class="info" id="info">🛍️ Ritiro in negozio gratuito · 🚚 Spedizione con pagamento anticipato</div>
 
 <div id="barra">
@@ -158,6 +201,8 @@
   </div>
   <div id="chips"></div>
 </div>
+<div id="filtro-tag"></div>
+<div id="per-te"></div>
 <div id="conta"></div>
 
 <div id="stato">Caricamento delle offerte…</div>
@@ -185,6 +230,21 @@
   </div>
 </div>
 
+<!-- modulo di caricamento (solo amministratore) -->
+<div class="velo" id="v-car" onclick="if (event.target === this) chiudiCarico()">
+  <div class="foglio">
+    <button class="x" onclick="chiudiCarico()" aria-label="Chiudi">×</button>
+    <div class="scorri" id="car-corpo"></div>
+    <div class="piede" id="car-piede" hidden><button class="btn" id="car-salva" onclick="salvaCarico()">💾 Salva nel catalogo B2C</button></div>
+  </div>
+</div>
+<div class="velo" id="v-el" onclick="if (event.target === this) this.classList.remove('show')">
+  <div class="foglio">
+    <button class="x" onclick="document.getElementById('v-el').classList.remove('show')" aria-label="Chiudi">×</button>
+    <div class="scorri" id="el-corpo">Caricamento…</div>
+  </div>
+</div>
+
 <!-- statistiche -->
 <div class="velo" id="v-stat" onclick="if (event.target === this) this.classList.remove('show')">
   <div class="foglio">
@@ -200,7 +260,7 @@
   const API_URL = 'https://script.google.com/macros/s/AKfycbx09XG2XA-PrkoaueaWySeYOm8IxKX4BtNv7oTGJqxBkqkUWJOoZsSKabh1RlXFBcKVIw/exec';
   const WHATSAPP = '39096421546';
   const TITOLO_ORDINE = 'ORDINE BLACK FRIDAY';
-  const CACHE_KEY = 'b2c_cache_v1', CARRELLO_KEY = 'b2c_carrello_v1', NOME_KEY = 'b2c_nome', VID_KEY = 'b2c_vid';
+  const CACHE_KEY = 'b2c_cache_v1', CARRELLO_KEY = 'b2c_carrello_v1', NOME_KEY = 'b2c_nome', PROFILO_KEY = 'b2c_profilo_v1', VID_KEY = 'b2c_vid';
 
   // ===== STATO =====
   const params = new URLSearchParams(location.search);
@@ -209,7 +269,7 @@
   let CONFIG = { spedizione: 7, puntiRitiro: [] };
   let PRODOTTI = [], GRUPPI = [], VAR = {}, FINE = '';
   let CART = {};                 // id variante -> quantità
-  let CAT = 'Tutte', APERTO = null, GPOS = {}, MODO = 'RITIRO';
+  let TAG = '', CAT = 'Tutte', APERTO = null, GPOS = {}, MODO = 'RITIRO';
 
   // ===== UTILITÀ =====
   const $ = id => document.getElementById(id);
@@ -296,8 +356,64 @@
     GRUPPI.forEach(g => {
       g.esaurito = !g.varianti.some(v => v.disponibile);
       g.ultimi = g.varianti.some(v => v.disponibile && v.ultimi);
+      g.hashtag = (String(g.descrizione).match(/#[\p{L}\p{N}_]+/gu) || []).map(t => t.slice(1).toLowerCase());
+      g.tags = [...new Set(g.hashtag.concat([g.tipo, g.materiale, g.categoria, g.brand].map(t => norm(t).replace(/\s+/g, '')).filter(Boolean)))];
+      g.descrPulita = String(g.descrizione).replace(/#[\p{L}\p{N}_]+/gu, '').replace(/[ \t]{2,}/g, ' ').trim();
       g.testo = norm([g.nome, g.descrizione, g.brand, g.tipo, g.materiale, g.key, g.varianti.map(v => v.colore + ' ' + v.misura).join(' ')].join(' '));
     });
+  }
+
+  // ===== PROFILO DEL CLIENTE (solo su questo telefono: etichette e misure che guarda/chiede) =====
+  let PROF = { t: {}, m: {}, v: {} };
+  try { const x = JSON.parse(lsGet(PROFILO_KEY) || 'null'); if (x && x.t && x.m) PROF = Object.assign({ v: {} }, x); } catch (e) {}
+  function salvaProfilo() {
+    const taglia = (o, n) => { const k = Object.keys(o); if (k.length > n) k.sort((a, b) => o[a] - o[b]).slice(0, k.length - n).forEach(x => delete o[x]); };
+    taglia(PROF.t, 60); taglia(PROF.m, 20); taglia(PROF.v, 100);
+    lsSet(PROFILO_KEY, JSON.stringify(PROF));
+  }
+  const piu = (o, k, n) => { if (k) o[k] = Math.round(((o[k] || 0) + n) * 10) / 10; };
+  function impara(g, peso, misura) {
+    g.tags.forEach(t => piu(PROF.t, t, peso));
+    if (misura) piu(PROF.m, String(misura).trim(), peso);
+    piu(PROF.v, g.key, 1);
+    salvaProfilo();
+  }
+  const norm2 = m => String(m).trim().toUpperCase();
+  function punteggio(g) {
+    let sc = 0; g.tags.forEach(t => { sc += PROF.t[t] || 0; });
+    if (!sc) return { sc: 0, taglia: '' };
+    let taglia = '', bm = 0;
+    g.varianti.forEach(v => {
+      if (!v.disponibile || !v.misura) return;
+      const w = Object.keys(PROF.m).reduce((t, k) => t + (norm2(k) === norm2(v.misura) ? PROF.m[k] : 0), 0);
+      if (w > bm) { bm = w; taglia = v.misura; }
+    });
+    sc += bm * 1.5;
+    if (PROF.v[g.key]) sc *= 0.5;   // già visto: scende nei suggerimenti
+    return { sc, taglia };
+  }
+  function disegnaPerTe() {
+    const box = $('per-te');
+    const libero = CAT === 'Tutte' && !TAG && !$('cerca').value.trim();
+    if (!libero || !GRUPPI.length) { box.classList.remove('show'); return; }
+    const lista = GRUPPI.filter(g => !g.esaurito && !nelCarrello(g)).map(g => Object.assign({ g }, punteggio(g)))
+      .filter(x => x.sc > 0).sort((a, b) => b.sc - a.sc).slice(0, 8);
+    if (!lista.length) { box.classList.remove('show'); return; }
+    box.innerHTML = '<h2>✨ Scelti per te</h2><div class="riga-pt">' + lista.map(({ g, taglia }) => {
+      const s = scontoAttivo(g);
+      return `<div class="card" data-k="${esc(g.key)}" data-pt="1"><div class="foto"><img loading="lazy" decoding="async" src="${esc(g.imgs[0] || '')}" alt="${esc(g.nome)}" onerror="this.onerror=null;this.style.visibility='hidden'">
+        ${s ? `<span class="badge-sconto">-${Number.isInteger(s) ? s : s.toFixed(1)}%</span>` : ''}</div>
+        <div class="corpo"><h3>${esc(g.nome)}</h3><div class="prezzo">${prezzoHtml(g)}</div>${taglia ? `<div class="taglia-pt">✔ Disponibile in ${esc(taglia)}</div>` : ''}</div></div>`;
+    }).join('') + '</div>';
+    box.classList.add('show');
+  }
+  $('per-te').addEventListener('click', e => { const c = e.target.closest('.card'); if (c) apriProdotto(c.dataset.k); });
+  function filtroTag(t) {
+    TAG = t || ''; CAT = 'Tutte'; $('cerca').value = '';
+    const f = $('filtro-tag');
+    f.innerHTML = TAG ? `<button onclick="filtroTag('')">#${esc(TAG)} &nbsp;×</button>` : '';
+    f.classList.toggle('show', !!TAG);
+    disegnaChips(); filtra(); window.scrollTo({ top: 0 });
   }
 
   // ===== FILTRI E ORDINE =====
@@ -312,7 +428,7 @@
   function filtra() {
     const termini = norm($('cerca').value).split(/\s+/).filter(Boolean);
     const ord = $('ordina').value;
-    let lista = GRUPPI.filter(g => (CAT === 'Tutte' || g.categoria === CAT) && termini.every(t => g.testo.indexOf(t) >= 0));
+    let lista = GRUPPI.filter(g => (CAT === 'Tutte' || g.categoria === CAT) && (!TAG || g.tags.indexOf(TAG) >= 0) && termini.every(t => g.testo.indexOf(t) >= 0));
     const cmpNov = (a, b) => (a.dataCarico < b.dataCarico ? 1 : a.dataCarico > b.dataCarico ? -1 : b.pos - a.pos);
     lista.sort((a, b) => (a.esaurito - b.esaurito) || (
       ord === 'prezzo-' ? prezzoFinale(a) - prezzoFinale(b) :
@@ -321,10 +437,11 @@
       (scontoAttivo(b) - scontoAttivo(a)) || cmpNov(a, b)));
     $('conta').textContent = GRUPPI.length ? lista.length + (lista.length === 1 ? ' articolo' : ' articoli') : '';
     disegnaGriglia(lista);
+    disegnaPerTe();
   }
   $('chips').addEventListener('click', e => {
     const b = e.target.closest('.chip'); if (!b) return;
-    CAT = b.dataset.cat; disegnaChips(); filtra(); window.scrollTo({ top: 0 });
+    CAT = b.dataset.cat; if (TAG) { TAG = ''; $('filtro-tag').classList.remove('show'); } disegnaChips(); filtra(); window.scrollTo({ top: 0 });
   });
 
   // ===== GRIGLIA =====
@@ -368,14 +485,14 @@
   function apriProdotto(k) {
     APERTO = k; GPOS[k] = GPOS[k] || 0;
     const g = GRUPPI.find(x => x.key === k); if (!g) return;
-    traccia('prodotto', g.nome);
+    traccia('prodotto', g.nome); traccia('tag', g.tags.join(' ')); impara(g, 1);
     $('v-prod').classList.add('show'); document.body.style.overflow = 'hidden';
     try { history.pushState({ b2c: 1 }, '', location.href); } catch (e) {}
     disegnaProdotto(true);
   }
   function chiudiProdotto(daPop) {
     if (!APERTO) return;
-    APERTO = null; $('v-prod').classList.remove('show');
+    APERTO = null; $('v-prod').classList.remove('show'); disegnaPerTe();
     if (!$('v-ord').classList.contains('show')) document.body.style.overflow = '';
     if (!daPop) { try { if (history.state && history.state.b2c) history.back(); } catch (e) {} }
   }
@@ -413,7 +530,8 @@
       <div class="prezzo">${prezzoHtml(g)}<span style="font-size:12px;color:var(--mute)">IVA inclusa</span></div>
       ${s && g.fino ? `<div class="fino">Offerta fino al ${dataIt(g.fino)}</div>` : ''}
       ${s && g.min30 > 0 ? `<div class="omnibus">Prezzo più basso degli ultimi 30 giorni: ${eur(g.min30)}</div>` : ''}
-      ${g.descrizione ? `<p class="descr">${esc(g.descrizione)}</p>` : ''}
+      ${g.descrPulita ? `<p class="descr">${esc(g.descrPulita)}</p>` : ''}
+      ${g.tags.length ? `<div class="tags" id="htags">${g.tags.slice(0, 10).map(t => `<button class="htag" data-tag="${esc(t)}">#${esc(t)}</button>`).join('')}</div>` : ''}
       <div class="taglie"><h4>Scegli taglia e colore</h4>${taglieHtml(g)}</div>`;
     corpo.scrollTop = dall ? 0 : st;
     aggiornaPulsantiProdotto();
@@ -423,6 +541,8 @@
     $('prod-vai').textContent = n ? '🛒 Il mio ordine (' + n + ')' : '🛒 Il mio ordine';
   }
   $('prod-corpo').addEventListener('click', e => {
+    const ht = e.target.closest('.htag');
+    if (ht) { const g0 = GRUPPI.find(x => x.key === APERTO); if (g0) piu(PROF.t, ht.dataset.tag, 2), salvaProfilo(); chiudiProdotto(); filtroTag(ht.dataset.tag); return; }
     const b = e.target.closest('[data-a]'); if (!b) return;
     const a = b.dataset.a, g = GRUPPI.find(x => x.key === APERTO);
     if (a === 'gp' || a === 'gn') { const n = g.imgs.length; GPOS[g.key] = ((GPOS[g.key] || 0) + (a === 'gn' ? 1 : -1) + n) % n; disegnaProdotto(); return; }
@@ -452,7 +572,7 @@
     const q = Math.max(0, Math.min(prima + delta, x.p.max));
     if (delta > 0 && q === prima) { avviso('Disponibili al massimo ' + x.p.max + ' pezzi di questa taglia'); return; }
     if (q) CART[id] = q; else delete CART[id];
-    if (delta > 0 && prima === 0) traccia('carrello', x.g.nome);
+    if (delta > 0 && prima === 0) { traccia('carrello', x.g.nome); traccia('tagc', x.g.tags.join(' ')); if (x.p.misura) traccia('misura', String(x.p.misura).trim()); impara(x.g, 3, x.p.misura); }
     salvaCarrello(); aggiornaBarra(); aggiornaBadgeCard();
     if (APERTO) disegnaProdotto();
     if ($('v-ord').classList.contains('show')) disegnaCarrello();
@@ -569,7 +689,7 @@
   }
 
   // ===== STATISTICHE (solo con ?c=CODICE-ADMIN) =====
-  if (ADMIN) $('btn-stat').classList.add('show');
+  if (ADMIN) $('admin-bar').classList.add('show');
   function apriStatistiche() {
     $('v-stat').classList.add('show'); $('stat-corpo').textContent = 'Caricamento…';
     fetch(API_URL + '?action=b2cstats&cli=' + encodeURIComponent(ADMIN)).then(r => r.json()).then(d => {
@@ -583,9 +703,262 @@
         <p class="stat-h">Ultimi giorni</p>${tab(['Giorno', 'Visite', 'Visitatori', 'Ordini'], d.giorni.map(g => [dataIt(g.giorno), g.visite, g.visitatori, g.ordini]))}
         <p class="stat-h">Da dove arrivano (?fonte=…)</p>${tab(['Origine', 'Visite', 'Visitatori', 'Ordini'], d.origini.map(o => [o.origine, o.visite, o.visitatori, o.ordini]))}
         <p class="stat-h">Prodotti più guardati</p>${tab(['Prodotto', 'Aperture', 'Carrello'], d.prodotti.map(p => [p.nome, p.aperture, p.carrelli]))}
+        <p class="stat-h">Etichette (#) più viste</p>${tab(['Etichetta', 'Viste', 'Carrello'], (d.tag || []).map(t => ['#' + t.tag, t.viste, t.carrelli]))}
+        <p class="stat-h">Misure più richieste (aggiunte al carrello)</p>${tab(['Misura', 'Richieste'], (d.misure || []).map(m => [m.misura, m.richieste]))}
         <p class="nota">Per distinguere i canali aggiungi al link ?fonte=instagram, ?fonte=whatsapp, ?fonte=qr-negozio…</p>`;
     }).catch(() => { $('stat-corpo').innerHTML = '<p class="errore">Non riesco a leggere le statistiche.</p>'; });
   }
+
+  // ===== MODULO DI CARICAMENTO (solo con ?c=CODICE-ADMIN) =====
+  // Cerca il codice in BIGDATA (EAN, misure, colori), mostra cosa c'è già nel B2C/B2B e salva:
+  // scheda B2C (prezzo, sconto, data) + scheda B2C_PRODOTTI (anagrafica per EAN). Il catalogo B2B non viene toccato.
+  let CR = null;
+  const apiAdmin = (az, extra) => fetch(API_URL + '?action=' + az + '&cli=' + encodeURIComponent(ADMIN) + (extra || '') + '&_=' + Date.now(), { cache: 'no-store' }).then(r => r.json());
+  const unione = (...liste) => {
+    const m = new Map();
+    liste.forEach(l => (l || []).forEach(x => { const t = String(x == null ? '' : x).trim(); if (t && !m.has(t.toLowerCase())) m.set(t.toLowerCase(), t); }));
+    return [...m.values()].sort((a, b) => a.localeCompare(b, 'it'));
+  };
+  const dataTra = giorni => { const d = new Date(Date.now() + giorni * 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+
+  function apriCarico(codice) {
+    $('v-el').classList.remove('show');
+    $('v-car').classList.add('show'); document.body.style.overflow = 'hidden';
+    $('car-piede').hidden = true; CR = null;
+    $('car-corpo').innerHTML = `<h2 style="margin:0 40px 8px 0">➕ Carica prodotto B2C</h2>
+      <div class="campo"><label for="car-cod">Codice prodotto (o codice interno)</label>
+        <div style="display:flex;gap:8px"><input id="car-cod" autocomplete="off" onkeydown="if (event.key === 'Enter') cercaCarico()" placeholder="es. 123456">
+        <button class="btn" id="car-cerca" style="flex:none;padding:0 20px" onclick="cercaCarico()">Cerca</button></div></div>
+      <p class="nota">Il sistema legge BIGDATA (EAN, misure e colori), le foto di Gestione immagini e quello che c'è già nel catalogo.</p><div id="car-ris"></div>`;
+    if (codice) { $('car-cod').value = codice; cercaCarico(); } else setTimeout(() => $('car-cod').focus(), 50);
+  }
+  function chiudiCarico() {
+    $('v-car').classList.remove('show');
+    if (!APERTO && !$('v-ord').classList.contains('show')) document.body.style.overflow = '';
+  }
+
+  async function cercaCarico(messaggio) {
+    const q = $('car-cod').value.trim(); if (!q) return;
+    const btn = $('car-cerca'); btn.disabled = true; btn.textContent = 'Cerco…';
+    $('car-ris').innerHTML = '<p class="nota">⏳ Cerco in BIGDATA, nel catalogo e in Gestione immagini…</p>'; $('car-piede').hidden = true;
+    try {
+      const bd = await apiAdmin('cercaprodotto', '&q=' + encodeURIComponent(q));
+      if (!bd.ok) throw new Error(bd.error || 'Risposta non valida');
+      const codice = String(bd.codice || q).trim();
+      const sc = await apiAdmin('b2cscheda', '&q=' + encodeURIComponent(codice));
+      if (!sc.ok) throw new Error(sc.error || 'Risposta non valida');
+      preparaCarico(q, codice, bd, sc);
+      disegnaCarico(messaggio);
+    } catch (e) {
+      $('car-ris').innerHTML = '<p class="errore">' + esc(e.message === 'Failed to fetch' ? 'Server non raggiungibile: hai pubblicato la nuova versione dello script?' : e.message) + '</p>';
+    } finally { btn.disabled = false; btn.textContent = 'Cerca'; }
+  }
+
+  function preparaCarico(ricerca, codice, bd, sc) {
+    const mappa = new Map();
+    (bd.varianti || []).forEach(v => mappa.set(String(v.ean), { ean: String(v.ean), misura: String(v.misura || '').trim(), colore: String(v.colore || '').trim(),
+      bigdata: !v.soloCatalogo, altro: !!v.altroCodice, brand: v.brand || '', descr: v.descrizione || '' }));
+    (sc.varianti || []).forEach(v => {
+      const e = String(v.ean);
+      const x = mappa.get(e) || { ean: e, misura: String(v.misura || ''), colore: String(v.colore || ''), bigdata: false, altro: false, brand: '', descr: '' };
+      x.origine = v.origine; x.giacenza = v.giacenza; mappa.set(e, x);
+    });
+    const varianti = [...mappa.values()];
+    // già nel catalogo B2B (con questo codice o con un altro): dati e foto restano quelli, qui si imposta solo il B2C
+    varianti.forEach(v => { v.bloccato = v.origine === 'CATALOGO' || (v.altro && v.origine !== 'B2C'); v.sel = v.origine === 'CATALOGO' || v.origine === 'B2C' || !v.altro; });
+    const c = sc.comune || {}, d = (bd.foto && bd.foto.dati) || {}, v0 = varianti.find(v => v.bigdata) || varianti[0] || {};
+    const r = sc.regola || null;
+    CR = {
+      ricerca: ricerca, codice: codice, bd: bd, sc: sc, varianti: varianti,
+      soloB2B: varianti.length > 0 && varianti.every(v => v.bloccato),
+      senzaFoto: false,
+      campi: {
+        nome: c.nome || d.descrizione || v0.descr || '', descrizione: c.descrizione || '', categoria: c.categoria || '', brand: c.brand || v0.brand || '',
+        tipo: c.tipo || d.tipo || '', materiale: c.materiale || d.materiale || '',
+        prezzo: r ? Number(r.prezzo).toFixed(2).replace('.', ',') : '', sconto: r && r.sconto ? r.sconto : '', fino: r ? r.fino : '',
+        min30: r && r.min ? Number(r.min).toFixed(2).replace('.', ',') : '', attivo: r ? r.attivo : true, prevendita: !!c.prevendita
+      },
+      liste: {
+        categorie: unione(bd.categorie, PRODOTTI.map(p => p.categoria)), tipi: unione(bd.tipi, PRODOTTI.map(p => p.tipo)),
+        materiali: unione(bd.materiali, PRODOTTI.map(p => p.materiale)), brand: unione(bd.cataloghi, PRODOTTI.map(p => p.catalogo))
+      }
+    };
+    const esistenti = c.origine === 'B2C' || !c.origine ? (c.immagini || []) : [];
+    const gi = (bd.foto && bd.foto.tutte) || [];
+    CR.fotoEsistenti = new Set(esistenti);
+    CR.fotoTutte = esistenti.concat(gi.filter(u => esistenti.indexOf(u) < 0));
+    CR.fotoSel = new Set(CR.fotoTutte);
+  }
+
+  // campo a elenco con "Nuova voce…" (stessa logica del catalogo B2B)
+  const NUOVA = '__nuovo__';
+  function campoLista(id, etichetta, lista, valore, vuoto) {
+    const cur = String(valore || '').trim();
+    const L = unione(lista, [cur]);
+    const trovato = L.find(x => x.toLowerCase() === cur.toLowerCase()) || '';
+    return `<div><label for="${id}">${etichetta}</label><select id="${id}" onchange="document.getElementById('${id}-n').hidden = this.value !== '${NUOVA}'; if (this.value === '${NUOVA}') document.getElementById('${id}-n').focus()">
+      <option value="">${vuoto}</option>${L.map(x => `<option value="${esc(x)}"${x === trovato ? ' selected' : ''}>${esc(x)}</option>`).join('')}<option value="${NUOVA}">＋ Nuova voce…</option></select>
+      <input type="text" id="${id}-n" placeholder="Scrivi la nuova voce" hidden style="margin-top:6px"></div>`;
+  }
+  function valoreLista(id, lista) {
+    const sel = $(id); if (!sel) return '';
+    if (sel.value !== NUOVA) return sel.value;
+    const n = $(id + '-n').value.trim();
+    return (lista || []).find(x => x.toLowerCase() === n.toLowerCase()) || n;
+  }
+
+  function fotoCarHtml() {
+    if (!CR.fotoTutte.length) return '';
+    const sel = CR.fotoTutte.filter(u => CR.fotoSel.has(u)), prima = sel[0];
+    return '<div class="car-foto">' + CR.fotoTutte.map((u, i) => {
+      const on = CR.fotoSel.has(u);
+      return `<div class="f${on ? ' on' : ''}" data-i="${i}"><img loading="lazy" src="${esc(u)}" alt="">${on && u === prima ? '<span class="cop">copertina</span>' : ''}${on && u !== prima ? `<button type="button" class="stella" data-i="${i}" title="Usa come copertina">★</button>` : ''}</div>`;
+    }).join('') + '</div>';
+  }
+
+  function disegnaCarico(messaggio) {
+    const V = CR.varianti, ris = $('car-ris');
+    if (!V.length) {
+      ris.innerHTML = '<p class="errore">Nessun articolo con codice <b>' + esc($('car-cod').value.trim()) + '</b> in BIGDATA né nel catalogo.</p>';
+      $('car-piede').hidden = true; return;
+    }
+    const misure = [...new Set(V.map(v => v.misura))].sort(confrontaTaglie);
+    V.sort((a, b) => a.colore.localeCompare(b.colore, 'it') || misure.indexOf(a.misura) - misure.indexOf(b.misura));
+    const f = CR.campi, L = CR.liste, nelB2C = V.some(v => v.origine === 'B2C') || !!CR.sc.regola;
+    const stato = v => v.origine === 'CATALOGO' ? '<span class="stato b2b">già nel catalogo B2B</span>'
+      : v.altro && v.origine !== 'B2C' ? '<span class="stato altro">nel B2B con altro codice</span>'
+      : v.origine === 'B2C' ? '<span class="stato b2c">già nel B2C</span>' : '<span class="stato nuova">nuova</span>';
+    const bdFoto = CR.bd.foto || {};
+
+    ris.innerHTML = `
+      <h3 style="margin:14px 0 2px">${esc(CR.codice)}${V[0] && V[0].brand ? ' · ' + esc(V[0].brand) : ''}</h3>
+      <div class="meta" style="color:var(--mute);font-size:12.5px">${V.length} ${V.length === 1 ? 'variante' : 'varianti'} · ${nelB2C ? 'già presente nel catalogo B2C: stai modificando' : 'nuovo nel catalogo B2C'}</div>
+      ${CR.soloB2B ? '<p class="nota" style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:8px 10px">Questo prodotto è già nel catalogo B2B: nome, foto, taglie e colori vengono da lì. Qui imposti solo prezzo e sconto per il B2C.</p>' : ''}
+      <div class="car-sez">Varianti (EAN, misura, colore)</div>
+      <table class="car-var"><thead><tr><th><input type="checkbox" id="car-tutti" ${V.every(v => v.sel) ? 'checked' : ''}></th><th>EAN</th><th>Colore</th><th>Misura</th><th class="n">Giac.</th><th>Stato</th></tr></thead><tbody>
+        ${V.map((v, i) => `<tr><td><input type="checkbox" class="car-sel" data-i="${i}" ${v.sel ? 'checked' : ''} ${v.bloccato ? 'disabled' : ''}></td><td class="ean">${esc(v.ean)}</td><td>${esc(v.colore || '—')}</td><td>${esc(v.misura || '—')}</td><td class="n">${v.giacenza == null ? '—' : v.giacenza}</td><td>${stato(v)}</td></tr>`).join('')}
+      </tbody></table>
+      <p class="nota" style="margin-top:0">Togliere la spunta a una variante già nel B2C la rimuove dal catalogo B2C. La giacenza è quella del MAGAZZINO, per EAN.</p>
+      ${CR.soloB2B ? '' : `
+      <div class="car-sez">Foto</div>
+      ${CR.fotoTutte.length
+        ? `<p class="nota" style="margin:0">Tocca una foto per toglierla o rimetterla; con ★ scegli la copertina.${CR.fotoTutte.some(u => !CR.fotoEsistenti.has(u)) && CR.fotoEsistenti.size ? ' Le nuove arrivano da Gestione immagini.' : ''}</p><div id="car-foto-box">${fotoCarHtml()}</div>`
+        : `<p class="errore">⚠️ ${bdFoto.errore ? esc(bdFoto.errore) : bdFoto.configurato === false ? 'Gestione immagini non è collegata.' : 'Per questo prodotto non ci sono foto in Gestione immagini.'}</p>
+           <div class="car-scorciatoie">${CR.bd.appImmagini ? '<button type="button" onclick="apriGestioneImmagini()">📷 Apri Gestione immagini</button>' : ''}<button type="button" onclick="cercaCarico()">🔄 Cerca di nuovo</button></div>
+           <label class="spunta"><input type="checkbox" id="car-senzafoto" ${CR.senzaFoto ? 'checked' : ''}> Salva comunque senza foto</label>`}
+      <div class="car-sez">Dati del prodotto</div>
+      <div class="griglia2">
+        <div class="campo largo"><label for="car-nome">Nome prodotto (titolo)</label><input id="car-nome" value="${esc(f.nome)}"></div>
+        <div class="campo largo"><label for="car-descr">Descrizione (facoltativa)</label><textarea id="car-descr" rows="2" placeholder="es. Tuta in felpa morbida #neonata #inverno #regalo">${esc(f.descrizione)}</textarea><p class="nota" style="margin:4px 0 0">Le parole con # diventano etichette cliccabili e servono a proporre prodotti simili ai clienti.</p></div>
+        <div class="campo">${campoLista('car-cat', 'Categoria *', L.categorie, f.categoria, '— scegli —')}</div>
+        <div class="campo">${campoLista('car-brand', 'Marchio / catalogo', L.brand, f.brand, '— scegli —')}</div>
+        <div class="campo">${campoLista('car-tipo', 'Tipo', L.tipi, f.tipo, '— nessuno —')}</div>
+        <div class="campo">${campoLista('car-mat', 'Materiale', L.materiali, f.materiale, '— nessuno —')}</div>
+      </div>
+      <label class="spunta"><input type="checkbox" id="car-prev" ${f.prevendita ? 'checked' : ''}> Ordinabile anche senza giacenza (prevendita)</label>`}
+      <div class="car-sez">Prezzo e promozione B2C</div>
+      <div class="griglia2">
+        <div class="campo"><label for="car-prezzo">Prezzo pubblico, IVA inclusa *</label><input id="car-prezzo" inputmode="decimal" value="${esc(f.prezzo)}" placeholder="es. 49,90" oninput="aggiornaAnteprima()"></div>
+        <div class="campo"><label for="car-sconto">Sconto % (vuoto = nessuno)</label><input id="car-sconto" inputmode="decimal" value="${esc(f.sconto)}" placeholder="es. 30" oninput="aggiornaAnteprima()"></div>
+        <div class="campo"><label for="car-fino">Sconto valido fino al</label><input id="car-fino" type="date" value="${esc(f.fino)}"></div>
+        <div class="campo"><label for="car-min">Prezzo minimo ultimi 30 giorni (facoltativo)</label><input id="car-min" inputmode="decimal" value="${esc(f.min30)}" placeholder="es. 39,90"></div>
+      </div>
+      <div class="car-scorciatoie">${[3, 7, 15, 30].map(g => `<button type="button" onclick="document.getElementById('car-fino').value = '${dataTra(g)}'">${g} giorni</button>`).join('')}<button type="button" onclick="document.getElementById('car-sconto').value=''; document.getElementById('car-fino').value=''; aggiornaAnteprima()">Togli sconto</button></div>
+      <div class="anteprima" id="car-prev-txt"></div>
+      <label class="spunta"><input type="checkbox" id="car-attivo" ${f.attivo ? 'checked' : ''}> Visibile nel catalogo B2C (se tolta, il prodotto resta qui ma i clienti non lo vedono)</label>
+      <div class="errore" id="car-err"></div>${messaggio ? `<div class="esito ok">${messaggio}</div>` : ''}`;
+    $('car-piede').hidden = false;
+    aggiornaAnteprima();
+  }
+  function aggiornaAnteprima() {
+    const p = parseFloat(String(($('car-prezzo') || {}).value || '').replace(',', '.')), s = parseFloat(String(($('car-sconto') || {}).value || '').replace(',', '.'));
+    const el = $('car-prev-txt'); if (!el) return;
+    el.textContent = p > 0 && s > 0 && s < 100 ? 'Il cliente vedrà ' + eur(p * (1 - s / 100)) + ' (prima ' + eur(p) + ')' : '';
+  }
+  function apriGestioneImmagini() {
+    const u = new URL(CR.bd.appImmagini), v0 = CR.varianti[0] || {};
+    u.searchParams.set('codice', CR.codice);
+    if (CR.ricerca && CR.ricerca !== CR.codice) u.searchParams.set('cerca', CR.ricerca);
+    if (v0.brand) u.searchParams.set('brand', v0.brand);
+    window.open(u.toString(), '_blank');
+  }
+
+  // clic su varianti e foto
+  $('car-corpo').addEventListener('click', e => {
+    if (!CR) return;
+    const st = e.target.closest('.stella');
+    if (st) { const u = CR.fotoTutte.splice(+st.dataset.i, 1)[0]; CR.fotoTutte.unshift(u); $('car-foto-box').innerHTML = fotoCarHtml(); return; }
+    const f = e.target.closest('.car-foto .f');
+    if (f) { const u = CR.fotoTutte[+f.dataset.i]; if (CR.fotoSel.has(u)) CR.fotoSel.delete(u); else CR.fotoSel.add(u); $('car-foto-box').innerHTML = fotoCarHtml(); }
+  });
+  $('car-corpo').addEventListener('change', e => {
+    if (!CR) return;
+    if (e.target.id === 'car-tutti') { document.querySelectorAll('.car-sel:not(:disabled)').forEach(c => { c.checked = e.target.checked; CR.varianti[+c.dataset.i].sel = c.checked; }); return; }
+    if (e.target.classList.contains('car-sel')) CR.varianti[+e.target.dataset.i].sel = e.target.checked;
+    if (e.target.id === 'car-senzafoto') CR.senzaFoto = e.target.checked;
+  });
+
+  async function salvaCarico() {
+    if (!CR) return;
+    const err = t => { $('car-err').textContent = t; };
+    err('');
+    const sel = CR.varianti.filter(v => v.sel);
+    if (!sel.length) { err('Scegli almeno una variante.'); return; }
+    const prezzo = $('car-prezzo').value.trim();
+    if (!(parseFloat(prezzo.replace(',', '.')) > 0)) { err('Scrivi il prezzo pubblico (IVA inclusa).'); $('car-prezzo').focus(); return; }
+    const sconto = $('car-sconto').value.trim();
+    if (sconto && !(parseFloat(sconto.replace(',', '.')) >= 1 && parseFloat(sconto.replace(',', '.')) <= 99)) { err('Lo sconto deve essere tra 1 e 99%.'); $('car-sconto').focus(); return; }
+    const fino = $('car-fino').value;
+    if (sconto && !fino && !confirm('Lo sconto non ha una data di fine: resterà attivo finché non lo togli. Continuare?')) return;
+    const body = { action: 'b2cSalva', cli: ADMIN, codice: CR.codice, prezzo: prezzo, sconto: sconto, fino: sconto ? fino : '', min30: $('car-min').value.trim(),
+      attivo: $('car-attivo').checked, varianti: sel.map(v => ({ ean: v.ean, misura: v.misura, colore: v.colore })) };
+    if (!CR.soloB2B) {
+      const L = CR.liste, cat = valoreLista('car-cat', L.categorie);
+      if (!cat) { err('Scegli la categoria (o aggiungine una nuova).'); $('car-cat').focus(); return; }
+      const foto = CR.fotoTutte.filter(u => CR.fotoSel.has(u));
+      const aggiungeB2C = sel.some(v => !v.bloccato);
+      if (aggiungeB2C && !foto.length && !(CR.senzaFoto || ($('car-senzafoto') && $('car-senzafoto').checked))) { err('Mancano le foto: caricale in Gestione immagini o spunta "Salva comunque senza foto".'); return; }
+      Object.assign(body, { nome: $('car-nome').value.trim(), descrizione: $('car-descr').value.trim(), categoria: cat,
+        brand: valoreLista('car-brand', L.brand), tipo: valoreLista('car-tipo', L.tipi), materiale: valoreLista('car-mat', L.materiali),
+        prevendita: $('car-prev').checked, immagini: foto });
+    }
+    const b = $('car-salva'); b.disabled = true; b.textContent = 'Salvo…';
+    try {
+      const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || 'Salvataggio non riuscito');
+      const fatto = ['regola prezzo/sconto ' + j.regola];
+      if (j.aggiunte) fatto.push(j.aggiunte + (j.aggiunte === 1 ? ' variante aggiunta' : ' varianti aggiunte'));
+      if (j.aggiornate) fatto.push(j.aggiornate + (j.aggiornate === 1 ? ' variante aggiornata' : ' varianti aggiornate'));
+      if (j.rimosse) fatto.push(j.rimosse + (j.rimosse === 1 ? ' variante rimossa' : ' varianti rimosse'));
+      const inattese = (j.saltate || []).filter(e => { const v = CR.varianti.find(x => x.ean === e); return !(v && v.bloccato); });
+      let msg = '✅ Salvato: ' + fatto.join(' · ') + '.' + (inattese.length ? '<br><small>Non aggiunti (EAN già usati da un altro prodotto): ' + esc(inattese.join(', ')) + '</small>' : '') + '<br><small>Il catalogo B2C è già aggiornato.</small>';
+      try { localStorage.removeItem(CACHE_KEY); } catch (e) {}
+      carica();
+      $('car-cod').value = CR.codice;
+      await cercaCarico(msg);
+    } catch (e) {
+      err(e.message === 'Failed to fetch' ? 'Server non raggiungibile: hai pubblicato la nuova versione dello script?' : e.message);
+    } finally { b.disabled = false; b.textContent = '💾 Salva nel catalogo B2C'; }
+  }
+
+  // ===== ELENCO di ciò che c'è nel catalogo B2C =====
+  async function apriElenco() {
+    $('v-el').classList.add('show'); $('el-corpo').textContent = 'Caricamento…';
+    try {
+      const j = await apiAdmin('b2celenco');
+      if (!j.ok) throw new Error(j.error || 'Errore');
+      const righe = j.righe || [];
+      $('el-corpo').innerHTML = `<h2 style="margin:0 40px 8px 0">📋 Prodotti nel catalogo B2C</h2>
+        <div class="car-scorciatoie" style="margin:0 0 10px"><button onclick="apriCarico()">➕ Carica un prodotto</button></div>
+        ${righe.length ? `<table class="tab-el"><thead><tr><th>Prodotto</th><th class="n">Prezzo</th><th class="n">Sconto</th><th class="n">Var.</th><th></th></tr></thead><tbody>${righe.map(r => `
+          <tr class="r${r.attivo ? '' : ' off'}" data-cod="${esc(r.codice)}"><td><b>${esc(r.nome || '(senza nome)')}</b><small>${esc(r.codice)}${r.brand ? ' · ' + esc(r.brand) : ''}</small></td>
+          <td class="n">${eur(r.prezzo)}</td><td class="n">${r.sconto ? '-' + r.sconto + '%' + (r.fino ? '<small>fino al ' + dataIt(r.fino) + '</small>' : '') : '—'}</td>
+          <td class="n">${r.disponibili}/${r.varianti}</td><td>${!r.attivo ? '⏸ nascosto' : r.scaduto ? '⌛ sconto scaduto' : r.varianti === 0 ? '⚠️ senza varianti' : r.disponibili === 0 ? '❌ esaurito' : '✅'}</td></tr>`).join('')}</tbody></table>
+          <p class="nota">Tocca un prodotto per modificarlo. "Var." = varianti disponibili / totali.</p>` : '<p class="nota">Nessun prodotto ancora. Usa "Carica un prodotto".</p>'}`;
+    } catch (e) { $('el-corpo').innerHTML = '<p class="errore">' + esc(e.message) + '</p>'; }
+  }
+  $('el-corpo').addEventListener('click', e => { const r = e.target.closest('tr.r'); if (r) apriCarico(r.dataset.cod); });
 
   // ===== AVVIO =====
   try { CART = JSON.parse(lsGet(CARRELLO_KEY) || '{}') || {}; } catch (e) { CART = {}; }
