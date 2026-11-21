@@ -713,7 +713,9 @@
   // Cerca il codice in BIGDATA (EAN, misure, colori), mostra cosa c'è già nel B2C/B2B e salva:
   // scheda B2C (prezzo, sconto, data) + scheda B2C_PRODOTTI (anagrafica per EAN). Il catalogo B2B non viene toccato.
   let CR = null;
-  const apiAdmin = (az, extra) => fetch(API_URL + '?action=' + az + '&cli=' + encodeURIComponent(ADMIN) + (extra || '') + '&_=' + Date.now(), { cache: 'no-store' }).then(r => r.json());
+  const apiAdmin = (az, extra) => fetch(API_URL + '?action=' + az + '&cli=' + encodeURIComponent(ADMIN) + (extra || '') + '&_=' + Date.now(), { cache: 'no-store' }).then(r => r.text()).then(t => {
+    try { return JSON.parse(t); } catch (e) { throw new Error('Lo script non riconosce l\'azione "' + az + '": sostituisci Code.gs e B2C.gs in Apps Script e pubblica una Nuova versione.'); }
+  });
   const unione = (...liste) => {
     const m = new Map();
     liste.forEach(l => (l || []).forEach(x => { const t = String(x == null ? '' : x).trim(); if (t && !m.has(t.toLowerCase())) m.set(t.toLowerCase(), t); }));
