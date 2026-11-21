@@ -770,14 +770,24 @@
     varianti.forEach(v => { v.bloccato = v.origine === 'CATALOGO' || (v.altro && v.origine !== 'B2C'); v.sel = v.origine === 'CATALOGO' || v.origine === 'B2C' || !v.altro; });
     const c = sc.comune || {}, d = (bd.foto && bd.foto.dati) || {}, v0 = varianti.find(v => v.bigdata) || varianti[0] || {};
     const r = sc.regola || null;
+    // prezzo da BIGDATA (LIS5 se lo script lo manda, altrimenti il prezzo che restituisce la ricerca)
+    let prBd = '', prCampo = '';
+    for (const v of (bd.varianti || [])) {
+      for (const k of ['lis5', 'prezzoLis5', 'LIS5', 'prezzo']) {
+        const n = parseFloat(String(v[k] == null ? '' : v[k]).replace(',', '.'));
+        if (n > 0) { prBd = n.toFixed(2).replace('.', ','); prCampo = k === 'prezzo' ? 'prezzo' : 'LIS5'; break; }
+      }
+      if (prBd) break;
+    }
     CR = {
+      prezzoBd: r ? '' : prBd, prezzoBdCampo: prCampo,
       ricerca: ricerca, codice: codice, bd: bd, sc: sc, varianti: varianti,
       soloB2B: varianti.length > 0 && varianti.every(v => v.bloccato),
       senzaFoto: false,
       campi: {
         nome: c.nome || d.descrizione || v0.descr || '', descrizione: c.descrizione || '', categoria: c.categoria || '', brand: c.brand || v0.brand || '',
         tipo: c.tipo || d.tipo || '', materiale: c.materiale || d.materiale || '',
-        prezzo: r ? Number(r.prezzo).toFixed(2).replace('.', ',') : '', sconto: r && r.sconto ? r.sconto : '', fino: r ? r.fino : '',
+        prezzo: r ? Number(r.prezzo).toFixed(2).replace('.', ',') : prBd, sconto: r && r.sconto ? r.sconto : '', fino: r ? r.fino : '',
         min30: r && r.min ? Number(r.min).toFixed(2).replace('.', ',') : '', attivo: r ? r.attivo : true, prevendita: !!c.prevendita
       },
       liste: {
@@ -861,7 +871,7 @@
       <label class="spunta"><input type="checkbox" id="car-prev" ${f.prevendita ? 'checked' : ''}> Ordinabile anche senza giacenza (prevendita)</label>`}
       <div class="car-sez">Prezzo e promozione B2C</div>
       <div class="griglia2">
-        <div class="campo"><label for="car-prezzo">Prezzo pubblico, IVA inclusa *</label><input id="car-prezzo" inputmode="decimal" value="${esc(f.prezzo)}" placeholder="es. 49,90" oninput="aggiornaAnteprima()"></div>
+        <div class="campo"><label for="car-prezzo">Prezzo pubblico, IVA inclusa *</label><input id="car-prezzo" inputmode="decimal" value="${esc(f.prezzo)}" placeholder="es. 49,90" oninput="aggiornaAnteprima()">${CR.prezzoBd ? `<p class="nota" style="margin:4px 0 0">Proposto da BIGDATA (${CR.prezzoBdCampo}): controlla che sia il prezzo al pubblico.</p>` : ''}</div>
         <div class="campo"><label for="car-sconto">Sconto % (vuoto = nessuno)</label><input id="car-sconto" inputmode="decimal" value="${esc(f.sconto)}" placeholder="es. 30" oninput="aggiornaAnteprima()"></div>
         <div class="campo"><label for="car-fino">Sconto valido fino al</label><input id="car-fino" type="date" value="${esc(f.fino)}"></div>
         <div class="campo"><label for="car-min">Prezzo minimo ultimi 30 giorni (facoltativo)</label><input id="car-min" inputmode="decimal" value="${esc(f.min30)}" placeholder="es. 39,90"></div>
