@@ -194,6 +194,14 @@
   table.st { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 6px 0 14px; }
   table.st th, table.st td { padding: 6px 4px; border-bottom: 1px solid #eee; text-align: left; } table.st .n { text-align: right; font-variant-numeric: tabular-nums; }
   table.st th { font-size: 11px; color: var(--mute); text-transform: uppercase; }
+  .oa { border: 1px solid #e5e5e5; border-radius: 12px; padding: 10px 12px; margin: 8px 0; font-size: 13px; }
+  .oa.coda { border-color: #e0a100; background: #fff8e1; }
+  .oa .t { display: flex; justify-content: space-between; gap: 8px; font-weight: 800; }
+  .oa .st-b { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: #eee; white-space: nowrap; }
+  .oa ul { margin: 6px 0; padding-left: 18px; }
+  .oa .scad { color: var(--accent-d); font-weight: 700; }
+  .oa .az { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .oa .az button { border: 1px solid #ccc; background: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
   .stat-h { font-size: 13px; font-weight: 800; margin: 12px 0 0; }
 </style>
 </head>
@@ -209,6 +217,7 @@
   <button onclick="apriCarico()">➕ Carica prodotto</button>
   <button onclick="apriElenco()">📋 Offerte nel catalogo</button>
   <button onclick="apriLinkNegozi()">🔗 Link negozi</button>
+  <button id="btn-ord" onclick="apriOrdini()">📦 Ordini</button>
   <button id="btn-stat" onclick="apriStatistiche()">📊 Statistiche</button>
 </div>
 <div class="info" id="info">🛍️ Ritiro in negozio gratuito · 🚚 Spedizione con pagamento anticipato<button class="link-pay" onclick="apriPagamenti()">💳 Come pagare</button></div>
@@ -290,6 +299,13 @@
   <div class="foglio">
     <button class="x" onclick="document.getElementById('v-stat').classList.remove('show')" aria-label="Chiudi">×</button>
     <div class="scorri" id="stat-corpo">Caricamento…</div>
+  </div>
+</div>
+
+<div class="velo" id="v-ordadm" onclick="if (event.target === this) this.classList.remove('show')">
+  <div class="foglio">
+    <button class="x" onclick="document.getElementById('v-ordadm').classList.remove('show')" aria-label="Chiudi">×</button>
+    <div class="scorri" id="ordadm-corpo">Caricamento…</div>
   </div>
 </div>
 
@@ -845,6 +861,48 @@
         <p class="stat-h">Misure più richieste (aggiunte al carrello)</p>${tab(['Misura', 'Richieste'], (d.misure || []).map(m => [m.misura, m.richieste]))}
         <p class="nota">Per distinguere i canali aggiungi al link ?fonte=instagram, ?fonte=whatsapp, ?fonte=qr-negozio…</p>`;
     }).catch(() => { $('stat-corpo').innerHTML = '<p class="errore">Non riesco a leggere le statistiche.</p>'; });
+  }
+
+  // ===== ORDINI / PRENOTATO / CODA (solo ADMIN) =====
+  async function apriOrdini() {
+    $('v-ordadm').classList.add('show');
+    if (!$('ordadm-corpo').dataset.ok) $('ordadm-corpo').textContent = 'Caricamento…';
+    try {
+      const d = await apiAdmin('b2cordini');
+      if (!d.ok) throw new Error(d.error || 'Errore');
+      const riga = (o, l) => {
+        const nome = esc((l.nome || l.ean) + (l.misura || l.colore ? ' (' + [l.misura, l.colore].filter(Boolean).join(' / ') + ')' : ''));
+        if (l.coda) return `<li>${l.qty}× ${nome} — <b>IN CODA</b>${l.disponibileOra ? ` · <span class="scad">ora disponibile</span> <button data-prom="${esc(o.numero)}|${esc(l.ean)}">Promuovi</button>` : ''}</li>`;
+        const att = (o.stato === 'Da confermare' || o.stato === 'Confermato');
+        return `<li>${l.qty}× ${nome}${att ? (l.scaduta ? ' — <span class="scad">prenotazione scaduta</span>' : ' — prenotato ancora ' + l.oreResidue + ' h') : ''}</li>`;
+      };
+      const html = d.ordini.map(o => {
+        const conCoda = o.righe.some(l => l.coda);
+        const aperto = o.stato === 'Da confermare' || o.stato === 'Confermato';
+        return `<div class="oa ${conCoda && aperto ? 'coda' : ''}"><div class="t"><span>#${esc(o.numero)} · ${esc(o.nome)}</span><span class="st-b">${esc(o.stato)}</span></div>
+          <small>${esc(o.data)} · ${esc(o.modalita)} · ${eur(o.totale)}</small><ul>${o.righe.map(l => riga(o, l)).join('')}</ul>
+          ${aperto ? `<div class="az">${o.stato === 'Da confermare' ? `<button data-st="${esc(o.numero)}|Confermato">✅ Conferma</button>` : ''}<button data-st="${esc(o.numero)}|Evaso">📤 Evaso (scaricato dal POS)</button><button data-st="${esc(o.numero)}|Annullato">✖ Annulla</button></div>` : ''}</div>`;
+      }).join('') || '<p class="nota">Nessun ordine.</p>';
+      $('ordadm-corpo').dataset.ok = '1';
+      $('ordadm-corpo').innerHTML = `<h2 style="margin:0 40px 6px 0">📦 Ordini B2C</h2>
+        <p class="nota">Un articolo è "prenotato" per ${d.ore.daConfermare} h se l'ordine è Da confermare, ${d.ore.confermato} h se Confermato. Segna <b>Evaso</b> appena lo scarichi dal POS, così non viene contato due volte.</p>${html}`;
+      $('ordadm-corpo').querySelectorAll('button[data-st]').forEach(b => b.onclick = () => {
+        const [n, st] = b.dataset.st.split('|');
+        if (st === 'Annullato' && !confirm('Annullare l\'ordine ' + n + '? La merce torna disponibile.')) return;
+        b.disabled = true; postOrdini({ action: 'b2cOrdineStato', numero: n, stato: st });
+      });
+      $('ordadm-corpo').querySelectorAll('button[data-prom]').forEach(b => b.onclick = () => {
+        const [n, e] = b.dataset.prom.split('|'); b.disabled = true; postOrdini({ action: 'b2cPromuovi', numero: n, ean: e });
+      });
+    } catch (e) {
+      $('ordadm-corpo').innerHTML = '<p class="errore">' + esc(e.message === 'Failed to fetch' ? 'Server non raggiungibile' : e.message) + '</p>';
+    }
+  }
+  function postOrdini(body) {
+    body.c = ADMIN;
+    fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) })
+      .then(r => r.json()).then(d => { if (!d.ok) avviso('⚠️ ' + (d.error || 'Errore')); else avviso('✅ Fatto'); apriOrdini(); })
+      .catch(() => { avviso('⚠️ Errore di rete'); apriOrdini(); });
   }
 
   // ===== MODULO DI CARICAMENTO (solo con ?c=CODICE-ADMIN) =====
