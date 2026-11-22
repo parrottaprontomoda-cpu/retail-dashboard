@@ -94,6 +94,13 @@
   .ld-f .ico { display: inline-flex; vertical-align: middle; margin-right: 6px; }
   .link-pay { background: none; border: none; color: var(--accent); font-weight: 700; font-size: 12.5px; cursor: pointer; text-decoration: underline; padding: 0 0 0 6px; }
   #v-pay { align-items: center; padding: 16px; } #v-pay .foglio { border-radius: 18px; max-width: 440px; max-height: 92vh; }
+  #neg-bar { display: none; max-width: 1200px; margin: 8px auto 0; padding: 0 12px; }
+  #neg-bar.show { display: block; }
+  #neg-bar .neg-t { font-size: 13px; font-weight: 800; margin-bottom: 6px; }
+  #neg-bar .neg-b { display: flex; gap: 8px; flex-wrap: wrap; }
+  #neg-bar button { border: 1.5px solid var(--line); background: #fff; border-radius: 16px; padding: 7px 13px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  #neg-bar button.on { background: #111; color: #fff; border-color: #111; }
+  .neg-bdg { display: inline-block; background: #dcfce7; color: #166534; font-size: 11px; font-weight: 800; border-radius: 8px; padding: 2px 8px; margin-top: 3px; }
   .descr { font-size: 13.5px; color: #444; margin: 10px 0 0; line-height: 1.45; }
   .taglie { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
   .taglie h4 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--mute); }
@@ -201,6 +208,7 @@
 <div id="admin-bar">
   <button onclick="apriCarico()">➕ Carica prodotto</button>
   <button onclick="apriElenco()">📋 Offerte nel catalogo</button>
+  <button onclick="apriLinkNegozi()">🔗 Link negozi</button>
   <button id="btn-stat" onclick="apriStatistiche()">📊 Statistiche</button>
 </div>
 <div class="info" id="info">🛍️ Ritiro in negozio gratuito · 🚚 Spedizione con pagamento anticipato<button class="link-pay" onclick="apriPagamenti()">💳 Come pagare</button></div>
@@ -217,6 +225,7 @@
   </div>
   <div id="chips"></div>
 </div>
+<div id="neg-bar"></div>
 <div id="filtro-tag"></div>
 <div id="per-te"></div>
 <div id="conta"></div>
@@ -289,7 +298,13 @@
 <script>
   // ===== IMPOSTAZIONI =====
   const API_URL = 'https://script.google.com/macros/s/AKfycbx09XG2XA-PrkoaueaWySeYOm8IxKX4BtNv7oTGJqxBkqkUWJOoZsSKabh1RlXFBcKVIw/exec';
-  const WHATSAPP = '39096421546';
+  const WHATSAPP = '39096421546';   // numero generale (usato se il negozio non ha un numero suo)
+  // Numero WhatsApp a cui va l'ordine: quello del punto di ritiro scelto; per la spedizione, quello del negozio del link (se c'è)
+  function numeroWhatsApp(luogo) {
+    const l = CONFIG.negozi || [];
+    const n = (MODO === 'RITIRO' ? l.find(x => x.nome === luogo) : l.find(x => x.nome === NEG));
+    return (n && n.wa) || WHATSAPP;
+  }
   // Modi di pagamento mostrati al cliente. I loghi sono immagini: scrivi qui l'indirizzo (URL) del file del logo
   // (per esempio quello già usato su caramellopoint.it). Se lasci vuoto compare un'icona al posto del logo.
   const LOGHI = { klarna: '', paypal: 'https://www.caramellopoint.it/modules/ishipaymentoptionsblock/views/img/paypal.png' };
@@ -305,11 +320,12 @@
   // ===== STATO =====
   const params = new URLSearchParams(location.search);
   const ADMIN = (params.get('c') || '').trim().toUpperCase();     // ?c=CODICE-ADMIN mostra le statistiche
-  const FONTE = (params.get('fonte') || params.get('utm_source') || '').trim().slice(0, 30);   // es. ?fonte=instagram
+  const NEG_PARAM = String(params.get('negozio') || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '');   // es. ?negozio=caramello
+  const FONTE = (params.get('fonte') || params.get('utm_source') || (NEG_PARAM ? 'negozio-' + NEG_PARAM : '')).trim().slice(0, 30);   // es. ?fonte=instagram
   let CONFIG = { spedizione: 7, puntiRitiro: [] };
   let PRODOTTI = [], GRUPPI = [], VAR = {}, FINE = '';
   let CART = {};                 // id variante -> quantità
-  let TAG = '', CAT = 'Tutte', APERTO = null, GPOS = {}, MODO = 'RITIRO';
+  let NEG = '', SOLONEG = false, TAG = '', CAT = 'Tutte', APERTO = null, GPOS = {}, MODO = 'RITIRO';
 
   // ===== UTILITÀ =====
   const $ = id => document.getElementById(id);
@@ -344,11 +360,33 @@
   }
 
   // ===== CARICAMENTO =====
+  // ===== NEGOZIO (?negozio=caramello): prodotti disponibili in quel negozio in evidenza, catalogo sempre completo =====
+  const slugNeg = n => norm(n).replace(/[^a-z0-9]/g, '');
+  const inNeg = g => !!NEG && g.negozi.indexOf(NEG) >= 0;
+  let NEG_INIT = false;
+  function risolviNegozio() {
+    const l = CONFIG.puntiRitiro || [];
+    NEG = NEG_PARAM ? (l.find(n => slugNeg(n) === NEG_PARAM) || l.find(n => slugNeg(n).indexOf(NEG_PARAM) >= 0) || '') : '';
+    if (NEG && !NEG_INIT) { NEG_INIT = true; SOLONEG = GRUPPI.some(g => inNeg(g)); }   // parte dai prodotti del negozio, se ce ne sono
+    if (!NEG) SOLONEG = false;
+    disegnaNeg();
+  }
+  function disegnaNeg() {
+    const b = $('neg-bar');
+    if (!NEG) { b.classList.remove('show'); return; }
+    const n = GRUPPI.filter(g => inNeg(g)).length;
+    b.innerHTML = `<div class="neg-t">📍 Sei nel catalogo di ${esc(NEG)}</div><div class="neg-b">
+      <button data-m="1" class="${SOLONEG ? 'on' : ''}">🏪 Disponibili da ${esc(NEG)} (${n})</button>
+      <button data-m="0" class="${SOLONEG ? '' : 'on'}">Tutto il catalogo (${GRUPPI.length})</button></div>`;
+    b.classList.add('show');
+  }
+  $('neg-bar').addEventListener('click', e => { const x = e.target.closest('button'); if (!x) return; SOLONEG = x.dataset.m === '1'; disegnaNeg(); filtra(); });
   function applica(d) {
     PRODOTTI = d.products || [];
     FINE = d.fineOfferta || '';
     if (d.config) CONFIG = Object.assign(CONFIG, d.config);
     raggruppa();
+    risolviNegozio();
     $('info').innerHTML = '🛍️ Ritiro in negozio gratuito · 🚚 Spedizione ' + eur(CONFIG.spedizione) + ' con pagamento anticipato<button class="link-pay" onclick="apriPagamenti()">💳 Come pagare</button>';
     ripulisciCarrello();
     disegnaChips(); filtra(); aggiornaBarra();
@@ -418,10 +456,12 @@
       if (!g) {
         g = { key, nome: p.nome, descrizione: p.descrizione || '', nota: p.nota || '', categoria: p.categoria || 'Altro', brand: p.catalogo || '',
           tipo: p.tipo || '', materiale: p.materiale || '', prezzo: p.prezzo, sconto: p.sconto, fino: p.scontoFino || '',
-          min30: p.prezzoMin30 || 0, imgs: [], varianti: [], dataCarico: '', pos: i };
+          min30: p.prezzoMin30 || 0, imgs: [], varianti: [], dataCarico: '', pos: i, negozi: [] };
         mappa.set(key, g);
       }
       g.varianti.push(p); g.pos = i;
+      (g.negozi = g.negozi || []);
+      (p.negoziAuto || []).concat(p.negoziMan || []).forEach(n => { if (g.negozi.indexOf(n) < 0) g.negozi.push(n); });
       if ((p.dataCarico || '') > g.dataCarico) g.dataCarico = p.dataCarico || '';
       (p.immagini && p.immagini.length ? p.immagini : [p.immagine]).forEach(u => { if (u && g.imgs.indexOf(u) < 0) g.imgs.push(u); });
       VAR[p.id] = { p, g };
@@ -503,9 +543,9 @@
   function filtra() {
     const termini = norm($('cerca').value).split(/\s+/).filter(Boolean);
     const ord = $('ordina').value;
-    let lista = GRUPPI.filter(g => (CAT === 'Tutte' || g.categoria === CAT) && (!TAG || g.tags.indexOf(TAG) >= 0) && termini.every(t => g.testo.indexOf(t) >= 0));
+    let lista = GRUPPI.filter(g => (CAT === 'Tutte' || g.categoria === CAT) && (!TAG || g.tags.indexOf(TAG) >= 0) && (!NEG || !SOLONEG || inNeg(g)) && termini.every(t => g.testo.indexOf(t) >= 0));
     const cmpNov = (a, b) => (a.dataCarico < b.dataCarico ? 1 : a.dataCarico > b.dataCarico ? -1 : b.pos - a.pos);
-    lista.sort((a, b) => (a.esaurito - b.esaurito) || (
+    lista.sort((a, b) => (a.esaurito - b.esaurito) || (NEG && !SOLONEG ? inNeg(b) - inNeg(a) : 0) || (
       ord === 'prezzo-' ? prezzoFinale(a) - prezzoFinale(b) :
       ord === 'prezzo+' ? prezzoFinale(b) - prezzoFinale(a) :
       ord === 'novita' ? cmpNov(a, b) :
@@ -539,6 +579,7 @@
           ${g.esaurito ? '<div class="esaurito">ESAURITO</div>' : ''}</div>
         <div class="corpo"><h3>${esc(g.nome)}</h3>
           <div class="meta">${esc(g.brand)}</div>
+          ${inNeg(g) ? '<span class="neg-bdg">🏪 Disponibile qui</span>' : ''}
           ${g.notaPulita ? `<div class="nota-extra">${esc(g.notaPulita)}</div>` : ''}
           <div class="prezzo">${prezzoHtml(g)}</div>
           ${s && g.fino ? `<div class="fino">Offerta fino al ${dataIt(g.fino)}</div>` : ''}
@@ -606,6 +647,7 @@
       <div class="prezzo">${prezzoHtml(g)}<span style="font-size:12px;color:var(--mute)">IVA inclusa</span></div>
       ${s && g.fino ? `<div class="fino">Offerta fino al ${dataIt(g.fino)}</div>` : ''}
       ${s && g.min30 > 0 ? `<div class="omnibus">Prezzo più basso degli ultimi 30 giorni: ${eur(g.min30)}</div>` : ''}
+      ${inNeg(g) ? `<div class="neg-bdg" style="font-size:13px;padding:4px 10px">🏪 Disponibile da ${esc(NEG)}</div>` : ''}
       ${g.notaPulita ? `<div class="nota-box">${esc(g.notaPulita)}</div>` : ''}
       ${g.descrPulita ? `<p class="descr">${esc(g.descrPulita)}</p>` : ''}
       ${g.tags.length ? `<div class="tags" id="htags">${g.tags.slice(0, 10).map(t => `<button class="htag" data-tag="${esc(t)}">#${esc(t)}</button>`).join('')}</div>` : ''}
@@ -663,6 +705,7 @@
   }
 
   // ===== ORDINE =====
+  const SPTMP = {};   // dati di spedizione scritti ma non ancora inviati (restano se si cambia modalità)
   function apriCarrello() {
     if (!totaleArticoli()) { avviso('Il carrello è vuoto'); return; }
     $('v-ord').classList.add('show'); document.body.style.overflow = 'hidden';
@@ -683,15 +726,24 @@
     }).join('');
     const sped = MODO === 'SPEDIZIONE' ? CONFIG.spedizione : 0, merce = totaleMerce();
     const luoghi = CONFIG.puntiRitiro || [];
-    const keep = { nome: ($('o-nome') || {}).value, luogo: ($('o-luogo') || {}).value, ind: ($('o-ind') || {}).value };
+    const SPK = ['via', 'cap', 'citta', 'prov', 'tel', 'note'];
+    let sp0 = {}; try { sp0 = JSON.parse(lsGet('b2c_sped_v1') || '{}') || {}; } catch (e) {}
+    const keep = { nome: ($('o-nome') || {}).value, luogo: ($('o-luogo') || {}).value, sp: {} };
+    SPK.forEach(k => { const el = $('o-' + k); if (el) SPTMP[k] = el.value; keep.sp[k] = SPTMP[k] !== undefined ? SPTMP[k] : (sp0[k] || ''); });
     $('ord-corpo').innerHTML = `
       <h2 style="margin:0 40px 6px 0">Il tuo ordine</h2>${righe}
       <div class="modo">
         <label class="${MODO === 'RITIRO' ? 'on' : ''}"><input type="radio" name="modo" value="RITIRO" ${MODO === 'RITIRO' ? 'checked' : ''}><span><b>Ritiro in negozio</b> · gratis<small>Ti avvisiamo su WhatsApp quando è pronto</small></span></label>
         <label class="${MODO === 'SPEDIZIONE' ? 'on' : ''}"><input type="radio" name="modo" value="SPEDIZIONE" ${MODO === 'SPEDIZIONE' ? 'checked' : ''}><span><b>Spedizione</b> · ${eur(CONFIG.spedizione)}<small>Pagamento anticipato, poi spediamo</small></span></label>
       </div>
-      ${MODO === 'RITIRO' && luoghi.length > 1 ? `<div class="campo"><label for="o-luogo">Dove vuoi ritirare?</label><select id="o-luogo">${luoghi.map(l => `<option ${l === keep.luogo ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>` : ''}
-      ${MODO === 'SPEDIZIONE' ? `<div class="campo"><label for="o-ind">Indirizzo di spedizione *</label><textarea id="o-ind" rows="2" placeholder="Via, numero civico, CAP, città">${esc(keep.ind || '')}</textarea></div>` : ''}
+      ${MODO === 'RITIRO' && luoghi.length > 1 ? `<div class="campo"><label for="o-luogo">Dove vuoi ritirare?</label><select id="o-luogo">${luoghi.map(l => `<option ${l === (keep.luogo || NEG) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>` : ''}
+      ${MODO === 'SPEDIZIONE' ? `<div class="car-sez" style="margin-top:14px">Dati per la spedizione</div>
+        <div class="campo"><label for="o-via">Via e numero civico *</label><input id="o-via" autocomplete="address-line1" value="${esc(keep.sp.via)}" placeholder="es. Via Roma 12, scala B"></div>
+        <div class="griglia2"><div class="campo"><label for="o-cap">CAP *</label><input id="o-cap" inputmode="numeric" maxlength="5" autocomplete="postal-code" value="${esc(keep.sp.cap)}" placeholder="89044"></div>
+        <div class="campo"><label for="o-prov">Provincia *</label><input id="o-prov" maxlength="2" autocomplete="address-level1" value="${esc(keep.sp.prov)}" placeholder="RC" style="text-transform:uppercase"></div></div>
+        <div class="campo"><label for="o-citta">Città *</label><input id="o-citta" autocomplete="address-level2" value="${esc(keep.sp.citta)}" placeholder="es. Locri"></div>
+        <div class="campo"><label for="o-tel">Telefono per il corriere *</label><input id="o-tel" type="tel" inputmode="tel" autocomplete="tel" value="${esc(keep.sp.tel)}" placeholder="es. 333 1234567"></div>
+        <div class="campo"><label for="o-note">Note per la consegna (facoltative)</label><input id="o-note" maxlength="120" value="${esc(keep.sp.note)}" placeholder="es. citofono Rossi, consegna il pomeriggio"></div>` : ''}
       <div class="campo"><label for="o-nome">Il tuo nome *</label><input id="o-nome" autocomplete="name" value="${esc(keep.nome || lsGet(NOME_KEY) || '')}" placeholder="Nome e cognome"></div>
       <div class="totali"><div><span>Articoli</span><span>${eur(merce)}</span></div>
         <div><span>Spedizione</span><span>${MODO === 'SPEDIZIONE' ? eur(sped) : 'gratis'}</span></div>
@@ -713,9 +765,18 @@
     const nome = ($('o-nome').value || '').trim();
     if (!nome) { err('Scrivi il tuo nome.'); $('o-nome').focus(); return; }
     let luogo = '';
+    let spedInfo = null;
     if (MODO === 'SPEDIZIONE') {
-      luogo = ($('o-ind').value || '').trim();
-      if (luogo.length < 8) { err('Scrivi l\'indirizzo completo di spedizione.'); $('o-ind').focus(); return; }
+      const v = k => ($('o-' + k).value || '').trim();
+      const via = v('via'), cap = v('cap'), citta = v('citta'), prov = v('prov').toUpperCase(), tel = v('tel'), nota = v('note');
+      if (via.length < 4) { err('Scrivi la via e il numero civico.'); $('o-via').focus(); return; }
+      if (!/^\d{5}$/.test(cap)) { err('Il CAP deve avere 5 cifre.'); $('o-cap').focus(); return; }
+      if (citta.length < 2) { err('Scrivi la città.'); $('o-citta').focus(); return; }
+      if (!/^[A-Z]{2}$/.test(prov)) { err('Scrivi la sigla della provincia (es. RC).'); $('o-prov').focus(); return; }
+      if (tel.replace(/\D/g, '').length < 8) { err('Scrivi un numero di telefono per il corriere.'); $('o-tel').focus(); return; }
+      spedInfo = { via, cap, citta, prov, tel, nota };
+      lsSet('b2c_sped_v1', JSON.stringify(spedInfo));
+      luogo = via + ', ' + cap + ' ' + citta + ' (' + prov + ') · Tel ' + tel + (nota ? ' · Note: ' + nota : '');
     } else {
       luogo = $('o-luogo') ? $('o-luogo').value : ((CONFIG.puntiRitiro || [])[0] || '');
     }
@@ -730,7 +791,7 @@
     });
     const testo = `*${TITOLO_ORDINE}* n. ${numero}\n` +
       `Nome: ${nome}\n` +
-      (MODO === 'SPEDIZIONE' ? `Modalità: SPEDIZIONE (${eur(sped)}, pagamento anticipato)\nIndirizzo: ${luogo}\n` : `Modalità: RITIRO in negozio — ${luogo}\n`) +
+      (MODO === 'SPEDIZIONE' ? `Modalità: SPEDIZIONE (${eur(sped)}, pagamento anticipato)\nIndirizzo: ${spedInfo.via}, ${spedInfo.cap} ${spedInfo.citta} (${spedInfo.prov})\nTelefono: ${spedInfo.tel}\n${spedInfo.nota ? 'Note consegna: ' + spedInfo.nota + '\n' : ''}` : `Modalità: RITIRO in negozio — ${luogo}\n`) +
       `\n${righe.join('\n')}\n\n` +
       `Articoli: ${eur(merce)}\n` + (sped ? `Spedizione: ${eur(sped)}\n` : '') +
       `*TOTALE: ${eur(merce + sped)}* (IVA inclusa)\n\n` +
@@ -742,7 +803,7 @@
         body: JSON.stringify({ action: 'ordineB2C', numero, nome, modalita: MODO, luogo, origine: FONTE, righe: ids.map(id => ({ id, qty: CART[id] })) }) }).catch(() => {});
     } catch (e) {}
     traccia('ordine', numero);
-    window.open('https://wa.me/' + WHATSAPP + '?text=' + encodeURIComponent(testo), '_blank');
+    window.open('https://wa.me/' + numeroWhatsApp(luogo) + '?text=' + encodeURIComponent(testo), '_blank');
     CART = {}; salvaCarrello(); aggiornaBarra(); aggiornaBadgeCard();
     if (APERTO) disegnaProdotto();
     chiudiCarrello();
@@ -865,7 +926,7 @@
         nome: c.nome || d.descrizione || v0.descr || '', descrizione: c.descrizione || '', categoria: c.categoria || '', brand: c.brand || v0.brand || '',
         tipo: c.tipo || d.tipo || '', materiale: c.materiale || d.materiale || '',
         prezzo: r ? Number(r.prezzo).toFixed(2).replace('.', ',') : prBd, sconto: r && r.sconto ? r.sconto : '', fino: r ? r.fino : '',
-        nota: r ? (r.nota || '') : '', min30: r && r.min ? Number(r.min).toFixed(2).replace('.', ',') : '', attivo: r ? r.attivo : true, prevendita: !!c.prevendita
+        nota: r ? (r.nota || '') : '', negozi: r ? (r.negozi || []) : [], min30: r && r.min ? Number(r.min).toFixed(2).replace('.', ',') : '', attivo: r ? r.attivo : true, prevendita: !!c.prevendita
       },
       liste: {
         categorie: unione(bd.categorie, PRODOTTI.map(p => p.categoria)), tipi: unione(bd.tipi, PRODOTTI.map(p => p.tipo)),
@@ -955,6 +1016,9 @@
       </div>
       <div class="campo" style="margin-top:12px"><label for="car-nota">Nota extra breve (facoltativa)</label><input id="car-nota" maxlength="200" value="${esc(f.nota)}" placeholder="es. Ultimi pezzi, perfetta per l'inverno · vale anche per il regalo">
         <p class="nota" style="margin:4px 0 0">Compare sotto il nome del prodotto e in evidenza nella scheda. Max 200 caratteri.</p></div>
+      ${(CONFIG.puntiRitiro || []).length ? `<div class="campo" style="margin-top:12px"><label>Negozi abbinati (facoltativo)</label>
+        ${(CONFIG.puntiRitiro || []).map((n, k) => `<label class="spunta" style="margin-top:6px"><input type="checkbox" class="car-neg" value="${esc(n)}" ${(f.negozi || []).indexOf(n) >= 0 ? 'checked' : ''}> ${esc(n)}</label>`).join('')}
+        <p class="nota" style="margin:4px 0 0">Il prodotto compare tra quelli "Disponibili qui" di questi negozi, anche se i pezzi sono altrove. I negozi dove i pezzi ci sono davvero vengono abbinati in automatico.</p></div>` : ''}
       <div class="car-scorciatoie">${[3, 7, 15, 30].map(g => `<button type="button" onclick="document.getElementById('car-fino').value = '${dataTra(g)}'">${g} giorni</button>`).join('')}<button type="button" onclick="document.getElementById('car-sconto').value=''; document.getElementById('car-fino').value=''; aggiornaAnteprima()">Togli sconto</button></div>
       <div class="anteprima" id="car-prev-txt"></div>
       <label class="spunta"><input type="checkbox" id="car-attivo" ${f.attivo ? 'checked' : ''}> Visibile nel catalogo B2C (se tolta, il prodotto resta qui ma i clienti non lo vedono)</label>
@@ -1003,7 +1067,7 @@
     const fino = $('car-fino').value;
     if (sconto && !fino && !confirm('Lo sconto non ha una data di fine: resterà attivo finché non lo togli. Continuare?')) return;
     const body = { action: 'b2cSalva', cli: ADMIN, codice: CR.codice, prezzo: prezzo, sconto: sconto, fino: sconto ? fino : '', min30: $('car-min').value.trim(),
-      nota: $('car-nota').value.trim(), attivo: $('car-attivo').checked, varianti: sel.map(v => ({ ean: v.ean, misura: v.misura, colore: v.colore })) };
+      nota: $('car-nota').value.trim(), negozi: [...document.querySelectorAll('.car-neg:checked')].map(c => c.value), attivo: $('car-attivo').checked, varianti: sel.map(v => ({ ean: v.ean, misura: v.misura, colore: v.colore })) };
     if (!CR.soloB2B) {
       const L = CR.liste, cat = valoreLista('car-cat', L.categorie);
       if (!cat) { err('Scegli la categoria (o aggiungine una nuova).'); $('car-cat').focus(); return; }
@@ -1032,6 +1096,15 @@
     } catch (e) {
       err(e.message === 'Failed to fetch' ? 'Server non raggiungibile: hai pubblicato la nuova versione dello script?' : e.message);
     } finally { b.disabled = false; b.textContent = '💾 Salva nel catalogo B2C'; }
+  }
+
+  // ===== LINK PER OGNI NEGOZIO =====
+  function apriLinkNegozi() {
+    const base = location.origin + location.pathname, l = CONFIG.puntiRitiro || [];
+    $('v-el').classList.add('show');
+    $('el-corpo').innerHTML = `<h2 style="margin:0 40px 8px 0">🔗 Link per ogni negozio</h2>
+      <p class="nota">Chi entra da questi link vede tutto il catalogo, con i prodotti del suo negozio in evidenza. Mettili nei QR e nei messaggi del punto vendita.</p>
+      ${l.length ? l.map(n => { const u = base + '?negozio=' + slugNeg(n); return `<div class="campo"><label>${esc(n)}</label><div style="display:flex;gap:8px"><input readonly value="${esc(u)}" onclick="this.select()"><button class="btn" style="flex:none;padding:0 16px" onclick="navigator.clipboard && navigator.clipboard.writeText('${esc(u)}'); this.textContent='Copiato ✓'">Copia</button></div></div>`; }).join('') : '<p class="errore">Nessun negozio impostato: controlla il foglio B2C_NEGOZI.</p>'}`;
   }
 
   // ===== ELENCO di ciò che c'è nel catalogo B2C =====
