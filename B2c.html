@@ -202,6 +202,8 @@
   .oa .scad { color: var(--accent-d); font-weight: 700; }
   .oa .az { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .oa .az button { border: 1px solid #ccc; background: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .coupon-box { background: #fff8e1; border: 1px dashed #e0a100; border-radius: 12px; padding: 9px 12px; margin: 12px 0; font-size: 13px; }
+  .coupon-box small { display: block; color: #777; margin-top: 2px; }
   .stat-h { font-size: 13px; font-weight: 800; margin: 12px 0 0; }
 </style>
 </head>
@@ -220,7 +222,7 @@
   <button id="btn-ord" onclick="apriOrdini()">📦 Ordini</button>
   <button id="btn-stat" onclick="apriStatistiche()">📊 Statistiche</button>
 </div>
-<div class="info" id="info">🛍️ Ritiro in negozio gratuito · 🚚 Spedizione con pagamento anticipato<button class="link-pay" onclick="apriPagamenti()">💳 Come pagare</button></div>
+<div class="info" id="info">🛍️ Ritiro in negozio gratuito · 🚚 Spedizione con pagamento anticipato · 🎟️ Ogni 30 € di spesa un coupon da 5 €<button class="link-pay" onclick="apriPagamenti()">💳 Come pagare</button></div>
 
 <div id="barra">
   <div class="riga">
@@ -256,7 +258,7 @@
   <div class="foglio">
     <button class="x" onclick="chiudiPagamenti()" aria-label="Chiudi">×</button>
     <div class="scorri" style="padding:18px 18px 8px">
-      <h2 style="margin:0 40px 0 0">💳 Come puoi pagare</h2>
+      <h2 style="margin:0 40px 0 0">🎟️ Premi e modi di pagamento</h2>
       <ul class="pay-lista" id="pay-lista"></ul>
     </div>
     <div class="piede"><button class="btn" onclick="chiudiPagamenti()">Ho capito, vedi le offerte</button></div>
@@ -329,6 +331,12 @@
     { logo: 'paypal', icona: '💳', testo: 'PUOI PAGARE CON PAYPAL IN 3 RATE', breve: 'Puoi pagare con PayPal in 3 rate' },
     { icona: '🏪', testo: 'CONTANTE O POS AL PUNTO DI RITIRO', breve: 'Contante o POS al punto di ritiro' },
     { icona: '🏦', testo: 'CON BONIFICO', breve: 'Anche con bonifico' }
+  ];
+  // Fidelity: coupon ogni soglia di spesa + punti (per i clienti registrati)
+  const COUPON_SOGLIA = 30, COUPON_VALORE = 5;
+  const FEDELTA = [
+    { icona: '🎟️', testo: 'OGNI ' + COUPON_SOGLIA + ' € DI SPESA RICEVI UN COUPON DA ' + COUPON_VALORE + ' €', breve: 'Ogni ' + COUPON_SOGLIA + ' € di spesa ricevi un coupon da ' + COUPON_VALORE + ' €' },
+    { icona: '⭐', testo: 'CLIENTE REGISTRATO? ACCUMULI ANCHE I PUNTI FEDELTÀ SU OGNI ACQUISTO', breve: 'Se sei cliente registrato accumuli anche i punti su ogni acquisto' }
   ];
   const TITOLO_ORDINE = 'ORDINE BLACK FRIDAY';
   const CACHE_KEY = 'b2c_cache_v1', CARRELLO_KEY = 'b2c_carrello_v1', NOME_KEY = 'b2c_nome', PROFILO_KEY = 'b2c_profilo_v1', VID_KEY = 'b2c_vid';
@@ -425,7 +433,7 @@
       '❤️ Peplo · Caramello · Parrotta Point: sempre vicino a te'
     ].map(esc);
     // dopo la prima frase passano i modi di pagamento (con i loghi), poi le altre
-    frasi.splice(1, 0, ...PAGAMENTI.map(p => icoPag(p) + esc(p.breve)));
+    frasi.splice(1, 0, ...FEDELTA.map(p => icoPag(p) + esc(p.breve)), ...PAGAMENTI.map(p => icoPag(p) + esc(p.breve)));
     let i = 0; const f = $('ld-f'); f.innerHTML = frasi[0];
     ATT = { t0,
       a: setInterval(() => {
@@ -752,6 +760,7 @@
         <label class="${MODO === 'RITIRO' ? 'on' : ''}"><input type="radio" name="modo" value="RITIRO" ${MODO === 'RITIRO' ? 'checked' : ''}><span><b>Ritiro in negozio</b> · gratis<small>Ti avvisiamo su WhatsApp quando è pronto</small></span></label>
         <label class="${MODO === 'SPEDIZIONE' ? 'on' : ''}"><input type="radio" name="modo" value="SPEDIZIONE" ${MODO === 'SPEDIZIONE' ? 'checked' : ''}><span><b>Spedizione</b> · ${eur(CONFIG.spedizione)}<small>Pagamento anticipato, poi spediamo</small></span></label>
       </div>
+      <div class="coupon-box" id="coupon-box">${couponHtml(merce)}</div>
       ${MODO === 'RITIRO' && luoghi.length > 1 ? `<div class="campo"><label for="o-luogo">Dove vuoi ritirare?</label><select id="o-luogo">${luoghi.map(l => `<option ${l === (keep.luogo || NEG) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>` : ''}
       ${MODO === 'SPEDIZIONE' ? `<div class="car-sez" style="margin-top:14px">Dati per la spedizione</div>
         <div class="campo"><label for="o-via">Via e numero civico *</label><input id="o-via" autocomplete="address-line1" value="${esc(keep.sp.via)}" placeholder="es. Via Roma 12, scala B"></div>
@@ -1185,8 +1194,13 @@
 
   // ===== MODI DI PAGAMENTO: finestra a ogni accesso + frasi durante l'attesa =====
   const icoPag = p => '<span class="ico">' + (p.logo && LOGHI[p.logo] ? '<img src="' + esc(LOGHI[p.logo]) + '" alt="' + esc(p.logo) + '" onerror="this.parentNode.textContent=\'' + p.icona + '\'">' : p.icona) + '</span>';
+  function couponHtml(merce) {
+    const n = Math.floor(merce / COUPON_SOGLIA + 1e-9), manca = Math.round(((n + 1) * COUPON_SOGLIA - merce) * 100) / 100;
+    return '🎟️ ' + (n > 0 ? '<b>Con questo ordine ottieni ' + (n === 1 ? 'un coupon' : n + ' coupon') + ' da ' + eur(COUPON_VALORE * n) + '</b> · ' : '') +
+      'ti mancano ' + eur(manca) + ' per ' + (n > 0 ? 'il prossimo' : 'un coupon da ' + eur(COUPON_VALORE)) + '<small>Cliente registrato? Accumuli anche i punti fedeltà.</small>';
+  }
   function apriPagamenti() {
-    $('pay-lista').innerHTML = PAGAMENTI.map(p => '<li>' + icoPag(p) + '<span>' + esc(p.testo) + '</span></li>').join('');
+    $('pay-lista').innerHTML = FEDELTA.concat(PAGAMENTI).map(p => '<li>' + icoPag(p) + '<span>' + esc(p.testo) + '</span></li>').join('');
     $('v-pay').classList.add('show');
   }
   function chiudiPagamenti() { $('v-pay').classList.remove('show'); }
