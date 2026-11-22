@@ -205,6 +205,13 @@
   .coupon-box { background: #fff8e1; border: 1px dashed #e0a100; border-radius: 12px; padding: 9px 12px; margin: 12px 0; font-size: 13px; }
   .coupon-box small { display: block; color: #777; margin-top: 2px; }
   .btn-mod { float: right; margin: 0 0 6px 8px; border: 1px solid #e0a100; background: #fff8e1; color: #333; border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 800; cursor: pointer; }
+  .abb-box { border: 2px dashed #8b5cf6; background: #faf7ff; border-radius: 14px; padding: 10px 12px; margin: 16px 0 0; }
+  .abb-t { font-weight: 800; font-size: 13px; color: #5b21b6; margin-bottom: 6px; }
+  .abb-h { display: flex; align-items: center; gap: 10px; }
+  .abb-h img { width: 52px; height: 52px; object-fit: cover; border-radius: 8px; background: #eee; }
+  .abb-h > div { flex: 1; font-size: 13px; }
+  .abb-apri, .abb-msg button { border: 1px solid #8b5cf6; background: #fff; color: #5b21b6; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 800; cursor: pointer; }
+  .abb-msg { background: #faf7ff; border: 1px dashed #8b5cf6; border-radius: 12px; padding: 9px 12px; margin: 12px 0 0; font-size: 13px; }
   .stat-h { font-size: 13px; font-weight: 800; margin: 12px 0 0; }
 </style>
 </head>
@@ -481,7 +488,7 @@
       if (!g) {
         g = { key, nome: p.nome, descrizione: p.descrizione || '', nota: p.nota || '', categoria: p.categoria || 'Altro', brand: p.catalogo || '',
           tipo: p.tipo || '', materiale: p.materiale || '', prezzo: p.prezzo, sconto: p.sconto, fino: p.scontoFino || '',
-          min30: p.prezzoMin30 || 0, imgs: [], varianti: [], dataCarico: '', pos: i, negozi: [] };
+          min30: p.prezzoMin30 || 0, imgs: [], varianti: [], dataCarico: '', pos: i, negozi: [], abbDir: p.abbinati || [], abb: [] };
         mappa.set(key, g);
       }
       g.varianti.push(p); g.pos = i;
@@ -492,6 +499,12 @@
       VAR[p.id] = { p, g };
     });
     GRUPPI = [...mappa.values()];
+    // abbinamenti (es. felpa + pantalone): valgono nei due sensi anche se scritti su un solo prodotto
+    const perCod = {}; GRUPPI.forEach(g => { perCod[g.key.toUpperCase()] = g; });
+    GRUPPI.forEach(g => (g.abbDir || []).forEach(c => {
+      const h = perCod[String(c).trim().toUpperCase()];
+      if (h && h !== g) { if (g.abb.indexOf(h) < 0) g.abb.push(h); if (h.abb.indexOf(g) < 0) h.abb.push(g); }
+    }));
     GRUPPI.forEach(g => {
       g.esaurito = !g.varianti.some(v => v.disponibile);
       g.ultimi = g.varianti.some(v => v.disponibile && v.ultimi);
@@ -677,15 +690,27 @@
       ${g.notaPulita ? `<div class="nota-box">${esc(g.notaPulita)}</div>` : ''}
       ${g.descrPulita ? `<p class="descr">${esc(g.descrPulita)}</p>` : ''}
       ${g.tags.length ? `<div class="tags" id="htags">${g.tags.slice(0, 10).map(t => `<button class="htag" data-tag="${esc(t)}">#${esc(t)}</button>`).join('')}</div>` : ''}
-      <div class="taglie"><h4>Scegli taglia e colore</h4>${taglieHtml(g)}</div>`;
+      <div class="taglie"><h4>Scegli taglia e colore</h4>${taglieHtml(g)}</div>
+      ${g.abb.map(h => `<div class="abb-box"><div class="abb-t">🧩 Si abbina con</div>
+        <div class="abb-h"><img src="${esc(h.imgs[0] || '')}" alt="" onerror="this.style.visibility='hidden'"><div><b>${esc(h.nome)}</b><br><small>${prezzoHtml(h)}</small></div>
+        <button class="abb-apri" data-abb="${esc(h.key)}">Vedi</button></div>
+        <div class="taglie">${h.esaurito ? '<p class="nota">Al momento esaurito</p>' : '<h4>Aggiungi anche ' + esc(h.nome) + ' (scegli la stessa taglia)</h4>' + taglieHtml(h)}</div></div>`).join('')}`;
     corpo.scrollTop = dall ? 0 : st;
     aggiornaPulsantiProdotto();
+  }
+  function apriAbbinato(k) {
+    if (!GRUPPI.some(x => x.key === k)) return;
+    APERTO = k; GPOS[k] = GPOS[k] || 0;
+    const g = GRUPPI.find(x => x.key === k); traccia('prodotto', g.nome); impara(g, 1);
+    disegnaProdotto(true);
   }
   function aggiornaPulsantiProdotto() {
     const n = totaleArticoli();
     $('prod-vai').textContent = n ? '🛒 Il mio ordine (' + n + ')' : '🛒 Il mio ordine';
   }
   $('prod-corpo').addEventListener('click', e => {
+    const ab = e.target.closest('[data-abb]');
+    if (ab) { apriAbbinato(ab.dataset.abb); return; }
     if (ADMIN && e.target.closest('.btn-mod')) { const k = APERTO; chiudiProdotto(true); apriCarico(k); return; }
     const ht = e.target.closest('.htag');
     if (ht) { const g0 = GRUPPI.find(x => x.key === APERTO); if (g0) piu(PROF.t, ht.dataset.tag, 2), salvaProfilo(); chiudiProdotto(); filtroTag(ht.dataset.tag); return; }
@@ -763,6 +788,7 @@
         <label class="${MODO === 'RITIRO' ? 'on' : ''}"><input type="radio" name="modo" value="RITIRO" ${MODO === 'RITIRO' ? 'checked' : ''}><span><b>Ritiro in negozio</b> · gratis<small>Ti avvisiamo su WhatsApp quando è pronto</small></span></label>
         <label class="${MODO === 'SPEDIZIONE' ? 'on' : ''}"><input type="radio" name="modo" value="SPEDIZIONE" ${MODO === 'SPEDIZIONE' ? 'checked' : ''}><span><b>Spedizione</b> · ${eur(CONFIG.spedizione)}<small>Pagamento anticipato, poi spediamo</small></span></label>
       </div>
+      ${abbinatiMancanti().map(m => `<div class="abb-msg">🧩 Hai scelto <b>${esc(m.da.nome)}</b>: completa il set con <b>${esc(m.mancante.nome)}</b> <button data-ab-c="${esc(m.mancante.key)}">Vedi</button></div>`).join('')}
       <div class="coupon-box" id="coupon-box">${couponHtml(merce)}</div>
       ${MODO === 'RITIRO' && luoghi.length > 1 ? `<div class="campo"><label for="o-luogo">Dove vuoi ritirare?</label><select id="o-luogo">${luoghi.map(l => `<option ${l === (keep.luogo || NEG) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>` : ''}
       ${MODO === 'SPEDIZIONE' ? `<div class="car-sez" style="margin-top:14px">Dati per la spedizione</div>
@@ -780,6 +806,8 @@
       <div class="errore" id="o-err"></div>`;
   }
   $('ord-corpo').addEventListener('click', e => {
+    const ac = e.target.closest('[data-ab-c]');
+    if (ac) { const k = ac.dataset.abC; chiudiCarrello(true); apriProdotto(k); return; }
     const b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
     cambia(b.dataset.id, b.dataset.a === 'piu' ? 1 : -1);
     if (!totaleArticoli()) chiudiCarrello();
@@ -996,7 +1024,7 @@
         nome: c.nome || d.descrizione || v0.descr || '', descrizione: c.descrizione || '', categoria: c.categoria || '', brand: c.brand || v0.brand || '',
         tipo: c.tipo || d.tipo || '', materiale: c.materiale || d.materiale || '',
         prezzo: r ? Number(r.prezzo).toFixed(2).replace('.', ',') : prBd, sconto: r && r.sconto ? r.sconto : '', fino: r ? r.fino : '',
-        nota: r ? (r.nota || '') : '', negozi: r ? (r.negozi || []) : [], min30: r && r.min ? Number(r.min).toFixed(2).replace('.', ',') : '', attivo: r ? r.attivo : true, prevendita: !!c.prevendita
+        nota: r ? (r.nota || '') : '', negozi: r ? (r.negozi || []) : [], abbinati: r ? (r.abbinati || []) : [], min30: r && r.min ? Number(r.min).toFixed(2).replace('.', ',') : '', attivo: r ? r.attivo : true, prevendita: !!c.prevendita
       },
       liste: {
         categorie: unione(bd.categorie, PRODOTTI.map(p => p.categoria)), tipi: unione(bd.tipi, PRODOTTI.map(p => p.tipo)),
@@ -1086,6 +1114,8 @@
       </div>
       <div class="campo" style="margin-top:12px"><label for="car-nota">Nota extra breve (facoltativa)</label><input id="car-nota" maxlength="200" value="${esc(f.nota)}" placeholder="es. Ultimi pezzi, perfetta per l'inverno · vale anche per il regalo">
         <p class="nota" style="margin:4px 0 0">Compare sotto il nome del prodotto e in evidenza nella scheda. Max 200 caratteri.</p></div>
+      <div class="campo" style="margin-top:12px"><label for="car-abb">Si abbina con (facoltativo)</label><input id="car-abb" value="${esc((f.abbinati || []).join('; '))}" placeholder="codici prodotto separati da ; es. 456789">
+        <p class="nota" style="margin:4px 0 0">Per capi venduti con due codici (es. felpa e pantalone della tuta): nella scheda dell'uno compare l'altro, e nel carrello c'è un invito a completare il set. Basta scriverlo su uno dei due, vale in entrambi i sensi.</p></div>
       ${(CONFIG.puntiRitiro || []).length ? `<div class="campo" style="margin-top:12px"><label>Negozi abbinati (facoltativo)</label>
         ${(CONFIG.puntiRitiro || []).map((n, k) => `<label class="spunta" style="margin-top:6px"><input type="checkbox" class="car-neg" value="${esc(n)}" ${(f.negozi || []).indexOf(n) >= 0 ? 'checked' : ''}> ${esc(n)}</label>`).join('')}
         <p class="nota" style="margin:4px 0 0">Il prodotto compare tra quelli "Disponibili qui" di questi negozi, anche se i pezzi sono altrove. I negozi dove i pezzi ci sono davvero vengono abbinati in automatico.</p></div>` : ''}
@@ -1137,7 +1167,7 @@
     const fino = $('car-fino').value;
     if (sconto && !fino && !confirm('Lo sconto non ha una data di fine: resterà attivo finché non lo togli. Continuare?')) return;
     const body = { action: 'b2cSalva', cli: ADMIN, codice: CR.codice, prezzo: prezzo, sconto: sconto, fino: sconto ? fino : '', min30: $('car-min').value.trim(),
-      nota: $('car-nota').value.trim(), negozi: [...document.querySelectorAll('.car-neg:checked')].map(c => c.value), attivo: $('car-attivo').checked, varianti: sel.map(v => ({ ean: v.ean, misura: v.misura, colore: v.colore })) };
+      nota: $('car-nota').value.trim(), negozi: [...document.querySelectorAll('.car-neg:checked')].map(c => c.value), abbinati: ($('car-abb').value || '').split(/[;,]/).map(x => x.trim()).filter(Boolean), attivo: $('car-attivo').checked, varianti: sel.map(v => ({ ean: v.ean, misura: v.misura, colore: v.colore })) };
     if (!CR.soloB2B) {
       const L = CR.liste, cat = valoreLista('car-cat', L.categorie);
       if (!cat) { err('Scegli la categoria (o aggiungine una nuova).'); $('car-cat').focus(); return; }
@@ -1197,6 +1227,15 @@
 
   // ===== MODI DI PAGAMENTO: finestra a ogni accesso + frasi durante l'attesa =====
   const icoPag = p => '<span class="ico">' + (p.logo && LOGHI[p.logo] ? '<img src="' + esc(LOGHI[p.logo]) + '" alt="' + esc(p.logo) + '" onerror="this.parentNode.textContent=\'' + p.icona + '\'">' : p.icona) + '</span>';
+  function abbinatiMancanti() {
+    const inCarrello = new Set(Object.keys(CART).filter(id => CART[id] > 0 && VAR[id]).map(id => VAR[id].g));
+    const visti = new Set(), out = [];
+    inCarrello.forEach(g => g.abb.forEach(h => {
+      if (inCarrello.has(h) || h.esaurito || visti.has(h)) return;
+      visti.add(h); out.push({ da: g, mancante: h });
+    }));
+    return out;
+  }
   function couponHtml(merce) {
     const n = Math.floor(merce / COUPON_SOGLIA + 1e-9), manca = Math.round(((n + 1) * COUPON_SOGLIA - merce) * 100) / 100;
     return '🎟️ ' + (n > 0 ? '<b>Con questo ordine ottieni ' + (n === 1 ? 'un coupon' : n + ' coupon') + ' da ' + eur(COUPON_VALORE * n) + '</b> · ' : '') +
