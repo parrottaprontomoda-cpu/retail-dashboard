@@ -87,6 +87,13 @@
   .omnibus { font-size: 11.5px; color: var(--mute); margin-top: 2px; }
   .nota-extra { font-size: 12px; color: #7a4b00; font-style: italic; line-height: 1.3; margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .nota-box { background: #fff7e6; border: 1px solid #fde1a8; border-radius: 12px; padding: 10px 12px; margin: 12px 0 0; font-size: 14px; font-weight: 600; color: #7a4b00; line-height: 1.4; }
+  .pay-lista { list-style: none; margin: 14px 0 6px; padding: 0; display: grid; gap: 10px; }
+  .pay-lista li { display: flex; align-items: center; gap: 12px; background: #f7f7f5; border: 1px solid var(--line); border-radius: 12px; padding: 11px 12px; font-size: 14.5px; font-weight: 700; line-height: 1.25; }
+  .pay-lista .ico { flex: none; width: 54px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+  .pay-lista .ico img, .ld-f .ico img { max-width: 54px; max-height: 30px; object-fit: contain; }
+  .ld-f .ico { display: inline-flex; vertical-align: middle; margin-right: 6px; }
+  .link-pay { background: none; border: none; color: var(--accent); font-weight: 700; font-size: 12.5px; cursor: pointer; text-decoration: underline; padding: 0 0 0 6px; }
+  #v-pay { align-items: center; padding: 16px; } #v-pay .foglio { border-radius: 18px; max-width: 440px; max-height: 92vh; }
   .descr { font-size: 13.5px; color: #444; margin: 10px 0 0; line-height: 1.45; }
   .taglie { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
   .taglie h4 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--mute); }
@@ -196,7 +203,7 @@
   <button onclick="apriElenco()">📋 Offerte nel catalogo</button>
   <button id="btn-stat" onclick="apriStatistiche()">📊 Statistiche</button>
 </div>
-<div class="info" id="info">🛍️ Ritiro in negozio gratuito · 🚚 Spedizione con pagamento anticipato</div>
+<div class="info" id="info">🛍️ Ritiro in negozio gratuito · 🚚 Spedizione con pagamento anticipato<button class="link-pay" onclick="apriPagamenti()">💳 Come pagare</button></div>
 
 <div id="barra">
   <div class="riga">
@@ -227,6 +234,16 @@
 <div id="barra-carrello"><button onclick="apriCarrello()"><span id="bc-n">0 articoli</span><span id="bc-t">€ 0,00 · Vedi ordine ›</span></button></div>
 
 <!-- scheda prodotto -->
+<div class="velo" id="v-pay" onclick="if (event.target === this) chiudiPagamenti()">
+  <div class="foglio">
+    <button class="x" onclick="chiudiPagamenti()" aria-label="Chiudi">×</button>
+    <div class="scorri" style="padding:18px 18px 8px">
+      <h2 style="margin:0 40px 0 0">💳 Come puoi pagare</h2>
+      <ul class="pay-lista" id="pay-lista"></ul>
+    </div>
+    <div class="piede"><button class="btn" onclick="chiudiPagamenti()">Ho capito, vedi le offerte</button></div>
+  </div>
+</div>
 <div class="velo" id="v-prod" onclick="if (event.target === this) chiudiProdotto()">
   <div class="foglio">
     <button class="x" onclick="chiudiProdotto()" aria-label="Chiudi">×</button>
@@ -273,6 +290,15 @@
   // ===== IMPOSTAZIONI =====
   const API_URL = 'https://script.google.com/macros/s/AKfycbx09XG2XA-PrkoaueaWySeYOm8IxKX4BtNv7oTGJqxBkqkUWJOoZsSKabh1RlXFBcKVIw/exec';
   const WHATSAPP = '39096421546';
+  // Modi di pagamento mostrati al cliente. I loghi sono immagini: scrivi qui l'indirizzo (URL) del file del logo
+  // (per esempio quello già usato su caramellopoint.it). Se lasci vuoto compare un'icona al posto del logo.
+  const LOGHI = { klarna: '', paypal: 'https://www.caramellopoint.it/modules/ishipaymentoptionsblock/views/img/paypal.png' };
+  const PAGAMENTI = [
+    { logo: 'klarna', icona: '💳', testo: 'PUOI PAGARE CON KLARNA IN 3 RATE', breve: 'Puoi pagare con Klarna in 3 rate' },
+    { logo: 'paypal', icona: '💳', testo: 'PUOI PAGARE CON PAYPAL IN 3 RATE', breve: 'Puoi pagare con PayPal in 3 rate' },
+    { icona: '🏪', testo: 'CONTANTE O POS AL PUNTO DI RITIRO', breve: 'Contante o POS al punto di ritiro' },
+    { icona: '🏦', testo: 'CON BONIFICO', breve: 'Anche con bonifico' }
+  ];
   const TITOLO_ORDINE = 'ORDINE BLACK FRIDAY';
   const CACHE_KEY = 'b2c_cache_v1', CARRELLO_KEY = 'b2c_carrello_v1', NOME_KEY = 'b2c_nome', PROFILO_KEY = 'b2c_profilo_v1', VID_KEY = 'b2c_vid';
 
@@ -323,7 +349,7 @@
     FINE = d.fineOfferta || '';
     if (d.config) CONFIG = Object.assign(CONFIG, d.config);
     raggruppa();
-    $('info').innerHTML = '🛍️ Ritiro in negozio gratuito · 🚚 Spedizione ' + eur(CONFIG.spedizione) + ' con pagamento anticipato';
+    $('info').innerHTML = '🛍️ Ritiro in negozio gratuito · 🚚 Spedizione ' + eur(CONFIG.spedizione) + ' con pagamento anticipato<button class="link-pay" onclick="apriPagamenti()">💳 Come pagare</button>';
     ripulisciCarrello();
     disegnaChips(); filtra(); aggiornaBarra();
     $('stato').style.display = 'none';
@@ -343,15 +369,17 @@
       '⏳ Gli sconti valgono solo fino alla fine dell\'offerta',
       '👗 Pezzi contati: quando una taglia finisce, finisce',
       '❤️ Peplo · Caramello · Parrotta Point: sempre vicino a te'
-    ];
-    let i = 0; const f = $('ld-f'); f.textContent = frasi[0];
+    ].map(esc);
+    // dopo la prima frase passano i modi di pagamento (con i loghi), poi le altre
+    frasi.splice(1, 0, ...PAGAMENTI.map(p => icoPag(p) + esc(p.breve)));
+    let i = 0; const f = $('ld-f'); f.innerHTML = frasi[0];
     ATT = { t0,
       a: setInterval(() => {
         const sec = (Date.now() - t0) / 1000, resto = Math.ceil(stima - sec);
         $('ld-bar').style.width = Math.min(95, sec / stima * 95) + '%';
         $('ld-s').innerHTML = resto > 0 ? 'Pronto tra circa <b>' + resto + '</b> secondi' : 'Ci siamo quasi… ancora un momento';
       }, 250),
-      b: setInterval(() => { f.classList.add('fuori'); setTimeout(() => { i = (i + 1) % frasi.length; f.textContent = frasi[i]; f.classList.remove('fuori'); }, 250); }, 4000) };
+      b: setInterval(() => { f.classList.add('fuori'); setTimeout(() => { i = (i + 1) % frasi.length; f.innerHTML = frasi[i]; f.classList.remove('fuori'); }, 250); }, 4000) };
   }
   function fermaAttesa(ok) {
     if (!ATT) return;
@@ -1024,10 +1052,20 @@
   }
   $('el-corpo').addEventListener('click', e => { const r = e.target.closest('tr.r'); if (r) apriCarico(r.dataset.cod); });
 
+  // ===== MODI DI PAGAMENTO: finestra a ogni accesso + frasi durante l'attesa =====
+  const icoPag = p => '<span class="ico">' + (p.logo && LOGHI[p.logo] ? '<img src="' + esc(LOGHI[p.logo]) + '" alt="' + esc(p.logo) + '" onerror="this.parentNode.textContent=\'' + p.icona + '\'">' : p.icona) + '</span>';
+  function apriPagamenti() {
+    $('pay-lista').innerHTML = PAGAMENTI.map(p => '<li>' + icoPag(p) + '<span>' + esc(p.testo) + '</span></li>').join('');
+    $('v-pay').classList.add('show');
+  }
+  function chiudiPagamenti() { $('v-pay').classList.remove('show'); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') chiudiPagamenti(); });
+
   // ===== AVVIO =====
   try { CART = JSON.parse(lsGet(CARRELLO_KEY) || '{}') || {}; } catch (e) { CART = {}; }
   traccia('visita', '');
   carica();
+  if (!ADMIN) apriPagamenti();   // a ogni accesso, anche quando le offerte compaiono subito dalla copia salvata
 </script>
 </body>
 </html>
