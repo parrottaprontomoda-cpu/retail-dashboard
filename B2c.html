@@ -85,6 +85,8 @@
   .tag { background: #eee; border-radius: 10px; padding: 3px 9px; font-size: 11.5px; font-weight: 600; }
   .foglio .prezzo .nuovo { font-size: 26px; }
   .omnibus { font-size: 11.5px; color: var(--mute); margin-top: 2px; }
+  .nota-extra { font-size: 12px; color: #7a4b00; font-style: italic; line-height: 1.3; margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .nota-box { background: #fff7e6; border: 1px solid #fde1a8; border-radius: 12px; padding: 10px 12px; margin: 12px 0 0; font-size: 14px; font-weight: 600; color: #7a4b00; line-height: 1.4; }
   .descr { font-size: 13.5px; color: #444; margin: 10px 0 0; line-height: 1.45; }
   .taglie { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
   .taglie h4 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--mute); }
@@ -386,7 +388,7 @@
       const key = String(p.codiceProdotto || p.id);
       let g = mappa.get(key);
       if (!g) {
-        g = { key, nome: p.nome, descrizione: p.descrizione || '', categoria: p.categoria || 'Altro', brand: p.catalogo || '',
+        g = { key, nome: p.nome, descrizione: p.descrizione || '', nota: p.nota || '', categoria: p.categoria || 'Altro', brand: p.catalogo || '',
           tipo: p.tipo || '', materiale: p.materiale || '', prezzo: p.prezzo, sconto: p.sconto, fino: p.scontoFino || '',
           min30: p.prezzoMin30 || 0, imgs: [], varianti: [], dataCarico: '', pos: i };
         mappa.set(key, g);
@@ -400,10 +402,11 @@
     GRUPPI.forEach(g => {
       g.esaurito = !g.varianti.some(v => v.disponibile);
       g.ultimi = g.varianti.some(v => v.disponibile && v.ultimi);
-      g.hashtag = (String(g.descrizione).match(/#[\p{L}\p{N}_]+/gu) || []).map(t => t.slice(1).toLowerCase());
+      g.notaPulita = String(g.nota).replace(/#[\p{L}\p{N}_]+/gu, '').replace(/[ \t]{2,}/g, ' ').trim();
+      g.hashtag = (String(g.descrizione + ' ' + g.nota).match(/#[\p{L}\p{N}_]+/gu) || []).map(t => t.slice(1).toLowerCase());
       g.tags = [...new Set(g.hashtag.concat([g.tipo, g.materiale, g.categoria, g.brand].map(t => norm(t).replace(/\s+/g, '')).filter(Boolean)))];
       g.descrPulita = String(g.descrizione).replace(/#[\p{L}\p{N}_]+/gu, '').replace(/[ \t]{2,}/g, ' ').trim();
-      g.testo = norm([g.nome, g.descrizione, g.brand, g.tipo, g.materiale, g.key, g.varianti.map(v => v.colore + ' ' + v.misura).join(' ')].join(' '));
+      g.testo = norm([g.nome, g.descrizione, g.nota, g.brand, g.tipo, g.materiale, g.key, g.varianti.map(v => v.colore + ' ' + v.misura).join(' ')].join(' '));
     });
   }
 
@@ -508,6 +511,7 @@
           ${g.esaurito ? '<div class="esaurito">ESAURITO</div>' : ''}</div>
         <div class="corpo"><h3>${esc(g.nome)}</h3>
           <div class="meta">${esc(g.brand)}</div>
+          ${g.notaPulita ? `<div class="nota-extra">${esc(g.notaPulita)}</div>` : ''}
           <div class="prezzo">${prezzoHtml(g)}</div>
           ${s && g.fino ? `<div class="fino">Offerta fino al ${dataIt(g.fino)}</div>` : ''}
           <div class="nel-carrello" ${n ? '' : 'hidden'}>🛒 ${n} nel carrello</div></div></div>`;
@@ -574,6 +578,7 @@
       <div class="prezzo">${prezzoHtml(g)}<span style="font-size:12px;color:var(--mute)">IVA inclusa</span></div>
       ${s && g.fino ? `<div class="fino">Offerta fino al ${dataIt(g.fino)}</div>` : ''}
       ${s && g.min30 > 0 ? `<div class="omnibus">Prezzo più basso degli ultimi 30 giorni: ${eur(g.min30)}</div>` : ''}
+      ${g.notaPulita ? `<div class="nota-box">${esc(g.notaPulita)}</div>` : ''}
       ${g.descrPulita ? `<p class="descr">${esc(g.descrPulita)}</p>` : ''}
       ${g.tags.length ? `<div class="tags" id="htags">${g.tags.slice(0, 10).map(t => `<button class="htag" data-tag="${esc(t)}">#${esc(t)}</button>`).join('')}</div>` : ''}
       <div class="taglie"><h4>Scegli taglia e colore</h4>${taglieHtml(g)}</div>`;
@@ -832,7 +837,7 @@
         nome: c.nome || d.descrizione || v0.descr || '', descrizione: c.descrizione || '', categoria: c.categoria || '', brand: c.brand || v0.brand || '',
         tipo: c.tipo || d.tipo || '', materiale: c.materiale || d.materiale || '',
         prezzo: r ? Number(r.prezzo).toFixed(2).replace('.', ',') : prBd, sconto: r && r.sconto ? r.sconto : '', fino: r ? r.fino : '',
-        min30: r && r.min ? Number(r.min).toFixed(2).replace('.', ',') : '', attivo: r ? r.attivo : true, prevendita: !!c.prevendita
+        nota: r ? (r.nota || '') : '', min30: r && r.min ? Number(r.min).toFixed(2).replace('.', ',') : '', attivo: r ? r.attivo : true, prevendita: !!c.prevendita
       },
       liste: {
         categorie: unione(bd.categorie, PRODOTTI.map(p => p.categoria)), tipi: unione(bd.tipi, PRODOTTI.map(p => p.tipo)),
@@ -920,6 +925,8 @@
         <div class="campo"><label for="car-fino">Sconto valido fino al</label><input id="car-fino" type="date" value="${esc(f.fino)}"></div>
         <div class="campo"><label for="car-min">Prezzo minimo ultimi 30 giorni (facoltativo)</label><input id="car-min" inputmode="decimal" value="${esc(f.min30)}" placeholder="es. 39,90"></div>
       </div>
+      <div class="campo" style="margin-top:12px"><label for="car-nota">Nota extra breve (facoltativa)</label><input id="car-nota" maxlength="200" value="${esc(f.nota)}" placeholder="es. Ultimi pezzi, perfetta per l'inverno · vale anche per il regalo">
+        <p class="nota" style="margin:4px 0 0">Compare sotto il nome del prodotto e in evidenza nella scheda. Max 200 caratteri.</p></div>
       <div class="car-scorciatoie">${[3, 7, 15, 30].map(g => `<button type="button" onclick="document.getElementById('car-fino').value = '${dataTra(g)}'">${g} giorni</button>`).join('')}<button type="button" onclick="document.getElementById('car-sconto').value=''; document.getElementById('car-fino').value=''; aggiornaAnteprima()">Togli sconto</button></div>
       <div class="anteprima" id="car-prev-txt"></div>
       <label class="spunta"><input type="checkbox" id="car-attivo" ${f.attivo ? 'checked' : ''}> Visibile nel catalogo B2C (se tolta, il prodotto resta qui ma i clienti non lo vedono)</label>
@@ -968,7 +975,7 @@
     const fino = $('car-fino').value;
     if (sconto && !fino && !confirm('Lo sconto non ha una data di fine: resterà attivo finché non lo togli. Continuare?')) return;
     const body = { action: 'b2cSalva', cli: ADMIN, codice: CR.codice, prezzo: prezzo, sconto: sconto, fino: sconto ? fino : '', min30: $('car-min').value.trim(),
-      attivo: $('car-attivo').checked, varianti: sel.map(v => ({ ean: v.ean, misura: v.misura, colore: v.colore })) };
+      nota: $('car-nota').value.trim(), attivo: $('car-attivo').checked, varianti: sel.map(v => ({ ean: v.ean, misura: v.misura, colore: v.colore })) };
     if (!CR.soloB2B) {
       const L = CR.liste, cat = valoreLista('car-cat', L.categorie);
       if (!cat) { err('Scegli la categoria (o aggiungine una nuova).'); $('car-cat').focus(); return; }
