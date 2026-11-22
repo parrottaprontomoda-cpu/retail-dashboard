@@ -146,6 +146,10 @@
 
   #avviso { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); background: #222; color: #fff; padding: 10px 16px; border-radius: 22px; font-size: 13px; z-index: 50; opacity: 0; pointer-events: none; transition: opacity .25s; max-width: 90vw; text-align: center; }
   #avviso.show { opacity: 1; }
+  /* condivisione WhatsApp */
+  .card .condividi { position: absolute; right: 8px; bottom: 8px; width: 36px; height: 36px; border-radius: 50%; border: none; background: #25D366; color: #fff; font-size: 17px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.25); display: flex; align-items: center; justify-content: center; }
+  .btn-share { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 12px 0 4px; border: none; border-radius: 12px; padding: 12px; background: #25D366; color: #fff; font-weight: 800; font-size: 15px; cursor: pointer; }
+  .btn-share small { font-weight: 600; opacity: .9; }
   #stato { text-align: center; padding: 40px 16px; color: var(--mute); }
   .ld { max-width: 420px; margin: 0 auto; }
   .ld-t { font-size: 17px; font-weight: 800; color: var(--ink, #111); margin-bottom: 14px; }
@@ -354,6 +358,8 @@
   const ADMIN = (params.get('c') || '').trim().toUpperCase();     // ?c=CODICE-ADMIN mostra le statistiche
   const NEG_PARAM = String(params.get('negozio') || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '');   // es. ?negozio=caramello
   const FONTE = (params.get('fonte') || params.get('utm_source') || (NEG_PARAM ? 'negozio-' + NEG_PARAM : '')).trim().slice(0, 30);   // es. ?fonte=instagram
+  const P_PARAM = String(params.get('p') || '').trim();   // ?p=CODICE apre subito quel prodotto (link condiviso)
+  let P_FATTO = false;
   let CONFIG = { spedizione: 7, puntiRitiro: [] };
   let PRODOTTI = [], GRUPPI = [], VAR = {}, FINE = '';
   let CART = {};                 // id variante -> quantità
@@ -370,7 +376,7 @@
   const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
   let avvisoT = null;
-  function avviso(m) { const a = $('avviso'); a.textContent = m; a.classList.add('show'); clearTimeout(avvisoT); avvisoT = setTimeout(() => a.classList.remove('show'), 3000); }
+  function avviso(m, ms) { const a = $('avviso'); a.textContent = m; a.classList.add('show'); clearTimeout(avvisoT); avvisoT = setTimeout(() => a.classList.remove('show'), ms || 3000); }
 
   function scontoAttivo(g) {
     const s = Number(g.sconto) || 0;
@@ -413,7 +419,7 @@
     b.classList.add('show');
   }
   $('neg-bar').addEventListener('click', e => { const x = e.target.closest('button'); if (!x) return; SOLONEG = x.dataset.m === '1'; disegnaNeg(); filtra(); });
-  function applica(d) {
+  function applica(d, fresco) {
     PRODOTTI = d.products || [];
     FINE = d.fineOfferta || '';
     if (d.config) CONFIG = Object.assign(CONFIG, d.config);
@@ -424,6 +430,7 @@
     disegnaChips(); filtra(); aggiornaBarra();
     $('stato').style.display = 'none';
     avviaConto();
+    apriCondiviso(fresco);
   }
   // ===== ATTESA DEL PRIMO CARICAMENTO: conto alla rovescia, barra e frasi (la durata è quella dell'ultima volta) =====
   let ATT = null;
@@ -465,7 +472,7 @@
     else avviaAttesa();
     fetch(API_URL + '?action=b2c')
       .then(r => r.json())
-      .then(d => { if (!d.ok) throw new Error(d.error || 'errore'); fermaAttesa(true); lsSet(CACHE_KEY, JSON.stringify(d)); applica(d); if (APERTO) disegnaProdotto(); })
+      .then(d => { if (!d.ok) throw new Error(d.error || 'errore'); fermaAttesa(true); lsSet(CACHE_KEY, JSON.stringify(d)); applica(d, true); if (APERTO) disegnaProdotto(); })
       .catch(() => { fermaAttesa(false); if (!PRODOTTI.length) $('stato').innerHTML = 'Non riesco a caricare le offerte. Riprova tra poco o scrivici su <a href="https://wa.me/' + WHATSAPP + '">WhatsApp</a>.'; });
   }
 
@@ -614,7 +621,8 @@
         <div class="foto"><img loading="lazy" decoding="async" src="${esc(g.imgs[0] || '')}" alt="${esc(g.nome)}" onerror="this.onerror=null;this.style.visibility='hidden'">
           ${s ? `<span class="badge-sconto">-${Number.isInteger(s) ? s : s.toFixed(1)}%</span>` : ''}
           ${!g.esaurito && g.ultimi ? '<span class="badge-ultimi">Ultimi pezzi</span>' : ''}
-          ${g.esaurito ? '<div class="esaurito">ESAURITO</div>' : ''}</div>
+          ${g.esaurito ? '<div class="esaurito">ESAURITO</div>' : ''}
+          <button class="condividi" data-share="${esc(g.key)}" aria-label="Condividi su WhatsApp" title="Condividi su WhatsApp">📲</button></div>
         <div class="corpo"><h3>${esc(g.nome)}</h3>
           <div class="meta">${esc(g.brand)}</div>
           ${inNeg(g) ? '<span class="neg-bdg">🏪 Disponibile qui</span>' : ''}
@@ -633,6 +641,8 @@
     });
   }
   $('griglia').addEventListener('click', e => {
+    const sh = e.target.closest('[data-share]');
+    if (sh) { e.stopPropagation(); condividiProdotto(sh.dataset.share); return; }
     const c = e.target.closest('.card'); if (c) apriProdotto(c.dataset.k);
   });
 
@@ -687,6 +697,7 @@
       ${s && g.fino ? `<div class="fino">Offerta fino al ${dataIt(g.fino)}</div>` : ''}
       ${s && g.min30 > 0 ? `<div class="omnibus">Prezzo più basso degli ultimi 30 giorni: ${eur(g.min30)}</div>` : ''}
       ${inNeg(g) ? `<div class="neg-bdg" style="font-size:13px;padding:4px 10px">🏪 Disponibile da ${esc(NEG)}</div>` : ''}
+      <button class="btn-share" data-a="condividi">📲 Condividi su WhatsApp <small>con un amico</small></button>
       ${g.notaPulita ? `<div class="nota-box">${esc(g.notaPulita)}</div>` : ''}
       ${g.descrPulita ? `<p class="descr">${esc(g.descrPulita)}</p>` : ''}
       ${g.tags.length ? `<div class="tags" id="htags">${g.tags.slice(0, 10).map(t => `<button class="htag" data-tag="${esc(t)}">#${esc(t)}</button>`).join('')}</div>` : ''}
@@ -697,6 +708,7 @@
         <div class="taglie">${h.esaurito ? '<p class="nota">Al momento esaurito</p>' : '<h4>Aggiungi anche ' + esc(h.nome) + ' (scegli la stessa taglia)</h4>' + taglieHtml(h)}</div></div>`).join('')}`;
     corpo.scrollTop = dall ? 0 : st;
     aggiornaPulsantiProdotto();
+    preparaFoto(g);
   }
   function apriAbbinato(k) {
     if (!GRUPPI.some(x => x.key === k)) return;
@@ -716,10 +728,70 @@
     if (ht) { const g0 = GRUPPI.find(x => x.key === APERTO); if (g0) piu(PROF.t, ht.dataset.tag, 2), salvaProfilo(); chiudiProdotto(); filtroTag(ht.dataset.tag); return; }
     const b = e.target.closest('[data-a]'); if (!b) return;
     const a = b.dataset.a, g = GRUPPI.find(x => x.key === APERTO);
+    if (a === 'condividi') { condividiProdotto(g.key); return; }
     if (a === 'gp' || a === 'gn') { const n = g.imgs.length; GPOS[g.key] = ((GPOS[g.key] || 0) + (a === 'gn' ? 1 : -1) + n) % n; disegnaProdotto(); return; }
     if (b.disabled) return;
     cambia(b.dataset.id, a === 'piu' ? 1 : -1);
   });
+  // ===== CONDIVISIONE SU WHATSAPP =====
+  // Il link apre il catalogo completo, con il prodotto condiviso già aperto (stesso negozio di chi condivide)
+  function linkProdotto(g) {
+    const q = new URLSearchParams();
+    if (NEG_PARAM) q.set('negozio', NEG_PARAM);
+    q.set('p', g.key);
+    q.set('fonte', 'passaparola');
+    return location.origin + location.pathname + '?' + q.toString();   // mai il codice amministratore
+  }
+  function testoCondivisione(g) {
+    const s = scontoAttivo(g);
+    const prezzo = s ? `a soli ${eur(prezzoFinale(g))} invece di ${eur(g.prezzo)} (-${Number.isInteger(s) ? s : s.toFixed(1)}%)` : `a ${eur(g.prezzo)}`;
+    return `🖤 Guarda cosa ho trovato al Black Friday!\n*${g.nome}* ${prezzo} 🔥\n` +
+      (g.esaurito ? '' : '⏳ Pezzi limitati, corri a vederlo!\n') +
+      `👉 ${linkProdotto(g)}\n\nNel link trovi anche tutto il catalogo delle offerte 🛍️`;
+  }
+  // la foto viene preparata quando si apre la scheda, così al tocco la condivisione parte subito
+  const FOTO_SHARE = {};
+  function preparaFoto(g) {
+    if (!g || FOTO_SHARE[g.key] !== undefined || !g.imgs[0] || !navigator.canShare) return;
+    FOTO_SHARE[g.key] = null;
+    fetch(g.imgs[0]).then(r => { if (!r.ok) throw 0; return r.blob(); }).then(b => {
+      if (!/^image\//.test(b.type)) return;
+      const est = (b.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
+      const f = new File([b], (g.key || 'prodotto').replace(/[^\w-]/g, '') + '.' + est, { type: b.type });
+      if (navigator.canShare({ files: [f] })) FOTO_SHARE[g.key] = f;
+    }).catch(() => {});   // foto non scaricabile: si condivide testo + link
+  }
+  async function condividiProdotto(k) {
+    const g = GRUPPI.find(x => x.key === k); if (!g) return;
+    const testo = testoCondivisione(g);
+    traccia('condivisione', g.nome);
+    const f = FOTO_SHARE[g.key];
+    if (navigator.share) {
+      try {
+        if (f) await navigator.share({ files: [f], text: testo });
+        else await navigator.share({ text: testo });
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;   // l'utente ha annullato
+      }
+    }
+    window.open('https://wa.me/?text=' + encodeURIComponent(testo), '_blank');
+  }
+  // Arrivo da un link condiviso: apro il prodotto; se è finito avviso e lascio il catalogo
+  function apriCondiviso(fresco) {
+    if (!P_PARAM || P_FATTO) return;
+    const g = GRUPPI.find(x => x.key.toUpperCase() === P_PARAM.toUpperCase());
+    if (g) {
+      P_FATTO = true;
+      traccia('da-condivisione', g.nome);
+      apriProdotto(g.key);
+      if (g.esaurito) avviso('Questo articolo è andato a ruba! 🔥 Guarda le altre offerte del catalogo', 6000);
+    } else if (fresco) {
+      P_FATTO = true;
+      avviso('Questo articolo non è più disponibile 🔥 Guarda le altre offerte del catalogo', 6000);
+    }
+  }
+
   // dalla scheda all'ordine: la scheda si chiude senza "tornare indietro" nella cronologia (resta un solo passo, che chiude l'ordine)
   function vaiOrdine() { chiudiProdotto(true); apriCarrello(); }
 
@@ -1252,7 +1324,7 @@
   try { CART = JSON.parse(lsGet(CARRELLO_KEY) || '{}') || {}; } catch (e) { CART = {}; }
   traccia('visita', '');
   carica();
-  if (!ADMIN) apriPagamenti();   // a ogni accesso, anche quando le offerte compaiono subito dalla copia salvata
+  if (!ADMIN && !P_PARAM) apriPagamenti();   // a ogni accesso, anche quando le offerte compaiono subito dalla copia salvata
 </script>
 </body>
 </html>
