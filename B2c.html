@@ -204,6 +204,7 @@
   .oa .az button { border: 1px solid #ccc; background: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
   .coupon-box { background: #fff8e1; border: 1px dashed #e0a100; border-radius: 12px; padding: 9px 12px; margin: 12px 0; font-size: 13px; }
   .coupon-box small { display: block; color: #777; margin-top: 2px; }
+  .btn-mod { float: right; margin: 0 0 6px 8px; border: 1px solid #e0a100; background: #fff8e1; color: #333; border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 800; cursor: pointer; }
   .stat-h { font-size: 13px; font-weight: 800; margin: 12px 0 0; }
 </style>
 </head>
@@ -665,6 +666,7 @@
         ${nI > 1 ? `<button class="g-btn p" data-a="gp">‹</button><button class="g-btn n" data-a="gn">›</button>
           <div class="punti">${g.imgs.map((_, j) => `<i class="${j === i ? 'on' : ''}"></i>`).join('')}</div>` : ''}
       </div>
+      ${ADMIN ? `<button class="btn-mod" data-a="modifica">✏️ Modifica prodotto</button>` : ''}
       <h2>${esc(g.nome)}</h2>
       <div class="meta" style="color:var(--mute);font-size:12px">${esc(g.brand)}${g.key ? ' · Cod. ' + esc(g.key) : ''}</div>
       <div class="tags">${s ? `<span class="tag" style="background:var(--accent);color:#fff">-${Number.isInteger(s) ? s : s.toFixed(1)}%</span>` : ''}${g.tipo ? `<span class="tag">${esc(g.tipo)}</span>` : ''}${g.materiale ? `<span class="tag">🧵 ${esc(g.materiale)}</span>` : ''}</div>
@@ -684,6 +686,7 @@
     $('prod-vai').textContent = n ? '🛒 Il mio ordine (' + n + ')' : '🛒 Il mio ordine';
   }
   $('prod-corpo').addEventListener('click', e => {
+    if (ADMIN && e.target.closest('.btn-mod')) { const k = APERTO; chiudiProdotto(true); apriCarico(k); return; }
     const ht = e.target.closest('.htag');
     if (ht) { const g0 = GRUPPI.find(x => x.key === APERTO); if (g0) piu(PROF.t, ht.dataset.tag, 2), salvaProfilo(); chiudiProdotto(); filtroTag(ht.dataset.tag); return; }
     const b = e.target.closest('[data-a]'); if (!b) return;
