@@ -1078,7 +1078,7 @@
     async get(k) { const db = await this.apri(); return new Promise((ok, ko) => { const q = db.transaction('dati').objectStore('dati').get(k); q.onsuccess = () => ok(q.result); q.onerror = () => ko(q.error); }); },
     async set(k, v) { const db = await this.apri(); return new Promise((ok, ko) => { const t = db.transaction('dati', 'readwrite'); t.objectStore('dati').put(v, k); t.oncomplete = () => ok(); t.onerror = () => ko(t.error); }); }
   };
-  let BIG = null, BIG_IN_CORSO = null;
+  let BIG = null, BIG_IN_CORSO = null, BIG_LOCALE = null, BIG_T0 = 0, BIG_TIMER = null, BIG_ERR = '';
   function indicizzaBig(d) {
     const F = {}; d.campi.forEach((c, i) => { F[c] = i; });
     const perCod = new Map(), perEan = new Map(), perInt = new Map();
@@ -1086,17 +1086,23 @@
     d.righe.forEach((r, i) => { add(perCod, r[F.codice], i); add(perEan, r[F.ean], i); add(perInt, r[F.interno], i); });
     return Object.assign({}, d, { F, perCod, perEan, perInt });
   }
-  function statoBig(testo) {
-    const el = $('big-stato'); if (!el) return;
-    if (testo) { el.innerHTML = testo; return; }
-    if (!BIG) { el.innerHTML = 'BIGDATA: non ancora scaricato'; return; }
-    const g = new Date(BIG.generato);
-    el.innerHTML = '📦 BIGDATA: ' + BIG.righe.length.toLocaleString('it-IT') + ' EAN · aggiornato ' + (isNaN(g) ? '' : g.toLocaleDateString('it-IT') + ' alle ' + g.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })) +
-      (BIG.giorno !== oggiISO() ? ' <b style="color:var(--accent-d)">(di un altro giorno)</b>' : '');
+  function statoBig() {
+    const el = $('big-stato'), b = $('big-agg');
+    if (b) { b.disabled = !!BIG_IN_CORSO; b.textContent = BIG_IN_CORSO ? 'Aggiorno…' : '🔄 Aggiorna BIGDATA'; }
+    if (!el) return;
+    let t;
+    if (!BIG) t = 'BIGDATA: copia non ancora pronta, le ricerche usano il server';
+    else {
+      const g = new Date(BIG.generato);
+      t = '📦 BIGDATA: ' + BIG.righe.length.toLocaleString('it-IT') + ' EAN · copia del ' + (isNaN(g) ? '' : g.toLocaleDateString('it-IT') + ' ' + g.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }));
+    }
+    if (BIG_IN_CORSO) t += ' · ⏳ aggiornamento in sottofondo (' + Math.round((Date.now() - BIG_T0) / 1000) + ' s), puoi già cercare';
+    else if (BIG_ERR) t += ' · <span style="color:var(--accent-d)">⚠️ ' + esc(BIG_ERR) + '</span>';
+    el.innerHTML = t;
   }
-  async function scaricaBigdata() {
+  async function scaricaBigdata(ricostruisci) {
     const gz = typeof DecompressionStream !== 'undefined';
-    const r = await fetch(API_URL + '?action=bigdataexport&cli=' + encodeURIComponent(ADMIN) + (gz ? '&formato=gzip' : '') + '&_=' + Date.now(), { cache: 'no-store' });
+    const r = await fetch(API_URL + '?action=bigdataexport&cli=' + encodeURIComponent(ADMIN) + (gz ? '&formato=gzip' : '') + (ricostruisci ? '&ricostruisci=1' : '') + '&_=' + Date.now(), { cache: 'no-store' });
     let t = await r.text();
     if (gz && !/^\s*\{/.test(t)) {
       const bin = Uint8Array.from(atob(t.trim()), c => c.charCodeAt(0));
@@ -1106,35 +1112,32 @@
     if (!d.ok) throw new Error(d.error || 'BIGDATA non leggibile');
     return d;
   }
-  // forza = true: riscarica comunque (pulsante "Aggiorna BIGDATA")
-  function preparaBigdata(forza) {
+  // copia già salvata nel browser (anche di ieri: si usa subito, intanto si aggiorna)
+  function caricaLocale() {
+    return BIG_LOCALE || (BIG_LOCALE = IDB.get('bigdata').then(s => { if (s && s.righe && !BIG) BIG = indicizzaBig(s); statoBig(); return BIG; }).catch(() => null));
+  }
+  // scarico in sottofondo: le ricerche non aspettano mai
+  function aggiornaInSottofondo(ricostruisci) {
     if (BIG_IN_CORSO) return BIG_IN_CORSO;
-    BIG_IN_CORSO = (async () => {
-      const oggi = oggiISO();
-      if (!forza && BIG && BIG.giorno === oggi) return BIG;
-      let salvato = null;
-      try { salvato = await IDB.get('bigdata'); } catch (e) {}
-      if (!forza && salvato && salvato.giorno === oggi) { BIG = indicizzaBig(salvato); statoBig(); return BIG; }
-      statoBig('⏳ Scarico BIGDATA… (una volta al giorno, può richiedere qualche secondo)');
-      try {
-        const d = await scaricaBigdata();
-        const s = { campi: d.campi, righe: d.righe, campiProdotto: d.campiProdotto || [], prodotti: d.prodotti || {}, generato: d.generato, giorno: oggi };
-        try { await IDB.set('bigdata', s); } catch (e) {}
-        BIG = indicizzaBig(s); statoBig();
-        return BIG;
-      } catch (e) {
-        if (salvato) { BIG = indicizzaBig(salvato); statoBig(); avviso('⚠️ BIGDATA non aggiornato: uso la copia del ' + dataIt(salvato.giorno), 5000); return BIG; }
-        statoBig('⚠️ ' + esc(e.message)); throw e;
-      }
-    })().finally(() => { BIG_IN_CORSO = null; });
+    BIG_T0 = Date.now(); BIG_ERR = '';
+    clearInterval(BIG_TIMER); BIG_TIMER = setInterval(statoBig, 1000);
+    BIG_IN_CORSO = scaricaBigdata(ricostruisci).then(async d => {
+      const s = { campi: d.campi, righe: d.righe, campiProdotto: d.campiProdotto || [], prodotti: d.prodotti || {}, generato: d.generato, giorno: oggiISO() };
+      try { await IDB.set('bigdata', s); } catch (e) {}
+      BIG = indicizzaBig(s);
+      if (ricostruisci) avviso('✅ BIGDATA aggiornato');
+    }).catch(e => { BIG_ERR = e.message === 'Failed to fetch' ? 'server non raggiungibile' : e.message; })
+      .finally(() => { BIG_IN_CORSO = null; clearInterval(BIG_TIMER); statoBig(); });
+    statoBig();
     return BIG_IN_CORSO;
   }
-  async function aggiornaBigdata() {
-    const b = $('big-agg'); if (b) { b.disabled = true; b.textContent = 'Aggiorno…'; }
-    try { await preparaBigdata(true); avviso('✅ BIGDATA aggiornato'); }
-    catch (e) { avviso('⚠️ ' + e.message, 6000); }
-    finally { if (b) { b.disabled = false; b.textContent = '🔄 Aggiorna BIGDATA'; } }
+  // all'apertura del modulo: copia locale subito, aggiornamento automatico una volta al giorno
+  async function preparaBigdata() {
+    await caricaLocale();
+    if (!BIG || BIG.giorno !== oggiISO()) aggiornaInSottofondo(false);
   }
+  // pulsante: rilegge ARCHIVIO adesso (può richiedere qualche minuto, intanto si lavora con la copia attuale)
+  function aggiornaBigdata() { aggiornaInSottofondo(true); }
   // stessa logica dello script: codice prodotto (D), poi EAN (C) o codice interno (J)
   function variantiLocali(q) {
     const B = BIG, F = B.F, Q = q.trim().toUpperCase();
@@ -1173,7 +1176,7 @@
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 8px"><span class="nota" id="big-stato" style="margin:0;flex:1;min-width:200px"></span>
         <button type="button" class="btn sec" id="big-agg" style="flex:none;padding:8px 12px;font-size:13px" onclick="aggiornaBigdata()">🔄 Aggiorna BIGDATA</button></div>
       <div id="car-ris"></div>`;
-    statoBig(); preparaBigdata(false).catch(() => {});   // la copia locale si prepara mentre scrivi il codice
+    statoBig(); preparaBigdata().catch(() => {});   // la copia locale si prepara mentre scrivi il codice
     if (codice) { $('car-cod').value = codice; cercaCarico(); } else setTimeout(() => $('car-cod').focus(), 50);
   }
   function chiudiCarico() {
@@ -1191,13 +1194,16 @@
       const scheda0 = apiAdmin('b2cscheda', '&q=' + encodeURIComponent(q)).catch(e => ({ ok: false, error: e.message }));
       let bd = null, tBig = 0;
       try {
+        await caricaLocale();
+        if (!BIG || BIG.giorno !== oggiISO()) aggiornaInSottofondo(false);   // non blocca la ricerca
         const t1 = Date.now();
-        await preparaBigdata(false);
-        const loc = variantiLocali(q);
+        const loc = BIG ? variantiLocali(q) : null;
         tBig = Date.now() - t1;
-        bd = await postAdmin({ action: 'cercaprodottoLocale', q: q, codice: loc.codice, varianti: loc.varianti });
-        if (!bd.ok && /sconosciuta|non valida/i.test(bd.error || '')) bd = null;   // script non ancora aggiornato
-        else if (bd.tempi) bd.tempi.bigdata = tBig;
+        if (loc && loc.varianti.length) {
+          bd = await postAdmin({ action: 'cercaprodottoLocale', q: q, codice: loc.codice, varianti: loc.varianti });
+          if (!bd.ok && /sconosciuta|non valida/i.test(bd.error || '')) bd = null;   // script non ancora aggiornato
+          else if (bd.tempi) bd.tempi.bigdata = tBig;
+        }
       } catch (e) { bd = null; }
       if (!bd) bd = await apiAdmin('cercaprodotto', '&q=' + encodeURIComponent(q));   // ricerca classica sul server
       const sc0 = await scheda0;
