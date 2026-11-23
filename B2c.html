@@ -1069,6 +1069,90 @@
   };
   const dataTra = giorni => { const d = new Date(Date.now() + giorni * 864e5); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 
+  // ===== COPIA LOCALE DI BIGDATA (IndexedDB del browser) =====
+  // Si scarica una volta al giorno (alla prima ricerca) o con "Aggiorna BIGDATA"; le ricerche poi sono istantanee.
+  // Le foto di Gestione immagini e il catalogo si leggono sempre dal server, così sono sempre aggiornati.
+  const IDB = {
+    db: null,
+    apri() { return this.db || (this.db = new Promise((ok, ko) => { const r = indexedDB.open('b2c_admin', 1); r.onupgradeneeded = () => r.result.createObjectStore('dati'); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); })); },
+    async get(k) { const db = await this.apri(); return new Promise((ok, ko) => { const q = db.transaction('dati').objectStore('dati').get(k); q.onsuccess = () => ok(q.result); q.onerror = () => ko(q.error); }); },
+    async set(k, v) { const db = await this.apri(); return new Promise((ok, ko) => { const t = db.transaction('dati', 'readwrite'); t.objectStore('dati').put(v, k); t.oncomplete = () => ok(); t.onerror = () => ko(t.error); }); }
+  };
+  let BIG = null, BIG_IN_CORSO = null;
+  function indicizzaBig(d) {
+    const F = {}; d.campi.forEach((c, i) => { F[c] = i; });
+    const perCod = new Map(), perEan = new Map(), perInt = new Map();
+    const add = (m, k, i) => { k = String(k == null ? '' : k).trim().toUpperCase(); if (!k) return; let l = m.get(k); if (!l) m.set(k, l = []); l.push(i); };
+    d.righe.forEach((r, i) => { add(perCod, r[F.codice], i); add(perEan, r[F.ean], i); add(perInt, r[F.interno], i); });
+    return Object.assign({}, d, { F, perCod, perEan, perInt });
+  }
+  function statoBig(testo) {
+    const el = $('big-stato'); if (!el) return;
+    if (testo) { el.innerHTML = testo; return; }
+    if (!BIG) { el.innerHTML = 'BIGDATA: non ancora scaricato'; return; }
+    const g = new Date(BIG.generato);
+    el.innerHTML = '📦 BIGDATA: ' + BIG.righe.length.toLocaleString('it-IT') + ' EAN · aggiornato ' + (isNaN(g) ? '' : g.toLocaleDateString('it-IT') + ' alle ' + g.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })) +
+      (BIG.giorno !== oggiISO() ? ' <b style="color:var(--accent-d)">(di un altro giorno)</b>' : '');
+  }
+  async function scaricaBigdata() {
+    const gz = typeof DecompressionStream !== 'undefined';
+    const r = await fetch(API_URL + '?action=bigdataexport&cli=' + encodeURIComponent(ADMIN) + (gz ? '&formato=gzip' : '') + '&_=' + Date.now(), { cache: 'no-store' });
+    let t = await r.text();
+    if (gz && !/^\s*\{/.test(t)) {
+      const bin = Uint8Array.from(atob(t.trim()), c => c.charCodeAt(0));
+      t = await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+    }
+    let d; try { d = JSON.parse(t); } catch (e) { throw new Error('Lo script non riconosce "bigdataexport": aggiorna Code.gs e Carico.gs e pubblica una Nuova versione.'); }
+    if (!d.ok) throw new Error(d.error || 'BIGDATA non leggibile');
+    return d;
+  }
+  // forza = true: riscarica comunque (pulsante "Aggiorna BIGDATA")
+  function preparaBigdata(forza) {
+    if (BIG_IN_CORSO) return BIG_IN_CORSO;
+    BIG_IN_CORSO = (async () => {
+      const oggi = oggiISO();
+      if (!forza && BIG && BIG.giorno === oggi) return BIG;
+      let salvato = null;
+      try { salvato = await IDB.get('bigdata'); } catch (e) {}
+      if (!forza && salvato && salvato.giorno === oggi) { BIG = indicizzaBig(salvato); statoBig(); return BIG; }
+      statoBig('⏳ Scarico BIGDATA… (una volta al giorno, può richiedere qualche secondo)');
+      try {
+        const d = await scaricaBigdata();
+        const s = { campi: d.campi, righe: d.righe, generato: d.generato, giorno: oggi };
+        try { await IDB.set('bigdata', s); } catch (e) {}
+        BIG = indicizzaBig(s); statoBig();
+        return BIG;
+      } catch (e) {
+        if (salvato) { BIG = indicizzaBig(salvato); statoBig(); avviso('⚠️ BIGDATA non aggiornato: uso la copia del ' + dataIt(salvato.giorno), 5000); return BIG; }
+        statoBig('⚠️ ' + esc(e.message)); throw e;
+      }
+    })().finally(() => { BIG_IN_CORSO = null; });
+    return BIG_IN_CORSO;
+  }
+  async function aggiornaBigdata() {
+    const b = $('big-agg'); if (b) { b.disabled = true; b.textContent = 'Aggiorno…'; }
+    try { await preparaBigdata(true); avviso('✅ BIGDATA aggiornato'); }
+    catch (e) { avviso('⚠️ ' + e.message, 6000); }
+    finally { if (b) { b.disabled = false; b.textContent = '🔄 Aggiorna BIGDATA'; } }
+  }
+  // stessa logica dello script: codice prodotto (D), poi EAN (C) o codice interno (J)
+  function variantiLocali(q) {
+    const B = BIG, F = B.F, Q = q.trim().toUpperCase();
+    let righe = B.perCod.get(Q) || [], codice = q;
+    if (!righe.length) {
+      const r1 = (B.perEan.get(Q) || []).concat(B.perInt.get(Q) || []);
+      if (r1.length) {
+        codice = B.righe[r1[0]][F.codice];
+        righe = codice ? (B.perCod.get(String(codice).toUpperCase()) || r1) : r1;
+        if (!codice) codice = B.righe[r1[0]][F.interno] || q;
+      }
+    }
+    const varianti = righe.slice(0, 400).map(i => { const r = B.righe[i], v = {}; B.campi.forEach((c, j) => { v[c] = r[j]; }); if (!v.codice) v.codice = codice; return v; });
+    return { codice: String(codice || q).trim(), varianti };
+  }
+  const postAdmin = body => fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ c: ADMIN }, body)) })
+    .then(r => r.text()).then(t => { try { return JSON.parse(t); } catch (e) { return { ok: false, error: 'Risposta non valida' }; } });
+
   function apriCarico(codice) {
     $('v-el').classList.remove('show');
     $('v-car').classList.add('show'); document.body.style.overflow = 'hidden';
@@ -1077,7 +1161,11 @@
       <div class="campo"><label for="car-cod">Codice prodotto (o codice interno)</label>
         <div style="display:flex;gap:8px"><input id="car-cod" autocomplete="off" onkeydown="if (event.key === 'Enter') cercaCarico()" placeholder="es. 123456">
         <button class="btn" id="car-cerca" style="flex:none;padding:0 20px" onclick="cercaCarico()">Cerca</button></div></div>
-      <p class="nota">Il sistema legge BIGDATA (EAN, misure e colori), le foto di Gestione immagini e quello che c'è già nel catalogo.</p><div id="car-ris"></div>`;
+      <p class="nota">Il sistema legge BIGDATA (EAN, misure e colori), le foto di Gestione immagini e quello che c'è già nel catalogo.</p>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 8px"><span class="nota" id="big-stato" style="margin:0;flex:1;min-width:200px"></span>
+        <button type="button" class="btn sec" id="big-agg" style="flex:none;padding:8px 12px;font-size:13px" onclick="aggiornaBigdata()">🔄 Aggiorna BIGDATA</button></div>
+      <div id="car-ris"></div>`;
+    statoBig(); preparaBigdata(false).catch(() => {});   // la copia locale si prepara mentre scrivi il codice
     if (codice) { $('car-cod').value = codice; cercaCarico(); } else setTimeout(() => $('car-cod').focus(), 50);
   }
   function chiudiCarico() {
@@ -1092,10 +1180,19 @@
     try {
       // le due ricerche partono insieme: la scheda B2C si richiede di nuovo solo se BIGDATA restituisce un codice diverso
       const t0 = Date.now();
-      const [bd, sc0] = await Promise.all([
-        apiAdmin('cercaprodotto', '&q=' + encodeURIComponent(q)),
-        apiAdmin('b2cscheda', '&q=' + encodeURIComponent(q)).catch(e => ({ ok: false, error: e.message }))
-      ]);
+      const scheda0 = apiAdmin('b2cscheda', '&q=' + encodeURIComponent(q)).catch(e => ({ ok: false, error: e.message }));
+      let bd = null, tBig = 0;
+      try {
+        const t1 = Date.now();
+        await preparaBigdata(false);
+        const loc = variantiLocali(q);
+        tBig = Date.now() - t1;
+        bd = await postAdmin({ action: 'cercaprodottoLocale', q: q, codice: loc.codice, varianti: loc.varianti });
+        if (!bd.ok && /sconosciuta|non valida/i.test(bd.error || '')) bd = null;   // script non ancora aggiornato
+        else if (bd.tempi) bd.tempi.bigdata = tBig;
+      } catch (e) { bd = null; }
+      if (!bd) bd = await apiAdmin('cercaprodotto', '&q=' + encodeURIComponent(q));   // ricerca classica sul server
+      const sc0 = await scheda0;
       if (!bd.ok) throw new Error(bd.error || 'Risposta non valida');
       const codice = String(bd.codice || q).trim();
       const sc = (sc0.ok && codice.toUpperCase() === q.toUpperCase()) ? sc0 : await apiAdmin('b2cscheda', '&q=' + encodeURIComponent(codice));
