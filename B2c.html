@@ -1090,11 +1090,17 @@
     const btn = $('car-cerca'); btn.disabled = true; btn.textContent = 'Cerco…';
     $('car-ris').innerHTML = '<p class="nota">⏳ Cerco in BIGDATA, nel catalogo e in Gestione immagini…</p>'; $('car-piede').hidden = true;
     try {
-      const bd = await apiAdmin('cercaprodotto', '&q=' + encodeURIComponent(q));
+      // le due ricerche partono insieme: la scheda B2C si richiede di nuovo solo se BIGDATA restituisce un codice diverso
+      const t0 = Date.now();
+      const [bd, sc0] = await Promise.all([
+        apiAdmin('cercaprodotto', '&q=' + encodeURIComponent(q)),
+        apiAdmin('b2cscheda', '&q=' + encodeURIComponent(q)).catch(e => ({ ok: false, error: e.message }))
+      ]);
       if (!bd.ok) throw new Error(bd.error || 'Risposta non valida');
       const codice = String(bd.codice || q).trim();
-      const sc = await apiAdmin('b2cscheda', '&q=' + encodeURIComponent(codice));
+      const sc = (sc0.ok && codice.toUpperCase() === q.toUpperCase()) ? sc0 : await apiAdmin('b2cscheda', '&q=' + encodeURIComponent(codice));
       if (!sc.ok) throw new Error(sc.error || 'Risposta non valida');
+      console.log('[carico] tempi', Object.assign({ pagina: Date.now() - t0 }, bd.tempi || {}));
       preparaCarico(q, codice, bd, sc);
       disegnaCarico(messaggio);
     } catch (e) {
