@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Immagini Prodotti Detail</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: shop-floor tool, fast and confident, like a sale tag on a rail
+   IDEA: the swing tag of a garment: photo on top, red promo price below
+   PICTURE: the live 4:5 promo card itself, large at the top
+   COLOUR and TYPE: white ground, ink near-black, sale red #d7193f, warm grey; Archivo 800 + Inter
+   LAYOUT: one column on phone: card, steps (foto, dati, IA, condividi); two columns above 900px */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#121212);--ink:light-dark(#151515,#f2f2f2);--mut:light-dark(#6b6762,#a9a49e);--line:light-dark(#e6e2dd,#2c2a28);--soft:light-dark(#f5f3f0,#1c1b1a);--red:#d7193f;--redd:#a90f2e}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif;overflow-x:clip}
+h1,h2,.big{font-family:Archivo,Inter,sans-serif}
+header{padding:18px max(5vw,16px) 10px;display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-size:clamp(24px,6vw,34px);line-height:1.05;margin:0;font-weight:900;letter-spacing:-.01em}
+h1 span{color:var(--red) }
+.sub{color:var(--mut);font-size:14px;margin:0}
+main{display:grid;gap:20px;padding:6px max(5vw,16px) 40px;max-width:1240px;margin:auto}
+@media(min-width:900px){main{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}.stage{position:sticky;top:16px}}
+.stage{background:var(--soft);border-radius:18px;padding:12px}
+.frame{position:relative;aspect-ratio:4/5;border-radius:12px;overflow:hidden;background:repeating-linear-gradient(135deg,var(--soft) 0 14px,var(--line) 14px 15px)}
+.frame canvas{position:absolute;inset:0;width:100%;height:100%}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--mut)}
+.empty b{display:block;font:800 22px/1.1 Archivo,sans-serif;color:var(--ink);margin-bottom:6px}
+.tabs{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.tab{flex:1 1 120px}
+section.step{border-top:1px solid var(--line);padding:16px 0 6px}
+section.step:first-child{border-top:0;padding-top:0}
+h2{font-size:20px;margin:0 0 10px;display:flex;gap:10px;align-items:center}
+h2 i{font-style:normal;width:28px;height:28px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-size:14px;flex:none}
+label{display:block;font-size:14px;font-weight:600;margin:10px 0 4px}
+input,select,textarea{width:100%;font:16px Inter,sans-serif;padding:11px 12px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);min-height:46px}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid color-mix(in srgb,var(--red) 45%,transparent);outline-offset:1px;border-color:var(--red)}
+.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+button{font:600 16px Inter,sans-serif;min-height:48px;padding:10px 16px;border-radius:12px;border:1.5px solid var(--ink);background:var(--bg);color:var(--ink);cursor:pointer;flex:1 1 140px}
+button.pri{background:var(--red);border-color:var(--red);color:#fff}
+button.dark{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+button:disabled{opacity:.45;cursor:default}
+.tab[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.disc{font:800 15px Archivo,sans-serif;color:var(--red);white-space:nowrap}
+.note{font-size:14px;color:var(--mut);margin:8px 0 0}
+.msg{margin-top:10px;padding:10px 12px;border-radius:10px;font-size:14px;display:none}
+.msg.on{display:block}.msg.err{background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--ink)}.msg.ok{background:color-mix(in srgb,#1b8a4b 14%,transparent)}
+.keyset{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.keyset code{background:var(--soft);padding:8px 10px;border-radius:8px;font-size:15px}
+details{border:1.5px solid var(--line);border-radius:12px;padding:4px 12px;margin-top:12px}
+summary{cursor:pointer;font-weight:600;min-height:40px;display:flex;align-items:center}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid #fff;border-right-color:transparent;border-radius:50%;animation:r .8s linear infinite;vertical-align:-3px;margin-right:8px}
+@keyframes r{to{transform:rotate(1turn)}}
+@media(prefers-reduced-motion:reduce){.spin{animation:none}}
+input[type=file]{display:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>Immagini Prodotti <span>Detail</span></h1>
+  <p class="sub">Parrotta Pronto Moda · scheda prodotto con prezzo promo</p>
+</header>
+<main>
+  <div class="stage">
+    <div class="frame" id="frame">
+      <canvas id="cv" width="1080" height="1350" hidden></canvas>
+      <div class="empty" id="empty"><div><b>Carica la foto del capo</b>Qui comparirà la scheda pronta da inviare</div></div>
+    </div>
+    <div class="tabs" id="tabs" hidden>
+      <button class="tab" id="tOrig" aria-pressed="true">Foto originale</button>
+      <button class="tab" id="tAi" aria-pressed="false" disabled>Versione IA</button>
+    </div>
+  </div>
+
+  <div>
+    <section class="step">
+      <h2><i>1</i>Foto del capo</h2>
+      <div class="btns">
+        <button class="dark" id="bCam">Scatta foto</button>
+        <button id="bGal">Dalla galleria</button>
+      </div>
+      <input type="file" id="fCam" accept="image/*" capture="environment">
+      <input type="file" id="fGal" accept="image/*">
+      <p class="note">Va bene anche la foto ricevuta su WhatsApp da un collaboratore.</p>
+    </section>
+
+    <section class="step">
+      <h2><i>2</i>Codice e prezzi</h2>
+      <label for="code">Codice prodotto</label>
+      <input id="code" autocomplete="off" placeholder="Es. PPM-24518">
+      <div class="row">
+        <div><label for="price">Prezzo €</label><input id="price" inputmode="decimal" placeholder="49,90"></div>
+        <div><label for="promo">Prezzo promo €</label><input id="promo" inputmode="decimal" placeholder="34,90"></div>
+      </div>
+      <p class="note">Sconto: <span class="disc" id="disc">—</span></p>
+      <label for="extra">Riga in basso (facoltativa)</label>
+      <input id="extra" maxlength="60" placeholder="Es. Offerta valida fino al 30 novembre">
+    </section>
+
+    <section class="step">
+      <h2><i>3</i>Indossato in città con IA</h2>
+      <div class="row">
+        <div><label for="who">Modello</label>
+          <select id="who"><option value="woman">Donna</option><option value="man">Uomo</option><option value="child">Bambino/a</option></select></div>
+        <div><label for="env">Ambiente</label>
+          <select id="env">
+            <option value="a modern Italian city street with shop windows, natural daylight">Via cittadina</option>
+            <option value="a historic Italian old-town street with stone buildings, warm afternoon light">Centro storico</option>
+            <option value="an urban seafront promenade in a southern Italian town, soft golden hour">Lungomare urbano</option>
+            <option value="a city street in the evening with warm shop lights and soft bokeh">Città di sera</option>
+          </select></div>
+      </div>
+      <div class="btns"><button class="pri" id="bAi" disabled>Crea versione indossata</button></div>
+      <div class="msg" id="aiMsg"></div>
+      <details id="set">
+        <summary>Impostazioni Gemini</summary>
+        <div id="keyBox"></div>
+        <label for="model">Modello immagini</label>
+        <select id="model">
+          <option value="gemini-3.1-flash-image">Nano Banana 2 (consigliato)</option>
+          <option value="gemini-3-pro-image">Nano Banana Pro (più qualità, più lento)</option>
+          <option value="gemini-3.1-flash-lite-image">Nano Banana 2 Lite (più veloce)</option>
+          <option value="gemini-2.5-flash-image">Nano Banana (vecchio)</option>
+        </select>
+        <p class="note">La chiave resta solo in questo telefono e va solo a Google. Non condividere il link di questa pagina con la chiave inserita su telefoni di altri.</p>
+      </details>
+    </section>
+
+    <section class="step">
+      <h2><i>4</i>Invia</h2>
+      <div class="btns">
+        <button class="pri" id="bShare" disabled>Condividi (WhatsApp, Drive)</button>
+        <button id="bSave" disabled>Salva immagine</button>
+      </div>
+      <div class="btns"><button id="bText" disabled>Copia testo per WhatsApp</button><button id="bNew">Nuova scheda</button></div>
+      <div class="msg" id="outMsg"></div>
+      <p class="note">Su Android, dal menu Condividi scegli "Salva su Drive" e la cartella di Parrotta Pronto Moda.</p>
+    </section>
+  </div>
+</main>
+<script>
+{
+const $=id=>document.getElementById(id);
+const cv=$('cv'),cx=cv.getContext('2d');
+const S={orig:null,ai:null,view:'orig'};
+const LS={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v);return true}catch(e){return false}}};
+const num=v=>{const n=parseFloat(String(v).replace(/\s|€/g,'').replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.'));return isFinite(n)?n:null};
+const eur=n=>n.toLocaleString('it-IT',{style:'currency',currency:'EUR'});
+const say=(el,t,kind)=>{el.textContent=t;el.className='msg on '+(kind||'')};
+const hush=el=>{el.className='msg'};
+
+function loadImg(src){return new Promise((ok,ko)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ko;i.src=src})}
+async function pick(file){
+  if(!file)return;
+  const url=URL.createObjectURL(file);
+  const img=await loadImg(url);
+  const m=1600,k=Math.min(1,m/Math.max(img.width,img.height));
+  const c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+  URL.revokeObjectURL(url);
+  S.orig=await loadImg(c.toDataURL('image/jpeg',.88));S.ai=null;S.view='orig';
+  $('tAi').disabled=true;hush($('aiMsg'));
+  draw();
+}
+$('bCam').onclick=()=>$('fCam').click();
+$('bGal').onclick=()=>$('fGal').click();
+$('fCam').onchange=e=>pick(e.target.files[0]);
+$('fGal').onchange=e=>pick(e.target.files[0]);
+
+function cover(img,x,y,w,h){const r=Math.max(w/img.width,h/img.height),iw=img.width*r,ih=img.height*r;cx.drawImage(img,x+(w-iw)/2,y+(h-ih)/2.4,iw,ih)}
+function rrect(x,y,w,h,r){cx.beginPath();cx.roundRect(x,y,w,h,r);cx.fill()}
+
+function draw(){
+  const img=S.view==='ai'&&S.ai?S.ai:S.orig;
+  const has=!!img;
+  cv.hidden=!has;$('empty').hidden=has;$('tabs').hidden=!has;
+  $('tOrig').setAttribute('aria-pressed',S.view==='orig');$('tAi').setAttribute('aria-pressed',S.view==='ai');
+  const p=num($('price').value),q=num($('promo').value);
+  const okP=p&&q&&q<p;
+  $('disc').textContent=okP?'-'+Math.round((1-q/p)*100)+'%':(p&&q?'il promo deve essere più basso':'—');
+  ['bAi','bShare','bSave','bText'].forEach(id=>$(id).disabled=!has);
+  if(!has)return;
+  const W=1080,H=1350;
+  cx.clearRect(0,0,W,H);cx.fillStyle='#eee';cx.fillRect(0,0,W,H);
+  cover(img,0,0,W,H);
+  const g=cx.createLinearGradient(0,H*.5,0,H);g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,.78)');
+  cx.fillStyle=g;cx.fillRect(0,H*.5,W,H*.5);
+  cx.textBaseline='middle';
+  cx.font='800 30px Archivo, sans-serif';
+  const brand='PARROTTA PRONTO MODA',bw=cx.measureText(brand).width+48;
+  cx.fillStyle='#fff';rrect(40,40,bw,64,32);cx.fillStyle='#151515';cx.fillText(brand,64,73);
+  if(okP){
+    const d='-'+Math.round((1-q/p)*100)+'%';
+    cx.fillStyle='#d7193f';cx.beginPath();cx.arc(W-130,140,96,0,Math.PI*2);cx.fill();
+    cx.fillStyle='#fff';cx.textAlign='center';cx.font='900 64px Archivo, sans-serif';cx.fillText(d,W-130,144);cx.textAlign='left';
+  }
+  const code=$('code').value.trim(),extra=$('extra').value.trim();
+  let y=H-60;
+  if(extra){cx.fillStyle='rgba(255,255,255,.9)';cx.font='500 30px Inter, sans-serif';cx.fillText(extra,48,y);y-=64}
+  if(q){
+    cx.font='900 120px Archivo, sans-serif';const t=eur(q),tw=cx.measureText(t).width;
+    cx.fillStyle='#d7193f';rrect(36,y-150,tw+56,150,18);cx.fillStyle='#fff';cx.fillText(t,64,y-70);
+    if(p&&okP){cx.font='700 54px Archivo, sans-serif';const o=eur(p),ow=cx.measureText(o).width,ox=36+tw+56+28;
+      cx.fillStyle='rgba(255,255,255,.85)';cx.fillText(o,ox,y-70);cx.fillRect(ox-4,y-72,ow+8,5)}
+    y-=178;
+  }else if(p){cx.font='900 110px Archivo, sans-serif';cx.fillStyle='#fff';cx.fillText(eur(p),48,y-70);y-=170}
+  if(code){cx.fillStyle='#fff';cx.font='600 38px Inter, sans-serif';cx.fillText('Cod. '+code,48,y)}
+}
+['code','price','promo','extra'].forEach(id=>$(id).addEventListener('input',draw));
+$('tOrig').onclick=()=>{S.view='orig';draw()};
+$('tAi').onclick=()=>{if(S.ai){S.view='ai';draw()}};
+if(document.fonts)document.fonts.ready.then(draw);
+
+/* chiave Gemini: salvata solo su questo telefono */
+function keyUI(){
+  const k=LS.get('ppm_gemini_key');
+  $('keyBox').innerHTML=k
+    ?'<label>Chiave API Gemini</label><div class="keyset"><code>salvata ••••'+k.slice(-4).replace(/[<>&]/g,'')+'</code><button id="kDel" style="flex:0 1 auto">Cambia</button></div>'
+    :'<label for="kIn">Chiave API Gemini</label><input id="kIn" type="password" autocomplete="off" placeholder="Incolla la chiave da Google AI Studio"><div class="btns"><button class="dark" id="kSave">Salva chiave</button></div>';
+  if(k)$('kDel').onclick=()=>{LS.set('ppm_gemini_key',null);keyUI()};
+  else $('kSave').onclick=()=>{const v=$('kIn').value.trim();if(!v)return;
+    if(!LS.set('ppm_gemini_key',v)){S.tmpKey=v}keyUI();if(!LS.get('ppm_gemini_key')&&S.tmpKey)$('keyBox').insertAdjacentHTML('beforeend','<p class="note">Questo browser non salva dati: la chiave vale solo finché la pagina resta aperta.</p>')};
+}
+keyUI();
+const mSel=$('model');const mm=LS.get('ppm_model');if(mm)mSel.value=mm;mSel.onchange=()=>LS.set('ppm_model',mSel.value);
+
+function prompt(){
+  const who={woman:'an adult female model',man:'an adult male model',child:'a child model, natural and age-appropriate pose'}[$('who').value];
+  return 'Take the clothing item shown in this photo and create a realistic, high-end fashion e-commerce photograph of '+who+' wearing exactly this item, standing or walking naturally in '+$('env').value+'. Keep the garment identical: same colour, fabric, texture, pattern, cut, length, buttons, prints and details. Complete the outfit with simple neutral pieces that do not distract. Vertical 4:5 framing, three-quarter or full-figure view, the garment clearly visible and in focus, background softly blurred. Photorealistic, no text, no logos added, no watermark.';
+}
+$('bAi').onclick=async()=>{
+  const key=LS.get('ppm_gemini_key')||S.tmpKey;
+  if(!key){$('set').open=true;say($('aiMsg'),'Inserisci prima la chiave API Gemini nelle impostazioni qui sotto.','err');return}
+  const b=$('bAi');b.disabled=true;b.innerHTML='<span class="spin"></span>Gemini sta lavorando…';
+  say($('aiMsg'),'Ci vogliono di solito 10–40 secondi.','');
+  try{
+    const data=S.orig.src.split(',')[1];
+    const body={contents:[{parts:[{text:prompt()},{inline_data:{mime_type:'image/jpeg',data}}]}],generationConfig:{responseModalities:['IMAGE'],imageConfig:{aspectRatio:'4:5'}}};
+    let r;
+    try{r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+mSel.value+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify(body)})}
+    catch(e){throw new Error('BLOCK')}
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error((j.error&&j.error.message)||('Errore '+r.status));
+    const parts=(j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[];
+    const im=parts.map(x=>x.inlineData||x.inline_data).find(Boolean);
+    if(!im)throw new Error('Gemini non ha restituito un\'immagine (forse filtro di sicurezza). Riprova con un\'altra foto o un altro ambiente.');
+    S.ai=await loadImg('data:'+(im.mimeType||im.mime_type||'image/png')+';base64,'+im.data);
+    S.view='ai';$('tAi').disabled=false;draw();
+    say($('aiMsg'),'Fatto. Puoi passare tra foto originale e versione IA sopra la scheda.','ok');
+  }catch(e){
+    say($('aiMsg'),e.message==='BLOCK'
+      ?'Qui la connessione a Gemini è bloccata (succede nell\'anteprima dentro Claude). Apri la versione pubblicata sul tuo GitHub Pages. Intanto puoi creare la scheda con la foto originale.'
+      :'Errore Gemini: '+e.message,'err');
+  }finally{b.disabled=false;b.textContent='Crea versione indossata'}
+};
+
+/* uscita */
+const fname=()=>'promo_'+(($('code').value.trim()||'prodotto').replace(/[^\w-]+/g,'_'))+'.jpg';
+const blob=()=>new Promise(ok=>cv.toBlob(ok,'image/jpeg',.92));
+function txt(){
+  const p=num($('price').value),q=num($('promo').value),c=$('code').value.trim(),x=$('extra').value.trim();
+  let t='PARROTTA PRONTO MODA';if(c)t+='\nCod. '+c;
+  if(p&&q&&q<p)t+='\nDa '+eur(p)+' a '+eur(q)+' (-'+Math.round((1-q/p)*100)+'%)';else if(q||p)t+='\nPrezzo '+eur(q||p);
+  if(x)t+='\n'+x;return t;
+}
+let DL=null;
+if(window.claude&&claude.use)claude.use('downloads').then(d=>{DL=d}).catch(()=>{});
+async function save(b){
+  if(DL){try{await DL.save({filename:fname(),data:b});say($('outMsg'),'Immagine salvata.','ok');return}catch(e){}}
+  try{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=fname();document.body.appendChild(a);a.click();a.remove();
+    say($('outMsg'),'Se il download non parte, tieni premuto sulla scheda e scegli "Salva immagine".','')}
+  catch(e){say($('outMsg'),'Tieni premuto sulla scheda e scegli "Salva immagine".','')}
+}
+$('bShare').onclick=async()=>{
+  const b=await blob();const f=new File([b],fname(),{type:'image/jpeg'});
+  try{
+    if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],text:txt()});say($('outMsg'),'Condivisione aperta.','ok');return}
+  }catch(e){if(e.name==='AbortError')return}
+  say($('outMsg'),'Qui la condivisione diretta non è disponibile: salvo l\'immagine, poi inviala da WhatsApp.','');save(b);
+};
+$('bSave').onclick=async()=>save(await blob());
+$('bText').onclick=async()=>{try{await navigator.clipboard.writeText(txt());say($('outMsg'),'Testo copiato: incollalo nel messaggio WhatsApp.','ok')}catch(e){say($('outMsg'),txt(),'')}};
+$('bNew').onclick=()=>{S.orig=S.ai=null;S.view='orig';['code','price','promo','extra'].forEach(id=>$(id).value='');$('fCam').value=$('fGal').value='';hush($('aiMsg'));hush($('outMsg'));draw();scrollTo({top:0,behavior:'smooth'})};
+draw();
+}
+</script>
+</body>
+</html>
