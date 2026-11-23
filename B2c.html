@@ -1225,7 +1225,8 @@
     const mappa = new Map();
     (bd.varianti || []).forEach(v => mappa.set(String(v.ean), { ean: String(v.ean), misura: String(v.misura || '').trim(), colore: String(v.colore || '').trim(),
       bigdata: !v.soloCatalogo, altro: !!v.altroCodice, brand: v.brand || '', descr: v.descrizione || '',
-      nomeB2c: v.nomeB2c || '', descrB2c: v.descrizioneB2c || '' }));
+      nomeB2c: v.nomeB2c || '', descrB2c: v.descrizioneB2c || '',
+      codiceD: String(v.soloCatalogo ? '' : (v.codice == null ? '' : v.codice)).trim() }));   // codice prodotto di ARCHIVIO, colonna D
     (sc.varianti || []).forEach(v => {
       const e = String(v.ean);
       const x = mappa.get(e) || { ean: e, misura: String(v.misura || ''), colore: String(v.colore || ''), bigdata: false, altro: false, brand: '', descr: '' };
@@ -1251,7 +1252,8 @@
       soloB2B: varianti.length > 0 && varianti.every(v => v.bloccato),
       senzaFoto: false,
       campi: {
-        nome: c.nome || v0.nomeB2c || d.descrizione || v0.descr || '', descrizione: c.descrizione || v0.descrB2c || '', categoria: c.categoria || '', brand: c.brand || v0.brand || '',
+        // nome proposto: il codice della colonna D di ARCHIVIO (se il prodotto è già nel B2C resta il nome salvato)
+        nome: c.nome || v0.codiceD || (varianti.find(v => v.codiceD) || {}).codiceD || v0.nomeB2c || d.descrizione || v0.descr || '', descrizione: c.descrizione || v0.descrB2c || '', categoria: c.categoria || '', brand: c.brand || v0.brand || '',
         tipo: c.tipo || d.tipo || '', materiale: c.materiale || d.materiale || '',
         prezzo: r ? Number(r.prezzo).toFixed(2).replace('.', ',') : prBd, sconto: r && r.sconto ? r.sconto : '', fino: r ? r.fino : '',
         nota: r ? (r.nota || '') : '', negozi: r ? (r.negozi || []) : [], abbinati: r ? (r.abbinati || []) : [], min30: r && r.min ? Number(r.min).toFixed(2).replace('.', ',') : '', attivo: r ? r.attivo : true, prevendita: !!c.prevendita
