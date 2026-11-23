@@ -1100,9 +1100,11 @@
       const codice = String(bd.codice || q).trim();
       const sc = (sc0.ok && codice.toUpperCase() === q.toUpperCase()) ? sc0 : await apiAdmin('b2cscheda', '&q=' + encodeURIComponent(codice));
       if (!sc.ok) throw new Error(sc.error || 'Risposta non valida');
-      console.log('[carico] tempi', Object.assign({ pagina: Date.now() - t0 }, bd.tempi || {}));
+      const tm = bd.tempi || {}, sec = ms => (ms / 1000).toFixed(1).replace('.', ',') + ' s';
+      console.log('[carico] tempi', Object.assign({ pagina: Date.now() - t0 }, tm));
       preparaCarico(q, codice, bd, sc);
       disegnaCarico(messaggio);
+      avviso('⏱ ' + sec(Date.now() - t0) + (tm.totale != null ? ' · BIGDATA ' + sec(tm.bigdata) + ' · catalogo ' + sec(tm.catalogo) + ' · foto ' + sec(tm.foto) : ''), 8000);
     } catch (e) {
       $('car-ris').innerHTML = '<p class="errore">' + esc(e.message === 'Failed to fetch' ? 'Server non raggiungibile: hai pubblicato la nuova versione dello script?' : e.message) + '</p>';
     } finally { btn.disabled = false; btn.textContent = 'Cerca'; }
@@ -1111,7 +1113,8 @@
   function preparaCarico(ricerca, codice, bd, sc) {
     const mappa = new Map();
     (bd.varianti || []).forEach(v => mappa.set(String(v.ean), { ean: String(v.ean), misura: String(v.misura || '').trim(), colore: String(v.colore || '').trim(),
-      bigdata: !v.soloCatalogo, altro: !!v.altroCodice, brand: v.brand || '', descr: v.descrizione || '' }));
+      bigdata: !v.soloCatalogo, altro: !!v.altroCodice, brand: v.brand || '', descr: v.descrizione || '',
+      nomeB2c: v.nomeB2c || '', descrB2c: v.descrizioneB2c || '' }));
     (sc.varianti || []).forEach(v => {
       const e = String(v.ean);
       const x = mappa.get(e) || { ean: e, misura: String(v.misura || ''), colore: String(v.colore || ''), bigdata: false, altro: false, brand: '', descr: '' };
@@ -1137,7 +1140,7 @@
       soloB2B: varianti.length > 0 && varianti.every(v => v.bloccato),
       senzaFoto: false,
       campi: {
-        nome: c.nome || d.descrizione || v0.descr || '', descrizione: c.descrizione || '', categoria: c.categoria || '', brand: c.brand || v0.brand || '',
+        nome: c.nome || v0.nomeB2c || d.descrizione || v0.descr || '', descrizione: c.descrizione || v0.descrB2c || '', categoria: c.categoria || '', brand: c.brand || v0.brand || '',
         tipo: c.tipo || d.tipo || '', materiale: c.materiale || d.materiale || '',
         prezzo: r ? Number(r.prezzo).toFixed(2).replace('.', ',') : prBd, sconto: r && r.sconto ? r.sconto : '', fino: r ? r.fino : '',
         nota: r ? (r.nota || '') : '', negozi: r ? (r.negozi || []) : [], abbinati: r ? (r.abbinati || []) : [], min30: r && r.min ? Number(r.min).toFixed(2).replace('.', ',') : '', attivo: r ? r.attivo : true, prevendita: !!c.prevendita
