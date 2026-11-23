@@ -81,6 +81,14 @@
   #per-te .riga-pt { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; }
   #per-te .card { flex: 0 0 150px; scroll-snap-align: start; }
   #per-te .taglia-pt { font-size: 11px; font-weight: 700; color: var(--ok); margin-top: 2px; }
+  /* nuovi arrivi */
+  #nuovi { display: none; max-width: 1200px; margin: 10px auto 0; padding: 0 12px; }
+  #nuovi.show { display: block; }
+  #nuovi h2 { font-size: 15px; margin: 0 0 8px; display: flex; align-items: baseline; gap: 8px; }
+  #nuovi h2 small { font-size: 12px; font-weight: 600; color: var(--mute); }
+  #nuovi .riga-pt { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; }
+  #nuovi .card { flex: 0 0 150px; scroll-snap-align: start; }
+  .badge-nuovo { position: absolute; left: 8px; bottom: 8px; background: #111; color: #fff; font-weight: 800; font-size: 10.5px; letter-spacing: .06em; padding: 4px 8px; border-radius: 8px; }
   .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
   .tag { background: #eee; border-radius: 10px; padding: 3px 9px; font-size: 11.5px; font-weight: 600; }
   .foglio .prezzo .nuovo { font-size: 26px; }
@@ -240,8 +248,8 @@
   <div class="riga">
     <input id="cerca" type="search" placeholder="Cerca un prodotto, un colore…" oninput="filtra()">
     <select id="ordina" onchange="filtra()" aria-label="Ordina">
+      <option value="novita" selected>Novità</option>
       <option value="sconto">Maggior sconto</option>
-      <option value="novita">Novità</option>
       <option value="prezzo-">Prezzo più basso</option>
       <option value="prezzo+">Prezzo più alto</option>
     </select>
@@ -250,6 +258,7 @@
 </div>
 <div id="neg-bar"></div>
 <div id="filtro-tag"></div>
+<div id="nuovi"></div>
 <div id="per-te"></div>
 <div id="conta"></div>
 
@@ -351,6 +360,7 @@
     { icona: '⭐', testo: 'CLIENTE REGISTRATO? ACCUMULI ANCHE I PUNTI FEDELTÀ SU OGNI ACQUISTO', breve: 'Se sei cliente registrato accumuli anche i punti su ogni acquisto' }
   ];
   const TITOLO_ORDINE = 'ORDINE BLACK FRIDAY';
+  const NUOVO_GIORNI = 7;   // un prodotto è "nuovo" se caricato negli ultimi N giorni
   const CACHE_KEY = 'b2c_cache_v1', CARRELLO_KEY = 'b2c_carrello_v1', NOME_KEY = 'b2c_nome', PROFILO_KEY = 'b2c_profilo_v1', VID_KEY = 'b2c_vid';
 
   // ===== STATO =====
@@ -486,6 +496,15 @@
     if (ia >= 0) return -1; if (ib >= 0) return 1;
     return String(a).localeCompare(String(b), 'it');
   }
+  // data di carico in formato aaaa-mm-gg (accetta anche gg/mm/aaaa e date complete)
+  function dataISO(x) {
+    const t = String(x || '').trim(); if (!t) return '';
+    let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t); if (m) return m[1] + '-' + m[2] + '-' + m[3];
+    m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/.exec(t); if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+    const d = new Date(t); if (isNaN(d)) return '';
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  const LIMITE_NUOVO = (() => { const d = new Date(); d.setDate(d.getDate() - NUOVO_GIORNI); return dataISO(d.toISOString().slice(0, 10)); })();
   function raggruppa() {
     const mappa = new Map();
     VAR = {};
@@ -514,6 +533,8 @@
     }));
     GRUPPI.forEach(g => {
       g.esaurito = !g.varianti.some(v => v.disponibile);
+      g.dataISO = dataISO(g.dataCarico);
+      g.nuovo = !!g.dataISO && g.dataISO >= LIMITE_NUOVO;
       g.ultimi = g.varianti.some(v => v.disponibile && v.ultimi);
       g.notaPulita = String(g.nota).replace(/#[\p{L}\p{N}_]+/gu, '').replace(/[ \t]{2,}/g, ' ').trim();
       g.hashtag = (String(g.descrizione + ' ' + g.nota).match(/#[\p{L}\p{N}_]+/gu) || []).map(t => t.slice(1).toLowerCase());
@@ -552,6 +573,21 @@
     if (PROF.v[g.key]) sc *= 0.5;   // già visto: scende nei suggerimenti
     return { sc, taglia };
   }
+  function disegnaNuovi() {
+    const box = $('nuovi');
+    const libero = CAT === 'Tutte' && !TAG && !$('cerca').value.trim();
+    const lista = libero ? GRUPPI.filter(g => g.nuovo && !g.esaurito && (!NEG || !SOLONEG || inNeg(g)))
+      .sort((a, b) => (a.dataISO < b.dataISO ? 1 : a.dataISO > b.dataISO ? -1 : b.pos - a.pos)).slice(0, 12) : [];
+    if (!lista.length) { box.classList.remove('show'); return; }
+    box.innerHTML = '<h2>🆕 Appena arrivati <small>' + lista.length + (lista.length === 1 ? ' novità' : ' novità') + '</small></h2><div class="riga-pt">' + lista.map(g => {
+      const s = scontoAttivo(g);
+      return `<div class="card" data-k="${esc(g.key)}"><div class="foto"><img loading="lazy" decoding="async" src="${esc(g.imgs[0] || '')}" alt="${esc(g.nome)}" onerror="this.onerror=null;this.style.visibility='hidden'">
+        ${s ? `<span class="badge-sconto">-${Number.isInteger(s) ? s : s.toFixed(1)}%</span>` : ''}<span class="badge-nuovo">NUOVO</span></div>
+        <div class="corpo"><h3>${esc(g.nome)}</h3><div class="prezzo">${prezzoHtml(g)}</div></div></div>`;
+    }).join('') + '</div>';
+    box.classList.add('show');
+  }
+  $('nuovi').addEventListener('click', e => { const c = e.target.closest('.card'); if (c) apriProdotto(c.dataset.k); });
   function disegnaPerTe() {
     const box = $('per-te');
     const libero = CAT === 'Tutte' && !TAG && !$('cerca').value.trim();
@@ -589,7 +625,7 @@
     const termini = norm($('cerca').value).split(/\s+/).filter(Boolean);
     const ord = $('ordina').value;
     let lista = GRUPPI.filter(g => (CAT === 'Tutte' || g.categoria === CAT) && (!TAG || g.tags.indexOf(TAG) >= 0) && (!NEG || !SOLONEG || inNeg(g)) && termini.every(t => g.testo.indexOf(t) >= 0));
-    const cmpNov = (a, b) => (a.dataCarico < b.dataCarico ? 1 : a.dataCarico > b.dataCarico ? -1 : b.pos - a.pos);
+    const cmpNov = (a, b) => (a.dataISO < b.dataISO ? 1 : a.dataISO > b.dataISO ? -1 : b.pos - a.pos);
     lista.sort((a, b) => (a.esaurito - b.esaurito) || (NEG && !SOLONEG ? inNeg(b) - inNeg(a) : 0) || (
       ord === 'prezzo-' ? prezzoFinale(a) - prezzoFinale(b) :
       ord === 'prezzo+' ? prezzoFinale(b) - prezzoFinale(a) :
@@ -597,6 +633,7 @@
       (scontoAttivo(b) - scontoAttivo(a)) || cmpNov(a, b)));
     $('conta').textContent = GRUPPI.length ? lista.length + (lista.length === 1 ? ' articolo' : ' articoli') : '';
     disegnaGriglia(lista);
+    disegnaNuovi();
     disegnaPerTe();
   }
   $('chips').addEventListener('click', e => {
@@ -621,6 +658,7 @@
         <div class="foto"><img loading="lazy" decoding="async" src="${esc(g.imgs[0] || '')}" alt="${esc(g.nome)}" onerror="this.onerror=null;this.style.visibility='hidden'">
           ${s ? `<span class="badge-sconto">-${Number.isInteger(s) ? s : s.toFixed(1)}%</span>` : ''}
           ${!g.esaurito && g.ultimi ? '<span class="badge-ultimi">Ultimi pezzi</span>' : ''}
+          ${!g.esaurito && g.nuovo ? '<span class="badge-nuovo">NUOVO</span>' : ''}
           ${g.esaurito ? '<div class="esaurito">ESAURITO</div>' : ''}
           <button class="condividi" data-share="${esc(g.key)}" aria-label="Condividi su WhatsApp" title="Condividi su WhatsApp">📲</button></div>
         <div class="corpo"><h3>${esc(g.nome)}</h3>
