@@ -1118,7 +1118,7 @@
       statoBig('⏳ Scarico BIGDATA… (una volta al giorno, può richiedere qualche secondo)');
       try {
         const d = await scaricaBigdata();
-        const s = { campi: d.campi, righe: d.righe, generato: d.generato, giorno: oggi };
+        const s = { campi: d.campi, righe: d.righe, campiProdotto: d.campiProdotto || [], prodotti: d.prodotti || {}, generato: d.generato, giorno: oggi };
         try { await IDB.set('bigdata', s); } catch (e) {}
         BIG = indicizzaBig(s); statoBig();
         return BIG;
@@ -1147,7 +1147,15 @@
         if (!codice) codice = B.righe[r1[0]][F.interno] || q;
       }
     }
-    const varianti = righe.slice(0, 400).map(i => { const r = B.righe[i], v = {}; B.campi.forEach((c, j) => { v[c] = r[j]; }); if (!v.codice) v.codice = codice; return v; });
+    const varianti = righe.slice(0, 400).map(i => {
+      const r = B.righe[i], v = {};
+      B.campi.forEach((c, j) => { v[c] = r[j]; });
+      // dati uguali per tutto il prodotto (descrizione, brand, nome e descrizione B2C)
+      const pr = B.prodotti && B.prodotti[v.codice || v.interno || v.ean];
+      if (pr) (B.campiProdotto || []).forEach((c, j) => { v[c] = pr[j]; });
+      if (!v.codice) v.codice = codice;
+      return v;
+    });
     return { codice: String(codice || q).trim(), varianti };
   }
   const postAdmin = body => fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ c: ADMIN }, body)) })
