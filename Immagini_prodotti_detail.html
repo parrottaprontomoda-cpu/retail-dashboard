@@ -114,6 +114,12 @@ input[type=file]{display:none}
           </select></div>
       </div>
       <div class="btns"><button class="pri" id="bAi" disabled>Crea versione indossata</button></div>
+      <p class="note"><b>Gratis con il tuo abbonamento Gemini:</b> copia il testo, apri l'app Gemini, allega la foto del capo e incolla. Salva l'immagine che ti dà e caricala qui.</p>
+      <div class="btns">
+        <button class="dark" id="bPr">Copia testo per Gemini</button>
+        <button id="bUp" disabled>Carica foto da Gemini</button>
+      </div>
+      <input type="file" id="fAi" accept="image/*">
       <div class="msg" id="aiMsg"></div>
       <details id="set">
         <summary>Impostazioni Gemini</summary>
@@ -181,7 +187,7 @@ function draw(){
   const p=num($('price').value),q=num($('promo').value);
   const okP=p&&q&&q<p;
   $('disc').textContent=okP?'-'+Math.round((1-q/p)*100)+'%':(p&&q?'il promo deve essere più basso':'—');
-  ['bAi','bShare','bSave','bText'].forEach(id=>$(id).disabled=!has);
+  ['bAi','bUp','bShare','bSave','bText'].forEach(id=>$(id).disabled=!has);
   if(!has)return;
   const W=1080,H=1350;
   cx.clearRect(0,0,W,H);cx.fillStyle='#eee';cx.fillRect(0,0,W,H);
@@ -257,6 +263,9 @@ $('bAi').onclick=async()=>{
   }finally{b.disabled=false;b.textContent='Crea versione indossata'}
 };
 
+$('bPr').onclick=async()=>{const t=prompt();try{await navigator.clipboard.writeText(t);say($('aiMsg'),'Testo copiato. Ora apri l\'app Gemini, allega la foto del capo e incolla.','ok')}catch(e){say($('aiMsg'),t,'')}};
+$('bUp').onclick=()=>$('fAi').click();
+$('fAi').onchange=async e=>{const f=e.target.files[0];if(!f)return;const u=URL.createObjectURL(f);S.ai=await loadImg(u);S.view='ai';$('tAi').disabled=false;draw();say($('aiMsg'),'Foto di Gemini caricata nella scheda.','ok')};
 /* uscita */
 const fname=()=>'promo_'+(($('code').value.trim()||'prodotto').replace(/[^\w-]+/g,'_'))+'.jpg';
 const blob=()=>new Promise(ok=>cv.toBlob(ok,'image/jpeg',.92));
