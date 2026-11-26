@@ -441,6 +441,8 @@
                 <button type="button" class="btn btn-warning" id="inv-genera"><i class="fas fa-magic me-2"></i> Genera righe rettifica</button>
                 <button type="button" class="btn btn-outline-primary" id="inv-copia" disabled><i class="fas fa-copy me-2"></i> Copia righe per Elenco Note</button>
                 <button type="button" class="btn btn-success" id="inv-excel" disabled><i class="fas fa-file-excel me-2"></i> Esporta righe Excel</button>
+                <button type="button" class="btn btn-danger" id="inv-archivia" disabled><i class="fas fa-cloud-upload-alt me-2"></i> Archivia su Elenco Note</button>
+                <button type="button" class="btn btn-outline-secondary" id="inv-collega" title="Collegamento al foglio NOTE (URL app web e codice di accesso)"><i class="fas fa-plug"></i></button>
             </div>
         </div>
     </div>
@@ -1535,6 +1537,7 @@
         document.getElementById('invBody').innerHTML = '<p class="text-muted mb-0">Seleziona un articolo e premi "Carica giacenze".</p>';
         document.getElementById('inv-copia').disabled = true;
         document.getElementById('inv-excel').disabled = true;
+        document.getElementById('inv-archivia').disabled = true;
         currentInvent = null;
         bootstrap.Modal.getOrCreateInstance(document.getElementById('inventarioModal')).show();
         if (target) loadInventario(target);
@@ -1700,6 +1703,7 @@
         body.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-warning"></div><p class="mt-2 text-muted">Lettura EAN da BIGDATA e calcolo giacenze su tutto lo storico...</p></div>';
         document.getElementById('inv-copia').disabled = true;
         document.getElementById('inv-excel').disabled = true;
+        document.getElementById('inv-archivia').disabled = true;
         try {
             const respCod = await gvizQuery(`SELECT * WHERE ${globalColIds['COD']} = ${codLit(cod)}`);
             const rows = gvizRowsToObjects(respCod).map(normalizeRow);
@@ -2040,12 +2044,13 @@
             });
             html += `</tbody><tfoot><tr><th colspan="6" class="text-end">Totale rettifica</th><th>${round3(tot)}</th><th></th><th>${eur(totVal)}</th></tr></tfoot></table>
                 ${noEan ? `<div class="alert alert-warning small py-2">${noEan} righe senza EAN: la variante non è in BIGDATA e non ha mai avuto un movimento con EAN in colonna ${RETTIFICA_COL_EAN}. Inseriscilo a mano dopo aver incollato.</div>` : ''}
-                <div class="alert alert-info small mb-0">Premi <strong>Copia righe</strong> e incollale nella prima riga libera del foglio NOTE (colonna A), oppure esporta in Excel.
+                <div class="alert alert-info small mb-0">Premi <strong>Archivia su Elenco Note</strong> per scriverle direttamente nella prima riga libera del foglio NOTE, oppure usa <strong>Copia righe</strong> / Excel.
                 Positivo = carico, negativo = scarico. Le righe hanno destinazione "${esc(RETTIFICA_DESTINAZIONE)}" e sono escluse dalle vendite nel riassortimento.</div>`;
         }
         document.getElementById('invRows').innerHTML = html;
         document.getElementById('inv-copia').disabled = !out.length;
         document.getElementById('inv-excel').disabled = !out.length;
+        document.getElementById('inv-archivia').disabled = !out.length;
     });
 
     // Colonne da esportare: da A fino all'ultima colonna valorizzata (per non toccare eventuali formule a destra)
@@ -2081,6 +2086,93 @@
         I.rows.forEach(r => sh.addRow(cols.map(h => r[h])));
         cols.forEach((h, i) => sh.getColumn(i + 1).width = Math.max(10, String(h).length + 2));
         await downloadWorkbook(wb, `Rettifiche_${String(I.cod).replace(/[^\w-]+/g, '_')}.xlsx`);
+    });
+
+    // ================= ARCHIVIAZIONE DIRETTA SU ELENCO NOTE =================
+    // URL dell'app web Apps Script (ArchiviaRettifiche.gs). Si può lasciare vuoto e inserirlo dal pulsante "Collegamento":
+    // URL e codice di accesso restano salvati solo in questo browser.
+    const RETTIFICA_WEBAPP_URL = '';
+    const RETT_CFG_KEY = 'rettifica_webapp_cfg_v1';
+    function rettCfg() { try { return JSON.parse(localStorage.getItem(RETT_CFG_KEY) || '{}') || {}; } catch (e) { return {}; } }
+    function rettSaveCfg(c) { try { localStorage.setItem(RETT_CFG_KEY, JSON.stringify(c)); } catch (e) {} }
+
+    async function rettPost(body) {
+        const c = rettCfg();
+        const url = c.url || RETTIFICA_WEBAPP_URL;
+        // text/plain: nessuna richiesta preliminare CORS verso Apps Script
+        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ token: c.token || '' }, body)) });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+    }
+
+    async function rettConfigura() {
+        const c = rettCfg();
+        const url = prompt("URL dell'app web Apps Script (finisce con /exec):", c.url || RETTIFICA_WEBAPP_URL);
+        if (url === null) return false;
+        const token = prompt('Codice di accesso (dal log di impostaCodiceAccesso):', c.token || '');
+        if (token === null) return false;
+        rettSaveCfg({ url: url.trim(), token: token.trim() });
+        try {
+            const r = await rettPost({ action: 'ping' });
+            alert(r.ok ? '✔ ' + r.info : 'Collegamento non riuscito: ' + r.error);
+            return !!r.ok;
+        } catch (e) {
+            alert('Collegamento non riuscito: ' + e.message + "\nControlla l'URL e che l'app web sia accessibile a \"Chiunque\".");
+            return false;
+        }
+    }
+    document.getElementById('inv-collega').addEventListener('click', rettConfigura);
+
+    function rettPayload(rows) {
+        const cols = rettificaColumns(rows);
+        const hEan = headerOfLetter(RETTIFICA_COL_EAN);
+        const eanNum = globalColTypes[hEan] === 'number';
+        const textCols = (!eanNum && hEan) ? [RETTIFICA_COL_EAN] : [];
+        const dateCols = [...new Set([globalColIds[COL.data], globalColIds['DATA']].filter(Boolean))];
+        const out = rows.map(r => {
+            const o = {};
+            cols.forEach(h => {
+                const v = r[h], L = globalColIds[h];
+                if (!L || v === '' || v === undefined || v === null) return;
+                o[L] = (h === hEan && eanNum && /^\d+$/.test(String(v))) ? Number(v) : v;
+            });
+            return o;
+        });
+        return { action: 'append', rows: out, idCol: globalColIds[COL.idril] || '', dateCols, textCols };
+    }
+
+    document.getElementById('inv-archivia').addEventListener('click', async function() {
+        const I = currentInvent;
+        if (!I || !I.rows.length) { alert('Genera prima le righe di rettifica.'); return; }
+        const c = rettCfg();
+        if (!(c.url || RETTIFICA_WEBAPP_URL) || !c.token) {
+            alert('Prima collega la dashboard al foglio NOTE (URL app web e codice di accesso).');
+            if (!(await rettConfigura())) return;
+        }
+        const tot = round3(I.rows.reduce((a, r) => a + (Number(r[COL.qta]) || 0), 0));
+        if (!confirm(`Archiviare ${I.rows.length} righe di rettifica di ${I.cod} (totale ${tot > 0 ? '+' : ''}${tot} pz) direttamente nel foglio NOTE di Elenco Note?`)) return;
+
+        const btn = this, html = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Archiviazione...'; btn.disabled = true;
+        const box = document.getElementById('invRows');
+        try {
+            const r = await rettPost(rettPayload(I.rows));
+            if (!r.ok) throw new Error(r.error || 'Errore sconosciuto');
+            box.insertAdjacentHTML('afterbegin', `<div class="alert alert-success py-2"><i class="fas fa-check-circle me-1"></i> Archiviate <strong>${r.n}</strong> righe nel foglio NOTE (righe ${r.firstRow}–${r.lastRow}). Ricarico le giacenze tra pochi secondi...</div>`);
+            I.rows = [];
+            document.getElementById('inv-copia').disabled = true;
+            document.getElementById('inv-excel').disabled = true;
+            // le quantità reali sono ora la giacenza contabile: le tolgo dalla sessione
+            Object.keys(invRealSession).forEach(k => { if (k.startsWith(I.cod + '||')) delete invRealSession[k]; });
+            setTimeout(() => loadInventario(I.cod), 4000);
+            btn.innerHTML = '<i class="fas fa-check me-2"></i> Archiviate';
+            return;
+        } catch (e) {
+            console.error(e);
+            box.insertAdjacentHTML('afterbegin', `<div class="alert alert-danger py-2"><i class="fas fa-exclamation-triangle me-1"></i> Archiviazione non riuscita: ${esc(e.message)}. Puoi sempre usare "Copia righe" o l'Excel.</div>`);
+            btn.disabled = false;
+        }
+        btn.innerHTML = html;
     });
 
     // ================= DETTAGLIO TABELLA =================
