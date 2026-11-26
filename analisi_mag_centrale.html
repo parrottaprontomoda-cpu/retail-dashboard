@@ -2096,13 +2096,45 @@
     function rettCfg() { try { return JSON.parse(localStorage.getItem(RETT_CFG_KEY) || '{}') || {}; } catch (e) { return {}; } }
     function rettSaveCfg(c) { try { localStorage.setItem(RETT_CFG_KEY, JSON.stringify(c)); } catch (e) {} }
 
-    async function rettPost(body) {
+    // Chiamata all'app web tramite <script> (JSONP): non è soggetta ai blocchi CORS del browser
+    let rettCbN = 0;
+    function rettCall(body) {
         const c = rettCfg();
-        const url = c.url || RETTIFICA_WEBAPP_URL;
-        // text/plain: nessuna richiesta preliminare CORS verso Apps Script
-        const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ token: c.token || '' }, body)) });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
+        const base = (c.url || RETTIFICA_WEBAPP_URL || '').trim();
+        if (!/^https:\/\/script\.google(usercontent)?\.com\/.+\/exec/.test(base)) return Promise.reject(new Error("URL non valido: deve essere l'URL dell'app web che finisce con /exec"));
+        return new Promise((resolve, reject) => {
+            const cb = 'rettCb_' + (++rettCbN) + '_' + Date.now();
+            const s = document.createElement('script');
+            let done = false;
+            const fine = () => { done = true; clearTimeout(t); try { delete window[cb]; } catch (e) { window[cb] = undefined; } s.remove(); };
+            const t = setTimeout(() => { if (!done) { fine(); reject(new Error("nessuna risposta dall'app web (tempo scaduto)")); } }, 60000);
+            window[cb] = res => { fine(); resolve(res); };
+            s.onerror = () => { if (!done) { fine(); reject(new Error("l'app web non risponde come previsto. Verifica: accesso \"Chiunque\" (non \"Chiunque con account Google\"), deployment aggiornato con il nuovo codice, URL /exec corretto")); } };
+            s.src = base + (base.includes('?') ? '&' : '?') + 'callback=' + cb + '&payload=' + encodeURIComponent(JSON.stringify(Object.assign({ token: c.token || '' }, body)));
+            document.body.appendChild(s);
+        });
+    }
+    // Invio a blocchi per non superare la lunghezza massima dell'indirizzo
+    async function rettPost(body) {
+        if (body.action !== 'append') return rettCall(body);
+        const parts = [];
+        let cur = [];
+        body.rows.forEach(r => {
+            const test = cur.concat([r]);
+            if (cur.length && encodeURIComponent(JSON.stringify(Object.assign({}, body, { rows: test }))).length > 6000) { parts.push(cur); cur = [r]; }
+            else cur = test;
+        });
+        if (cur.length) parts.push(cur);
+        let tot = 0, first = null, last = null;
+        for (let i = 0; i < parts.length; i++) {
+            const r = await rettCall(Object.assign({}, body, { rows: parts[i], part: i }));
+            if (!r.ok) {
+                if (i > 0) r.error = `${r.error} (già archiviate ${tot} righe su ${body.rows.length}: righe ${first}–${last})`;
+                return r;
+            }
+            tot += r.n; if (first === null) first = r.firstRow; last = r.lastRow;
+        }
+        return { ok: true, n: tot, firstRow: first, lastRow: last };
     }
 
     async function rettConfigura() {
@@ -2117,7 +2149,7 @@
             alert(r.ok ? '✔ ' + r.info : 'Collegamento non riuscito: ' + r.error);
             return !!r.ok;
         } catch (e) {
-            alert('Collegamento non riuscito: ' + e.message + "\nControlla l'URL e che l'app web sia accessibile a \"Chiunque\".");
+            alert('Collegamento non riuscito: ' + e.message + '.\n\nProva: apri l\'URL /exec in una finestra in incognito. Deve comparire {"ok":true,...}; se chiede di accedere a Google, l\'accesso dell\'app web non è su "Chiunque".');
             return false;
         }
     }
