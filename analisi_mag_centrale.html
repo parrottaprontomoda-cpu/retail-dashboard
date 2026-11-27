@@ -480,7 +480,9 @@
     // Colonne del foglio NOTE (per lettera) compilate nelle righe di rettifica:
     const RETTIFICA_COL_EAN = 'K';      // EAN della variante, preso dai movimenti della stessa variante
     const RETTIFICA_COL_PREZZO = 'G';   // valorizzazione unitaria della giacenza, copiata dai movimenti della variante
-    const RETTIFICA_COL_VALORE = 'O';   // totale valore della variazione = rettifica (N) × valorizzazione (G)
+    const RETTIFICA_COL_VALORE = 'O';
+    const RETTIFICA_COL_NRIGA = 'A';        // numero riga della registrazione: R<n> sulla prima riga ... R1 sull'ultima
+    const RETTIFICA_PREFISSO_NRIGA = 'R';   // totale valore della variazione = rettifica (N) × valorizzazione (G)
 
     // ---- CONFEZIONI (pezzi per confezione) ----
     const PZCONF_STORAGE_KEY = 'riassortimento_pz_conf_v1';
@@ -2025,6 +2027,14 @@
             const v0 = vs.find(v => v.noteC || v.noteS) || {};
             realStockOverrides[I.cod + '||' + (v0.noteC || c) + '||' + (v0.noteS || s)] = tot;
         });
+        // Colonna A: numero di riga della registrazione in ordine decrescente (prima riga R<n> ... ultima riga R1)
+        const hA = headerOfLetter(RETTIFICA_COL_NRIGA);
+        out.forEach((row, i) => {
+            const nr = RETTIFICA_PREFISSO_NRIGA + (out.length - i);
+            if (hA) row[hA] = nr;
+            row._nriga = nr;
+        });
+        preview.forEach((p, i) => p.nriga = out[i] ? out[i]._nriga : '');
         I.rows = out;
 
         let html = `<h6 class="text-primary"><i class="fas fa-list me-2"></i>Righe di rettifica per Elenco Note (ID ${esc(idRett)})</h6>`;
@@ -2034,15 +2044,15 @@
             let tot = 0, totVal = 0, noEan = 0;
             const eur = v => '€ ' + Number(v).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             html += `<table class="table table-sm table-bordered bg-white" style="font-size:0.85rem"><thead class="table-secondary"><tr>
-                <th>Codice</th><th>EAN (col. ${RETTIFICA_COL_EAN})</th><th>Colore</th><th>Misura</th><th>Sistema</th><th>Reale</th><th>Rettifica (${esc(COL.qta)})</th><th>Valorizz. (col. ${RETTIFICA_COL_PREZZO})</th><th>Totale (col. ${RETTIFICA_COL_VALORE})</th></tr></thead><tbody>`;
+                <th>Riga (col. ${RETTIFICA_COL_NRIGA})</th><th>Codice</th><th>EAN (col. ${RETTIFICA_COL_EAN})</th><th>Colore</th><th>Misura</th><th>Sistema</th><th>Reale</th><th>Rettifica (${esc(COL.qta)})</th><th>Valorizz. (col. ${RETTIFICA_COL_PREZZO})</th><th>Totale (col. ${RETTIFICA_COL_VALORE})</th></tr></thead><tbody>`;
             preview.forEach(p => {
                 tot += p.diff; if (p.val !== '') totVal += p.val; if (!p.ean) noEan++;
-                html += `<tr><td>${esc(I.cod)}</td><td>${p.ean ? esc(p.ean) + (p.inBd ? '' : ' <span class="badge bg-warning text-dark">no BIGDATA</span>') : '<span class="badge bg-warning text-dark">mancante</span>'}</td><td>${esc(p.c)}</td><td>${esc(p.s)}</td><td>${p.sys}</td><td>${p.real}</td>
+                html += `<tr><td>${esc(p.nriga)}</td><td>${esc(I.cod)}</td><td>${p.ean ? esc(p.ean) + (p.inBd ? '' : ' <span class="badge bg-warning text-dark">no BIGDATA</span>') : '<span class="badge bg-warning text-dark">mancante</span>'}</td><td>${esc(p.c)}</td><td>${esc(p.s)}</td><td>${p.sys}</td><td>${p.real}</td>
                     <td class="fw-bold ${p.diff > 0 ? 'text-success' : 'text-danger'}">${p.diff > 0 ? '+' : ''}${p.diff}</td>
                     <td>${p.prz !== '' ? eur(p.prz) : '-'}</td>
                     <td>${p.val !== '' ? eur(p.val) : '<span class="badge bg-warning text-dark">mancante</span>'}</td></tr>`;
             });
-            html += `</tbody><tfoot><tr><th colspan="6" class="text-end">Totale rettifica</th><th>${round3(tot)}</th><th></th><th>${eur(totVal)}</th></tr></tfoot></table>
+            html += `</tbody><tfoot><tr><th colspan="7" class="text-end">Totale rettifica</th><th>${round3(tot)}</th><th></th><th>${eur(totVal)}</th></tr></tfoot></table>
                 ${noEan ? `<div class="alert alert-warning small py-2">${noEan} righe senza EAN: la variante non è in BIGDATA e non ha mai avuto un movimento con EAN in colonna ${RETTIFICA_COL_EAN}. Inseriscilo a mano dopo aver incollato.</div>` : ''}
                 <div class="alert alert-info small mb-0">Premi <strong>Archivia su Elenco Note</strong> per scriverle direttamente nella prima riga libera del foglio NOTE, oppure usa <strong>Copia righe</strong> / Excel.
                 Positivo = carico, negativo = scarico. Le righe hanno destinazione "${esc(RETTIFICA_DESTINAZIONE)}" e sono escluse dalle vendite nel riassortimento.</div>`;
@@ -2160,7 +2170,14 @@
         const hEan = headerOfLetter(RETTIFICA_COL_EAN);
         const eanNum = globalColTypes[hEan] === 'number';
         const textCols = (!eanNum && hEan) ? [RETTIFICA_COL_EAN] : [];
-        const dateCols = [...new Set([globalColIds[COL.data], globalColIds['DATA']].filter(Boolean))];
+        // Colonna data (B): data + ora "gg/mm/aaaa hh:mm:ss". Se nel foglio è testo resta testo come le altre righe,
+        // se è una vera data/ora viene scritta come data/ora completa.
+        const dateCols = [];
+        [...new Set([COL.data, 'DATA'])].forEach(hd => {
+            const L = globalColIds[hd]; if (!L) return;
+            if (/date/.test(globalColTypes[hd] || '')) { if (!dateCols.includes(L)) dateCols.push(L); }
+            else if (!textCols.includes(L)) textCols.push(L);
+        });
         const out = rows.map(r => {
             const o = {};
             cols.forEach(h => {
