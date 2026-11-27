@@ -104,6 +104,20 @@
   #v-pay { align-items: center; padding: 16px; } #v-pay .foglio { border-radius: 18px; max-width: 440px; max-height: 92vh; }
   #neg-bar { display: none; max-width: 1200px; margin: 8px auto 0; padding: 0 12px; }
   #neg-bar.show { display: block; }
+  /* benvenuto con i punti vendita */
+  #v-benv { align-items: center; padding: 16px; } #v-benv .foglio { border-radius: 18px; max-width: 460px; max-height: 92vh; }
+  .benv-top { background: #111; color: #fff; padding: 22px 20px 18px; text-align: center; }
+  .benv-top small { display: block; font-size: 12px; font-weight: 800; letter-spacing: .16em; color: #d4af37; }
+  .benv-top h2 { margin: 6px 0 4px !important; font-size: 24px !important; color: #fff; }
+  .benv-top p { margin: 0; font-size: 14px; color: #ddd; }
+  .benv-neg { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; padding: 16px 16px 6px; }
+  .benv-neg button { display: flex; flex-direction: column; align-items: center; gap: 7px; border: 1.5px solid var(--line); background: #fff; border-radius: 14px; padding: 12px 8px; cursor: pointer; font: inherit; color: var(--ink); }
+  .benv-neg button.qui { border-color: #111; background: #f7f7f5; }
+  .benv-neg .ico { width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 22px; color: #fff; }
+  .benv-neg b { font-size: 13px; line-height: 1.2; text-align: center; }
+  .benv-neg span.st { font-size: 11.5px; font-weight: 700; color: var(--mute); }
+  .benv-neg button.qui span.st { color: var(--ok); }
+  #neg-bar .neg-altri { background: #111; color: #fff; border-color: #111; }
   #neg-bar .neg-t { font-size: 13px; font-weight: 800; margin-bottom: 6px; }
   #neg-bar .neg-b { display: flex; gap: 8px; flex-wrap: wrap; }
   #neg-bar button { border: 1.5px solid var(--line); background: #fff; border-radius: 16px; padding: 7px 13px; font-size: 13px; font-weight: 700; cursor: pointer; }
@@ -275,6 +289,17 @@
 <div id="barra-carrello"><button onclick="apriCarrello()"><span id="bc-n">0 articoli</span><span id="bc-t">€ 0,00 · Vedi ordine ›</span></button></div>
 
 <!-- scheda prodotto -->
+<div class="velo" id="v-benv" onclick="if (event.target === this) chiudiBenvenuto()">
+  <div class="foglio">
+    <button class="x" onclick="chiudiBenvenuto()" aria-label="Chiudi">×</button>
+    <div class="scorri" style="padding:0">
+      <div class="benv-top"><small>BLACK FRIDAY</small><h2 id="benv-tit">Benvenuto nelle offerte</h2><p id="benv-sub">Scegli il punto vendita: ognuno ha le sue offerte</p></div>
+      <div class="benv-neg" id="benv-neg"></div>
+      <p class="nota" style="text-align:center;margin:4px 16px 10px">Tocca un negozio per vedere le sue offerte. Il ritiro è gratuito in tutti i punti vendita.</p>
+    </div>
+    <div class="piede"><button class="btn" id="benv-ok" onclick="chiudiBenvenuto()">Vedi le offerte</button></div>
+  </div>
+</div>
 <div class="velo" id="v-pay" onclick="if (event.target === this) chiudiPagamenti()">
   <div class="foglio">
     <button class="x" onclick="chiudiPagamenti()" aria-label="Chiudi">×</button>
@@ -425,10 +450,11 @@
     const n = GRUPPI.filter(g => inNeg(g)).length;
     b.innerHTML = `<div class="neg-t">📍 Sei nel catalogo di ${esc(NEG)}</div><div class="neg-b">
       <button data-m="1" class="${SOLONEG ? 'on' : ''}">🏪 Disponibili da ${esc(NEG)} (${n})</button>
-      <button data-m="0" class="${SOLONEG ? '' : 'on'}">Tutto il catalogo (${GRUPPI.length})</button></div>`;
+      <button data-m="0" class="${SOLONEG ? '' : 'on'}">Tutto il catalogo (${GRUPPI.length})</button>
+      ${(CONFIG.puntiRitiro || []).length > 1 ? '<button data-altri="1" class="neg-altri">🏪 Offerte degli altri negozi</button>' : ''}</div>`;
     b.classList.add('show');
   }
-  $('neg-bar').addEventListener('click', e => { const x = e.target.closest('button'); if (!x) return; SOLONEG = x.dataset.m === '1'; disegnaNeg(); filtra(); });
+  $('neg-bar').addEventListener('click', e => { const x = e.target.closest('button'); if (!x) return; if (x.dataset.altri) { apriBenvenuto(); return; } SOLONEG = x.dataset.m === '1'; disegnaNeg(); filtra(); });
   function applica(d, fresco) {
     PRODOTTI = d.products || [];
     FINE = d.fineOfferta || '';
@@ -441,7 +467,39 @@
     $('stato').style.display = 'none';
     avviaConto();
     apriCondiviso(fresco);
+    if (!BENV_FATTO && !ADMIN && !P_PARAM && (CONFIG.puntiRitiro || []).length) { BENV_FATTO = true; apriBenvenuto(); }
   }
+
+  // ===== BENVENUTO: negozio del link + offerte degli altri punti vendita =====
+  let BENV_FATTO = false;
+  const COLORI_NEG = ['#111111', '#e11d2e', '#2563eb', '#b8860b', '#16a34a', '#7c3aed'];
+  function apriBenvenuto() {
+    const l = CONFIG.puntiRitiro || [];
+    if (!l.length) return;
+    $('benv-tit').textContent = NEG ? 'Benvenuto nelle offerte di ' + NEG : 'Benvenuto nelle offerte Black Friday';
+    $('benv-sub').textContent = NEG ? 'Scopri anche le offerte degli altri nostri punti vendita' : 'Scegli il punto vendita: ognuno ha le sue offerte';
+    $('benv-neg').innerHTML = l.map((n, i) => {
+      const qui = n === NEG;
+      const parole = String(n).trim().split(/\s+/);
+      const iniziali = (parole.filter(w => w.length > 2).slice(0, 2).map(w => w[0]).join('') || parole[0][0] || '?').toUpperCase();
+      return `<button type="button" data-neg="${esc(slugNeg(n))}" class="${qui ? 'qui' : ''}">
+        <span class="ico" style="background:${COLORI_NEG[i % COLORI_NEG.length]}">${esc(iniziali)}</span>
+        <b>${esc(n)}</b><span class="st">${qui ? '✓ Sei qui' : 'Vedi le offerte ›'}</span></button>`;
+    }).join('');
+    $('benv-ok').textContent = NEG ? 'Vedi le offerte di ' + NEG : 'Vedi tutte le offerte';
+    $('v-benv').classList.add('show');
+    traccia('benvenuto', NEG || '');
+  }
+  function chiudiBenvenuto() { $('v-benv').classList.remove('show'); }
+  $('benv-neg').addEventListener('click', e => {
+    const b = e.target.closest('[data-neg]'); if (!b) return;
+    if (b.classList.contains('qui')) { chiudiBenvenuto(); return; }
+    traccia('cambio-negozio', b.dataset.neg);
+    const q = new URLSearchParams();
+    q.set('negozio', b.dataset.neg);
+    q.set('fonte', 'da-' + (NEG_PARAM || 'catalogo'));   // nelle statistiche: da quale link è partito il cambio
+    location.href = location.origin + location.pathname + '?' + q.toString();
+  });
   // ===== ATTESA DEL PRIMO CARICAMENTO: conto alla rovescia, barra e frasi (la durata è quella dell'ultima volta) =====
   let ATT = null;
   function avviaAttesa() {
@@ -1478,13 +1536,13 @@
     $('v-pay').classList.add('show');
   }
   function chiudiPagamenti() { $('v-pay').classList.remove('show'); }
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') chiudiPagamenti(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { chiudiPagamenti(); chiudiBenvenuto(); } });
 
   // ===== AVVIO =====
   try { CART = JSON.parse(lsGet(CARRELLO_KEY) || '{}') || {}; } catch (e) { CART = {}; }
   traccia('visita', '');
   carica();
-  if (!ADMIN && !P_PARAM) apriPagamenti();   // a ogni accesso, anche quando le offerte compaiono subito dalla copia salvata
+  // all'avvio compare il benvenuto con i punti vendita (in applica, appena si conoscono i negozi); i modi di pagamento restano su "💳 Come pagare"
 </script>
 </body>
 </html>
