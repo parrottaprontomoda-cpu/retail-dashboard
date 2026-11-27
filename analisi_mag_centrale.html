@@ -470,19 +470,29 @@
     
     const PUNTI_VENDITA = ['PEPLO', 'PARROTTA POINT CHIARAVALLE', 'PARROTTA PRONTO MODA', 'CARAMELLO', 'TIKO'];
 
-    // ---- CONFIGURAZIONE RIGHE DI RETTIFICA (per Elenco Note) ----
-    // Destinazione scritta nella colonna CLI delle righe di rettifica: serve anche
-    // a escluderle dal calcolo delle vendite nel riassortimento.
+    // ---- CONFIGURAZIONE RIGHE DI RETTIFICA (stesso formato delle registrazioni di POS Mobile Stable) ----
+    // Foglio NOTE: A=ID riga (R9: SCATOLE 1) · B=DATA (2/1/2024 11.38.52) · C=COD · D=qta · E=DESCRIZIONE · F=PREZZO
+    // G=TOT (qta × prezzo) · H=MAG · I=CLI · J=OPER · K=LISTATO EAN · N=VALMAG (movimento: + carico, − scarico)
+    // O=IMPORTO (totale della registrazione) · P=RISORSA/ZONA/LIS/MESE/ANNO · Q=ID registrazione (numero progressivo)
+    // R=valorizzazione articolo · S=mis · T=col · U=forn
+    // Destinazione in MAG/CLI: serve anche a escluderle dal calcolo delle vendite nel riassortimento.
     const RETTIFICA_DESTINAZIONE = 'RETTIFICA INVENTARIO';
-    // Colonne copiate dall'ultimo movimento esistente della stessa variante.
-    // Tutte le altre colonne restano vuote (tranne data, quantità, ID, colore, misura, TOT).
-    const RETTIFICA_COLONNE_DA_COPIARE = ['COD', 'DESCRIZIONE', 'forn', 'OPER', 'PREZZO'];
-    // Colonne del foglio NOTE (per lettera) compilate nelle righe di rettifica:
-    const RETTIFICA_COL_EAN = 'K';      // EAN della variante, preso dai movimenti della stessa variante
-    const RETTIFICA_COL_PREZZO = 'G';   // valorizzazione unitaria della giacenza, copiata dai movimenti della variante
-    const RETTIFICA_COL_VALORE = 'O';
-    const RETTIFICA_COL_NRIGA = 'A';        // numero riga della registrazione: R<n> sulla prima riga ... R1 sull'ultima
-    const RETTIFICA_PREFISSO_NRIGA = 'R';   // totale valore della variazione = rettifica (N) × valorizzazione (G)
+    const RETTIFICA_OPERATORE = 'INVENTARIO';                  // colonna J (OPER)
+    const RETTIFICA_SCATOLE = 'SCATOLE 0';                     // testo dopo "R<n>: " in colonna A
+    // colonna P: stesso schema RISORSA-ZONA-LIS-MESE-ANNO delle note (mese e anno messi in automatico)
+    const RETTIFICA_RISORSA = 'MAGAZZINO', RETTIFICA_ZONA = 'INVENTARIO', RETTIFICA_LISTINO = 'L1';
+    const RETTIFICA_COL_NRIGA = 'A', RETTIFICA_PREFISSO_NRIGA = 'R';
+    const RETTIFICA_COL_DATA = 'B';
+    const RETTIFICA_COL_COD = 'C', RETTIFICA_COL_QTA = 'D', RETTIFICA_COL_DESCR = 'E';
+    const RETTIFICA_COL_PREZZO = 'F';    // prezzo unitario (copiato dall'ultimo movimento della variante)
+    const RETTIFICA_COL_TOT = 'G';       // qta × prezzo
+    const RETTIFICA_COL_MAG = 'H', RETTIFICA_COL_CLI = 'I', RETTIFICA_COL_OPER = 'J';
+    const RETTIFICA_COL_EAN = 'K';
+    const RETTIFICA_COL_VALMAG = 'N';    // movimento di magazzino = rettifica
+    const RETTIFICA_COL_VALORE = 'O';    // IMPORTO = somma dei TOT della registrazione
+    const RETTIFICA_COL_RISORSA = 'P';
+    const RETTIFICA_COL_ID = 'Q';        // ID registrazione: prossimo numero libero (assegnato di nuovo dallo script al salvataggio)
+    const RETTIFICA_COLONNE_DA_COPIARE = ['R', 'U'];   // copiate dall'ultimo movimento della variante (valorizzazione, fornitore)
 
     // ---- CONFEZIONI (pezzi per confezione) ----
     const PZCONF_STORAGE_KEY = 'riassortimento_pz_conf_v1';
@@ -1545,7 +1555,7 @@
         if (target) loadInventario(target);
     }
 
-    document.getElementById('btnInventario').addEventListener('click', () => openInventario(null));
+    document.getElementById('btnInventario').addEventListener('click', () => { rettLoadSheetCfg(); openInventario(null); });
     document.getElementById('inv-load').addEventListener('click', () => {
         const cod = String($('#inv-cod').val() || '').trim();
         if (!cod) { alert('Seleziona o digita un codice articolo.'); return; }
@@ -1959,54 +1969,77 @@
         if (/^\d+\.0+$/.test(v)) v = v.replace(/\.0+$/, '');
         return v;
     }
-    // valorizzazione unitaria della riga: colonna G (in mancanza, O ÷ N)
+    // prezzo unitario della riga: colonna F (in mancanza, TOT ÷ qta)
     function unitValueOf(r) {
         const num = h => { const raw = r._raw ? r._raw[h] : r[h]; return typeof raw === 'number' ? raw : parseEuro(raw); };
-        const hG = headerOfLetter(RETTIFICA_COL_PREZZO);
-        if (hG) { const g = num(hG); if (g) return Math.abs(g); }
-        const hO = headerOfLetter(RETTIFICA_COL_VALORE), q = r._qta_num;
-        if (hO && q) { const o = num(hO); if (o) return Math.abs(o / q); }
+        const hF = headerOfLetter(RETTIFICA_COL_PREZZO);
+        if (hF) { const f = num(hF); if (f) return Math.abs(f); }
+        const hG = headerOfLetter(RETTIFICA_COL_TOT), hD = headerOfLetter(RETTIFICA_COL_QTA);
+        if (hG && hD) { const g = num(hG), d = num(hD); if (g && d) return Math.abs(g / d); }
         return 0;
     }
 
-    function buildCorrectionRow(tpl, I, v, diff, idRett, dataStr) {
+    // Data come nelle note di POS Mobile: "27/11/2026 9.05.07" (giorno/mese senza zero iniziale, ora con i punti)
+    function fmtDataNota(d) {
+        return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()} ${d.getHours()}.${pad2(d.getMinutes())}.${pad2(d.getSeconds())}`;
+    }
+
+    function buildCorrectionRow(tpl, I, v, diff, regId, dataStr, risorsa) {
         const row = {};
         globalCols.forEach(h => row[h] = '');
-        const set = (h, val) => { if (h && Object.prototype.hasOwnProperty.call(row, h)) row[h] = val; };
-        if (tpl) RETTIFICA_COLONNE_DA_COPIARE.forEach(h => set(h, tpl[h] ?? ''));
-        set('COD', I.cod);
-        set('DESCRIZIONE', I.desc);
-        set(COL.data, dataStr); set('DATA', dataStr);
-        if (globalCols.includes('CLI')) set('CLI', RETTIFICA_DESTINAZIONE); else set('MAG', RETTIFICA_DESTINAZIONE);
-        set(COL.qta, diff);
-        set(COL.idril, idRett);
-        set(COL.colore, v.c === 'N/D' ? '' : v.c);
-        set(COL.misura, v.s === 'N/D' ? '' : v.s);
-        // EAN: quello della variante (BIGDATA o movimenti della stessa variante)
-        const hEan = headerOfLetter(RETTIFICA_COL_EAN);
-        if (hEan) set(hEan, v.ean || '');
-        // Valorizzazione (G) e valore (O)
-        const hVal = headerOfLetter(RETTIFICA_COL_VALORE);
+        const setL = (L, val) => { const h = headerOfLetter(L); if (h && Object.prototype.hasOwnProperty.call(row, h)) row[h] = val; };
+        if (tpl) RETTIFICA_COLONNE_DA_COPIARE.forEach(L => { const h = headerOfLetter(L); if (h) setL(L, (tpl._raw && tpl._raw[h] !== undefined && tpl._raw[h] !== '') ? tpl._raw[h] : (tpl[h] ?? '')); });
         let unit = v.unit || I.unitAny || 0;
-        if (!unit && tpl) unit = Math.abs(parseEuro(tpl['PREZZO']));
         if (!unit) unit = v.costo || 0;    // ultima riserva: costo LISN di BIGDATA
-        const hPrz = headerOfLetter(RETTIFICA_COL_PREZZO);
-        if (hPrz && unit) set(hPrz, Math.round(unit * 10000) / 10000);
-        if (hVal && unit) set(hVal, Math.round(diff * unit * 100) / 100);
-        row._prezzo = unit || '';
-        row._ean = v.ean || '';
-        row._valore = hVal && unit ? Math.round(diff * unit * 100) / 100 : '';
+        unit = Math.round(unit * 100) / 100;
+        const qtaNota = round3(-diff);     // come nelle note: qta positiva = uscita, VALMAG = −qta
+        const tot = Math.round(qtaNota * unit * 100) / 100;
+        setL(RETTIFICA_COL_DATA, dataStr);
+        setL(RETTIFICA_COL_COD, I.cod);
+        setL(RETTIFICA_COL_QTA, qtaNota);
+        setL(RETTIFICA_COL_DESCR, I.desc);
+        setL(RETTIFICA_COL_PREZZO, unit);
+        setL(RETTIFICA_COL_TOT, tot);
+        setL(RETTIFICA_COL_MAG, RETTIFICA_DESTINAZIONE);
+        setL(RETTIFICA_COL_CLI, RETTIFICA_DESTINAZIONE);
+        setL(RETTIFICA_COL_OPER, RETTIFICA_OPERATORE);
+        setL(RETTIFICA_COL_EAN, v.ean || '');
+        setL(RETTIFICA_COL_VALMAG, diff);
+        setL(RETTIFICA_COL_RISORSA, risorsa);
+        setL(RETTIFICA_COL_ID, regId);
+        // misura e colore: "ASS" se mancanti, come nelle note
+        setL(globalColIds[COL.misura], v.s === 'N/D' ? 'ASS' : v.s);
+        setL(globalColIds[COL.colore], v.c === 'N/D' ? 'ASS' : v.c);
+        row._prezzo = unit; row._tot = tot; row._ean = v.ean || ''; row._qta = qtaNota;
         return row;
     }
 
-    document.getElementById('inv-genera').addEventListener('click', function() {
+    // Prossimo ID registrazione libero (colonna Q): lo script lo ricontrolla al momento del salvataggio
+    async function nextRegId() {
+        const L = RETTIFICA_COL_ID;
+        let max = 0;
+        try {
+            const resp = await gvizQuery(`SELECT MAX(${L})`);
+            const c = resp.table.rows[0] && resp.table.rows[0].c && resp.table.rows[0].c[0];
+            if (c && typeof c.v === 'number') max = c.v;
+        } catch (e) { console.warn('MAX ID:', e); }
+        globalData.forEach(r => { const n = Number(r._id_ril); if (Number.isFinite(n) && n > max) max = n; });
+        return max + 1;
+    }
+
+    document.getElementById('inv-genera').addEventListener('click', async function() {
         const I = currentInvent;
         if (!I) { alert('Carica prima le giacenze di un articolo.'); return; }
         if (!Object.keys(I.real).length) { alert('Non hai inserito nessuna quantità reale.'); return; }
 
+        const btn = this, btnHtml = btn.innerHTML;
+        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Generazione...';
+        const regId = await nextRegId();
+        btn.disabled = false; btn.innerHTML = btnHtml;
+
         const now = new Date();
-        const dataStr = `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
-        const idRett = `RETT-${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}-${pad2(now.getHours())}${pad2(now.getMinutes())}`;
+        const dataStr = fmtDataNota(now);
+        const risorsa = [RETTIFICA_RISORSA, RETTIFICA_ZONA, RETTIFICA_LISTINO, now.getMonth() + 1, now.getFullYear()].join('-');
 
         const out = [], preview = [], celle = {};
         Object.entries(I.real).forEach(([key, real]) => {
@@ -2015,9 +2048,9 @@
             celle[v.c + '||' + v.s] = true;
             const diff = round3(real - v.sys);
             if (diff === 0) return;
-            const row = buildCorrectionRow(v.tpl || I.tplAny, I, v, diff, idRett, dataStr);
+            const row = buildCorrectionRow(v.tpl || I.tplAny, I, v, diff, regId, dataStr, risorsa);
             out.push(row);
-            preview.push({ c: v.c, s: v.s, sys: v.sys, real, diff, ean: row._ean, inBd: v.inBd, val: row._valore, prz: row._prezzo });
+            preview.push({ c: v.c, s: v.s, sys: v.sys, real, diff, ean: row._ean, inBd: v.inBd, qta: row._qta, prz: row._prezzo, tot: row._tot });
         });
         // il riassortimento userà la giacenza reale (somma degli EAN di ogni colore/misura)
         Object.keys(celle).forEach(cs => {
@@ -2027,35 +2060,36 @@
             const v0 = vs.find(v => v.noteC || v.noteS) || {};
             realStockOverrides[I.cod + '||' + (v0.noteC || c) + '||' + (v0.noteS || s)] = tot;
         });
-        // Colonna A: numero di riga della registrazione in ordine decrescente (prima riga R<n> ... ultima riga R1)
-        const hA = headerOfLetter(RETTIFICA_COL_NRIGA);
+        // Colonna A: "R<n>: SCATOLE 0" dalla prima riga (R<n>) all'ultima (R1) · Colonna O: IMPORTO della registrazione
+        const importo = Math.round(out.reduce((a, r) => a + r._tot, 0) * 100) / 100;
+        const hA = headerOfLetter(RETTIFICA_COL_NRIGA), hO = headerOfLetter(RETTIFICA_COL_VALORE);
         out.forEach((row, i) => {
-            const nr = RETTIFICA_PREFISSO_NRIGA + (out.length - i);
-            if (hA) row[hA] = nr;
-            row._nriga = nr;
+            row._nriga = `${RETTIFICA_PREFISSO_NRIGA}${out.length - i}: ${RETTIFICA_SCATOLE}`;
+            if (hA) row[hA] = row._nriga;
+            if (hO) row[hO] = importo;
+            preview[i].nriga = row._nriga;
         });
-        preview.forEach((p, i) => p.nriga = out[i] ? out[i]._nriga : '');
-        I.rows = out;
+        I.rows = out; I.regId = regId; I.uid = regId + '-' + now.getTime();
 
-        let html = `<h6 class="text-primary"><i class="fas fa-list me-2"></i>Righe di rettifica per Elenco Note (ID ${esc(idRett)})</h6>`;
+        let html = `<h6 class="text-primary"><i class="fas fa-list me-2"></i>Registrazione di rettifica per Elenco Note · ID ${esc(regId)} (col. ${RETTIFICA_COL_ID}) · ${esc(dataStr)}</h6>`;
         if (!out.length) {
             html += '<p class="text-success">Nessuna differenza: la giacenza contabile corrisponde a quella reale.</p>';
         } else {
-            let tot = 0, totVal = 0, noEan = 0;
+            let totDiff = 0, noEan = 0;
             const eur = v => '€ ' + Number(v).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            html += `<table class="table table-sm table-bordered bg-white" style="font-size:0.85rem"><thead class="table-secondary"><tr>
-                <th>Riga (col. ${RETTIFICA_COL_NRIGA})</th><th>Codice</th><th>EAN (col. ${RETTIFICA_COL_EAN})</th><th>Colore</th><th>Misura</th><th>Sistema</th><th>Reale</th><th>Rettifica (${esc(COL.qta)})</th><th>Valorizz. (col. ${RETTIFICA_COL_PREZZO})</th><th>Totale (col. ${RETTIFICA_COL_VALORE})</th></tr></thead><tbody>`;
+            html += `<div class="table-responsive"><table class="table table-sm table-bordered bg-white" style="font-size:0.85rem"><thead class="table-secondary"><tr>
+                <th>A</th><th>EAN (K)</th><th>Colore</th><th>Misura</th><th>Sistema</th><th>Reale</th><th>qta (D)</th><th>VALMAG (N)</th><th>Prezzo (F)</th><th>TOT (G)</th></tr></thead><tbody>`;
             preview.forEach(p => {
-                tot += p.diff; if (p.val !== '') totVal += p.val; if (!p.ean) noEan++;
-                html += `<tr><td>${esc(p.nriga)}</td><td>${esc(I.cod)}</td><td>${p.ean ? esc(p.ean) + (p.inBd ? '' : ' <span class="badge bg-warning text-dark">no BIGDATA</span>') : '<span class="badge bg-warning text-dark">mancante</span>'}</td><td>${esc(p.c)}</td><td>${esc(p.s)}</td><td>${p.sys}</td><td>${p.real}</td>
-                    <td class="fw-bold ${p.diff > 0 ? 'text-success' : 'text-danger'}">${p.diff > 0 ? '+' : ''}${p.diff}</td>
-                    <td>${p.prz !== '' ? eur(p.prz) : '-'}</td>
-                    <td>${p.val !== '' ? eur(p.val) : '<span class="badge bg-warning text-dark">mancante</span>'}</td></tr>`;
+                totDiff += p.diff; if (!p.ean) noEan++;
+                html += `<tr><td class="text-nowrap">${esc(p.nriga)}</td><td>${p.ean ? esc(p.ean) + (p.inBd ? '' : ' <span class="badge bg-warning text-dark">no BIGDATA</span>') : '<span class="badge bg-warning text-dark">mancante</span>'}</td><td>${esc(p.c)}</td><td>${esc(p.s)}</td><td>${p.sys}</td><td>${p.real}</td>
+                    <td>${p.qta}</td><td class="fw-bold ${p.diff > 0 ? 'text-success' : 'text-danger'}">${p.diff > 0 ? '+' : ''}${p.diff}</td>
+                    <td>${p.prz ? eur(p.prz) : '<span class="badge bg-warning text-dark">mancante</span>'}</td><td>${eur(p.tot)}</td></tr>`;
             });
-            html += `</tbody><tfoot><tr><th colspan="7" class="text-end">Totale rettifica</th><th>${round3(tot)}</th><th></th><th>${eur(totVal)}</th></tr></tfoot></table>
-                ${noEan ? `<div class="alert alert-warning small py-2">${noEan} righe senza EAN: la variante non è in BIGDATA e non ha mai avuto un movimento con EAN in colonna ${RETTIFICA_COL_EAN}. Inseriscilo a mano dopo aver incollato.</div>` : ''}
-                <div class="alert alert-info small mb-0">Premi <strong>Archivia su Elenco Note</strong> per scriverle direttamente nella prima riga libera del foglio NOTE, oppure usa <strong>Copia righe</strong> / Excel.
-                Positivo = carico, negativo = scarico. Le righe hanno destinazione "${esc(RETTIFICA_DESTINAZIONE)}" e sono escluse dalle vendite nel riassortimento.</div>`;
+            html += `</tbody><tfoot><tr><th colspan="7" class="text-end">Totale movimento / IMPORTO (O)</th><th>${totDiff > 0 ? '+' : ''}${round3(totDiff)}</th><th></th><th>${eur(importo)}</th></tr></tfoot></table></div>
+                <p class="small text-muted mb-2">MAG/CLI: "${esc(RETTIFICA_DESTINAZIONE)}" · OPER: "${esc(RETTIFICA_OPERATORE)}" · P: "${esc(risorsa)}" · colonne ${RETTIFICA_COLONNE_DA_COPIARE.join(', ')} copiate dall'ultimo movimento della variante.</p>
+                ${noEan ? `<div class="alert alert-warning small py-2">${noEan} righe senza EAN: la variante non è in BIGDATA e non ha mai avuto un movimento con EAN in colonna ${RETTIFICA_COL_EAN}.</div>` : ''}
+                <div class="alert alert-info small mb-0">Premi <strong>Archivia su Elenco Note</strong> per scrivere la registrazione nel foglio NOTE: se nel frattempo l'ID ${esc(regId)} è stato usato da POS Mobile, lo script assegna in automatico il primo ID libero.
+                VALMAG positivo = carico, negativo = scarico (qta = −VALMAG, come nelle note). Le righe sono escluse dalle vendite nel riassortimento.</div>`;
         }
         document.getElementById('invRows').innerHTML = html;
         document.getElementById('inv-copia').disabled = !out.length;
@@ -2063,47 +2097,38 @@
         document.getElementById('inv-archivia').disabled = !out.length;
     });
 
-    // Colonne da esportare: da A fino all'ultima colonna valorizzata (per non toccare eventuali formule a destra)
-    function rettificaColumns(rows) {
-        let last = 0;
-        rows.forEach(r => globalCols.forEach((h, i) => { if (r[h] !== '' && r[h] !== undefined && i > last) last = i; }));
-        return globalCols.slice(0, last + 1);
-    }
-
-    document.getElementById('inv-copia').addEventListener('click', async function() {
-        const I = currentInvent; if (!I || !I.rows.length) return;
-        const cols = rettificaColumns(I.rows);
-        const tsv = I.rows.map(r => cols.map(h => {
-            const v = r[h];
-            return typeof v === 'number' ? String(v).replace('.', ',') : String(v ?? '').replace(/[\t\r\n]+/g, ' ');
-        }).join('\t')).join('\n');
-        try {
-            await navigator.clipboard.writeText(tsv);
-            this.innerHTML = '<i class="fas fa-check me-2"></i> Copiate!';
-            setTimeout(() => this.innerHTML = '<i class="fas fa-copy me-2"></i> Copia righe per Elenco Note', 2000);
-        } catch (e) {
-            prompt('Copia manualmente (Ctrl+C):', tsv);
-        }
-    });
-
-    document.getElementById('inv-excel').addEventListener('click', async function() {
-        const I = currentInvent; if (!I || !I.rows.length) return;
-        const cols = rettificaColumns(I.rows);
-        const wb = new ExcelJS.Workbook();
-        const sh = wb.addWorksheet('Rettifiche NOTE');
-        sh.addRow(cols);
-        sh.getRow(1).font = { bold: true };
-        I.rows.forEach(r => sh.addRow(cols.map(h => r[h])));
-        cols.forEach((h, i) => sh.getColumn(i + 1).width = Math.max(10, String(h).length + 2));
-        await downloadWorkbook(wb, `Rettifiche_${String(I.cod).replace(/[^\w-]+/g, '_')}.xlsx`);
-    });
-
     // ================= ARCHIVIAZIONE DIRETTA SU ELENCO NOTE =================
     // URL dell'app web Apps Script (ArchiviaRettifiche.gs). Si può lasciare vuoto e inserirlo dal pulsante "Collegamento":
     // URL e codice di accesso restano salvati solo in questo browser.
     const RETTIFICA_WEBAPP_URL = '';
     const RETT_CFG_KEY = 'rettifica_webapp_cfg_v1';
-    function rettCfg() { try { return JSON.parse(localStorage.getItem(RETT_CFG_KEY) || '{}') || {}; } catch (e) { return {}; } }
+    // URL e codice di accesso possono stare anche nel foglio Elenco Note, scheda CONFIG_DASHBOARD
+    // (colonna A = chiave, colonna B = valore: URL_RETTIFICHE e CODICE_RETTIFICHE), scritti dallo script.
+    // Così ogni computer o cellulare li trova da solo, senza digitarli.
+    const RETT_CFG_SHEET = 'CONFIG_DASHBOARD';
+    let rettSheetCfg = null;
+    async function rettLoadSheetCfg(force = false) {
+        if (rettSheetCfg && !force) return rettSheetCfg;
+        const s = {};
+        try {
+            const resp = await gvizQuery('SELECT A, B', sheetID, RETT_CFG_SHEET);
+            resp.table.rows.forEach(r => {
+                const c = r.c || [];
+                const k = String(c[0] && c[0].v != null ? c[0].v : '').trim().toUpperCase();
+                const v = String(c[1] && c[1].v != null ? c[1].v : '').trim();
+                if (k === 'URL_RETTIFICHE') s.url = v;
+                if (k === 'CODICE_RETTIFICHE') s.token = v;
+            });
+        } catch (e) { console.warn('Configurazione dal foglio non disponibile:', e.message); }
+        rettSheetCfg = s;
+        return s;
+    }
+    function rettLocalCfg() { try { return JSON.parse(localStorage.getItem(RETT_CFG_KEY) || '{}') || {}; } catch (e) { return {}; } }
+    // quanto inserito a mano in questo browser (pulsante 🔌) ha la precedenza; altrimenti i valori del foglio
+    function rettCfg() {
+        const l = rettLocalCfg(), s = rettSheetCfg || {};
+        return { url: l.url || s.url || RETTIFICA_WEBAPP_URL || '', token: l.token || s.token || '' };
+    }
     function rettSaveCfg(c) { try { localStorage.setItem(RETT_CFG_KEY, JSON.stringify(c)); } catch (e) {} }
 
     // Chiamata all'app web tramite <script> (JSONP): non è soggetta ai blocchi CORS del browser
@@ -2135,20 +2160,22 @@
             else cur = test;
         });
         if (cur.length) parts.push(cur);
-        let tot = 0, first = null, last = null;
+        let tot = 0, first = null, last = null, id = body.idValue;
         for (let i = 0; i < parts.length; i++) {
-            const r = await rettCall(Object.assign({}, body, { rows: parts[i], part: i }));
+            // dal secondo blocco in poi si usa l'ID assegnato dallo script al primo blocco
+            const r = await rettCall(Object.assign({}, body, { rows: parts[i], part: i, idValue: id }));
             if (!r.ok) {
                 if (i > 0) r.error = `${r.error} (già archiviate ${tot} righe su ${body.rows.length}: righe ${first}–${last})`;
                 return r;
             }
-            tot += r.n; if (first === null) first = r.firstRow; last = r.lastRow;
+            tot += r.n; if (first === null) first = r.firstRow; last = r.lastRow; id = r.id;
         }
-        return { ok: true, n: tot, firstRow: first, lastRow: last };
+        return { ok: true, n: tot, firstRow: first, lastRow: last, id };
     }
 
     async function rettConfigura() {
-        const c = rettCfg();
+        const s = await rettLoadSheetCfg(true), l = rettLocalCfg();
+        const c = { url: s.url || l.url || RETTIFICA_WEBAPP_URL || '', token: s.token || l.token || '' };
         const url = prompt("URL dell'app web Apps Script (finisce con /exec):", c.url || RETTIFICA_WEBAPP_URL);
         if (url === null) return false;
         const token = prompt('Codice di accesso (dal log di impostaCodiceAccesso):', c.token || '');
@@ -2187,14 +2214,15 @@
             });
             return o;
         });
-        return { action: 'append', rows: out, idCol: globalColIds[COL.idril] || '', dateCols, textCols };
+        return { action: 'append', rows: out, idCol: RETTIFICA_COL_ID, idValue: currentInvent ? currentInvent.regId : '', uid: currentInvent ? currentInvent.uid : '', dateCols, textCols };
     }
 
     document.getElementById('inv-archivia').addEventListener('click', async function() {
         const I = currentInvent;
         if (!I || !I.rows.length) { alert('Genera prima le righe di rettifica.'); return; }
+        await rettLoadSheetCfg();
         const c = rettCfg();
-        if (!(c.url || RETTIFICA_WEBAPP_URL) || !c.token) {
+        if (!c.url || !c.token) {
             alert('Prima collega la dashboard al foglio NOTE (URL app web e codice di accesso).');
             if (!(await rettConfigura())) return;
         }
@@ -2207,7 +2235,7 @@
         try {
             const r = await rettPost(rettPayload(I.rows));
             if (!r.ok) throw new Error(r.error || 'Errore sconosciuto');
-            box.insertAdjacentHTML('afterbegin', `<div class="alert alert-success py-2"><i class="fas fa-check-circle me-1"></i> Archiviate <strong>${r.n}</strong> righe nel foglio NOTE (righe ${r.firstRow}–${r.lastRow}). Ricarico le giacenze tra pochi secondi...</div>`);
+            box.insertAdjacentHTML('afterbegin', `<div class="alert alert-success py-2"><i class="fas fa-check-circle me-1"></i> Archiviate <strong>${r.n}</strong> righe nel foglio NOTE (righe ${r.firstRow}–${r.lastRow}) con ID registrazione <strong>${esc(r.id)}</strong>${String(r.id) !== String(I.regId) ? ' (l\'ID ' + esc(I.regId) + ' era stato usato nel frattempo)' : ''}. Ricarico le giacenze tra pochi secondi...</div>`);
             I.rows = [];
             document.getElementById('inv-copia').disabled = true;
             document.getElementById('inv-excel').disabled = true;
