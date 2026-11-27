@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ordini Catalogo Ingrosso</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+    :root { --bar: #2c3e50; }
+    body { background: #f1f3f6; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .navbar { background: var(--bar); }
+    .app { height: calc(100vh - 56px); display: flex; }
+    .side { width: 210px; background: #fff; border-right: 1px solid #dee2e6; padding: 12px 8px; overflow-y: auto; flex-shrink: 0; }
+    .side .nav-link { color: #333; border-radius: 0 20px 20px 0; padding: 7px 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .side .nav-link.active { background: #d3e3fd; font-weight: 600; }
+    .side .nav-link .cnt { margin-left: auto; font-size: .78rem; }
+    .list-col { width: 430px; background: #fff; border-right: 1px solid #dee2e6; display: flex; flex-direction: column; flex-shrink: 0; }
+    .filters { padding: 10px; border-bottom: 1px solid #dee2e6; background: #fafbfc; }
+    .olist { overflow-y: auto; flex: 1; }
+    .oitem { padding: 10px 12px; border-bottom: 1px solid #eef0f2; cursor: pointer; position: relative; }
+    .oitem:hover { background: #f5f8ff; }
+    .oitem.sel { background: #e8f0fe; }
+    .oitem.unread { background: #fff; }
+    .oitem.unread .cli, .oitem.unread .when { font-weight: 700; color: #000; }
+    .oitem.unread::before { content: ''; position: absolute; left: 3px; top: 16px; width: 7px; height: 7px; border-radius: 50%; background: #0d6efd; }
+    .oitem .cli { font-size: .95rem; }
+    .oitem .when { font-size: .75rem; color: #6c757d; white-space: nowrap; }
+    .oitem .sum { font-size: .8rem; color: #495057; }
+    .oitem .prev { font-size: .75rem; color: #8a8f94; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .reader { flex: 1; overflow-y: auto; background: #fff; }
+    .reader-empty { color: #adb5bd; text-align: center; padding-top: 18vh; }
+    .st { font-size: .68rem; font-weight: 600; letter-spacing: .02em; }
+    .st-NUOVO { background: #0d6efd; color: #fff; }
+    .st-IN-LAVORAZIONE { background: #ffc107; color: #212529; }
+    .st-CONSEGNATO { background: #198754; color: #fff; }
+    .st-ANNULLATO { background: #dc3545; color: #fff; }
+    .st-VARIAZIONE { background: #fd7e14; color: #fff; }
+    .st-ORDINATO { background: #0dcaf0; color: #052c65; }
+    .st-IN-CONSEGNA { background: #6f42c1; color: #fff; }
+    .lines td, .lines th { font-size: .82rem; vertical-align: middle; }
+    .lines tr.annullato td { text-decoration: line-through; color: #999; }
+    .note-box { white-space: pre-wrap; font-size: .75rem; color: #6c4a00; background: #fff8e1; border-left: 3px solid #fd7e14; padding: 3px 6px; margin-top: 3px; }
+    .toast-container { z-index: 2000; }
+    .toast { min-width: 320px; }
+    .back-btn { display: none; }
+    @media (max-width: 991px) {
+        .side { display: none; }
+        .list-col { width: 100%; }
+        .reader { display: none; }
+        .app.reading .list-col { display: none; }
+        .app.reading .reader { display: block; }
+        .back-btn { display: inline-block; }
+        .mobile-tabs { display: flex !important; }
+    }
+    .mobile-tabs { display: none !important; overflow-x: auto; gap: 6px; padding-bottom: 6px; }
+    .mobile-tabs .btn { white-space: nowrap; }
+    @media print {
+        .navbar, .side, .list-col, .no-print, .toast-container { display: none !important; }
+        .app { height: auto; display: block; }
+        .reader { display: block !important; overflow: visible; }
+    }
+</style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark px-3" style="height:56px">
+    <span class="navbar-brand mb-0 h1"><i class="fas fa-inbox me-2"></i>Ordini Catalogo <span id="titleBadge" class="badge bg-danger ms-1 d-none"></span></span>
+    <div class="d-flex align-items-center gap-2">
+        <span class="text-white-50 small d-none d-md-inline" id="lastSync"></span>
+        <button class="btn btn-sm btn-outline-light" id="btnRefresh" title="Aggiorna"><i class="fas fa-sync-alt"></i></button>
+        <button class="btn btn-sm btn-outline-light" id="btnNotif" title="Attiva notifiche sul dispositivo"><i class="fas fa-bell"></i></button>
+        <button class="btn btn-sm btn-outline-light" id="btnSettings" title="Impostazioni"><i class="fas fa-cog"></i></button>
+    </div>
+</nav>
+
+<div class="app" id="app">
+    <!-- Cartelle -->
+    <div class="side">
+        <div class="nav flex-column" id="folders"></div>
+        <hr>
+        <div class="small text-muted px-2">Aggiornamento automatico ogni <span id="pollSec"></span> s</div>
+    </div>
+
+    <!-- Elenco ordini -->
+    <div class="list-col">
+        <div class="filters">
+            <div class="mobile-tabs mb-2" id="mobileFolders"></div>
+            <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text"><i class="fas fa-user"></i></span>
+                <input class="form-control" id="fCliente" list="dlClienti" placeholder="Cliente...">
+                <datalist id="dlClienti"></datalist>
+            </div>
+            <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text"><i class="fas fa-barcode"></i></span>
+                <input class="form-control" id="fCodice" placeholder="Codice, EAN o descrizione...">
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+                <input type="date" class="form-control form-control-sm" id="fDal" title="Dal">
+                <input type="date" class="form-control form-control-sm" id="fAl" title="Al">
+                <button class="btn btn-sm btn-outline-secondary" id="fReset" title="Azzera filtri"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="small text-muted mt-1" id="listInfo"></div>
+        </div>
+        <div class="olist" id="olist">
+            <div class="text-center text-muted p-5"><div class="spinner-border text-primary"></div><div class="mt-2">Caricamento ordini...</div></div>
+        </div>
+    </div>
+
+    <!-- Lettura ordine -->
+    <div class="reader" id="reader">
+        <div class="reader-empty"><i class="fas fa-envelope-open-text fa-4x mb-3"></i><div>Seleziona un ordine</div></div>
+    </div>
+</div>
+
+<div class="toast-container position-fixed top-0 end-0 p-3" id="toasts"></div>
+
+<!-- Impostazioni -->
+<div class="modal fade" id="mSettings" tabindex="-1">
+    <div class="modal-dialog modal-lg"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title"><i class="fas fa-cog me-2"></i>Impostazioni</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <h6>Collegamento</h6>
+            <div class="row g-2 mb-3">
+                <div class="col-md-8"><label class="small fw-bold">URL app web (finisce con /exec)</label><input class="form-control form-control-sm" id="sUrl"></div>
+                <div class="col-md-4"><label class="small fw-bold">Codice di accesso</label><input class="form-control form-control-sm" id="sToken"></div>
+                <div class="col-md-4"><label class="small fw-bold">Operatore (firma delle note)</label><input class="form-control form-control-sm" id="sUser" placeholder="Es. VERONICA"></div>
+                <div class="col-md-4"><label class="small fw-bold">Aggiorna ogni (secondi)</label><input type="number" min="20" class="form-control form-control-sm" id="sPoll"></div>
+                <div class="col-md-4 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" id="sSound"><label class="form-check-label small" for="sSound">Suono per i nuovi ordini</label></div></div>
+            </div>
+            <div class="small text-muted mb-3">Link da salvare nei preferiti di ogni dispositivo (contiene URL e codice): <input class="form-control form-control-sm mt-1" id="sLink" readonly onclick="this.select()"></div>
+            <h6>Colonne del foglio ORDINI_CATALOGO</h6>
+            <p class="small text-muted">Riconosciute in automatico dalle intestazioni; correggi se qualcosa non è giusto. Stato, ORDINATO, CONS e NOTE sono le colonne che la pagina aggiorna.</p>
+            <div class="row g-2" id="mapFields"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline-secondary" id="sTest"><i class="fas fa-plug me-1"></i> Prova collegamento</button>
+            <button class="btn btn-primary" id="sSave"><i class="fas fa-save me-1"></i> Salva</button>
+        </div>
+    </div></div>
+</div>
+
+<!-- Nota / variazione -->
+<div class="modal fade" id="mNota" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title" id="mNotaTitle">Nota</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="small text-muted mb-2" id="mNotaInfo"></div>
+            <textarea class="form-control" id="mNotaText" rows="4" placeholder="Es. manca la taglia M, sostituita con L · consegna spostata a martedì"></textarea>
+        </div>
+        <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button><button class="btn btn-warning" id="mNotaOk"><i class="fas fa-check me-1"></i> Registra</button></div>
+    </div></div>
+</div>
+
+<!-- Ordinato al fornitore / ricevuto -->
+<div class="modal fade" id="mRef" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title" id="mRefTitle"></h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="small text-muted mb-2" id="mRefInfo"></div>
+            <div id="mRefChips"></div>
+            <label class="small fw-bold" id="mRefLabel"></label>
+            <input class="form-control" id="mRefVal"><datalist id="dlRef"></datalist>
+        </div>
+        <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button><button class="btn btn-primary" id="mRefOk"><i class="fas fa-check me-1"></i> Registra</button></div>
+    </div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ===================== CONFIGURAZIONE =====================
+// URL dell'app web GestioneOrdini.gs (si può lasciare vuoto e inserirlo dalle impostazioni)
+const WEBAPP_URL = '';
+const CFG_KEY = 'gestione_ordini_cfg_v1';
+const SEEN_KEY = 'gestione_ordini_visti_v1';     // ordini già notificati
+const READ_KEY = 'gestione_ordini_letti_v1';     // ordini già aperti
+const MAP_KEY = 'gestione_ordini_colonne_v1';
+const STATI = ['NUOVO', 'IN LAVORAZIONE', 'ORDINATO', 'IN CONSEGNA', 'CONSEGNATO', 'ANNULLATO', 'VARIAZIONE'];
+const GEST = ['STORICO_GESTIONE'];
+
+// Campi riconosciuti dalle intestazioni (il primo che corrisponde vince)
+const FIELDS = [
+    { k: 'data', label: 'Data ordine', re: [/^DATA/i] },
+    { k: 'id', label: 'Codice ordine', re: [/^CODICE[ ._]*ORDINE$/i, /^(ID|N|NUM|NUMERO)[ ._]*ORDINE$/i, /ORDINE/i] },
+    { k: 'codCliente', label: 'Cod. cliente', re: [/^COD[ .]*CLIENTE$/i] },
+    { k: 'cliente', label: 'Cliente', re: [/^CLIENTE$/i, /RAGIONE|NOME.?CLIENTE/i] },
+    { k: 'ean', label: 'EAN', re: [/EAN/i] },
+    { k: 'codice', label: 'Codice prodotto', re: [/^COD(ICE)?[ ._]*(PRODOTTO|ARTICOLO)$/i] },
+    { k: 'desc', label: 'Articolo', re: [/^ARTICOLO$/i, /^DESCR/i] },
+    { k: 'misura', label: 'Misura', re: [/^(MIS|MISURA|TAGLIA)/i] },
+    { k: 'colore', label: 'Colore', re: [/^COLORE$/i] },
+    { k: 'qta', label: 'Pezzi', re: [/^PEZZI$/i, /^(QTA|QTÀ|QUANTIT)/i] },
+    { k: 'prezzo', label: 'Prezzo unit.', re: [/^PREZZO/i] },
+    { k: 'sconto', label: 'Sconto %', re: [/^SCONTO/i] },
+    { k: 'totale', label: 'Totale riga', re: [/^TOTALE/i] },
+    { k: 'prevendita', label: 'Prevendita', re: [/^PREVENDITA$/i] },
+    { k: 'stato', label: 'Stato', re: [/^STATO$/i] },
+    { k: 'ordinato', label: 'ORDINATO (ordine fornitore)', re: [/^ORDINATO$/i] },
+    { k: 'cons', label: 'CONS (ricevuto, in consegna)', re: [/^CONS/i] },
+    { k: 'note', label: 'NOTE', re: [/^NOTE$/i] },
+    { k: 'telefono', label: 'Telefono', re: [/TEL|CELL|WHATSAPP/i] }
+];
+
+// ===================== STATO =====================
+let cfg = loadJSON(CFG_KEY, {});
+let seen = new Set(loadJSON(SEEN_KEY, []));
+let readSet = new Set(loadJSON(READ_KEY, []));
+let headers = [], rows = [], orders = [], map = {}, hIdx = {};
+let folder = 'TUTTI', selKey = null, firstLoad = !loadJSON(SEEN_KEY, null), pollTimer = null, loading = false;
+
+// parametri nel link: ?k=CODICE&u=URL&cliente=...&codice=...
+const qp = new URLSearchParams(location.search);
+if (qp.get('k') || qp.get('u')) {
+    if (qp.get('k')) cfg.token = qp.get('k');
+    if (qp.get('u')) cfg.url = qp.get('u');
+    saveJSON(CFG_KEY, cfg);
+    qp.delete('k'); qp.delete('u');
+    history.replaceState(null, '', location.pathname + (qp.toString() ? '?' + qp : ''));
+}
+if (qp.get('cliente')) document.getElementById('fCliente').value = qp.get('cliente');
+if (qp.get('codice')) document.getElementById('fCodice').value = qp.get('codice');
+
+function loadJSON(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v === null || v === undefined ? d : v; } catch (e) { return d; } }
+function saveJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function num(v) { if (typeof v === 'number') return v; const s = String(v ?? '').replace(/[€\s]/g, ''); if (!s) return 0; const n = parseFloat(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s); return isNaN(n) ? 0 : n; }
+function eur(n) { return '€ ' + Number(n || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function pollSec() { return Math.max(20, parseInt(cfg.poll) || 60); }
+function stCls(s) { return 'st-' + String(s).replace(/\s+/g, '-'); }
+
+// ===================== COLLEGAMENTO (JSONP) =====================
+let cbN = 0;
+function api(body) {
+    const url = (cfg.url || WEBAPP_URL || '').trim();
+    if (!/^https:\/\/script\.google(usercontent)?\.com\/.+\/exec/.test(url)) return Promise.reject(new Error('Imposta l\'URL dell\'app web (ingranaggio in alto)'));
+    if (!cfg.token) return Promise.reject(new Error('Imposta il codice di accesso (ingranaggio in alto)'));
+    return new Promise((resolve, reject) => {
+        const cb = 'goCb_' + (++cbN) + '_' + Date.now();
+        const s = document.createElement('script');
+        let done = false;
+        const end = () => { done = true; clearTimeout(t); try { delete window[cb]; } catch (e) { window[cb] = undefined; } s.remove(); };
+        const t = setTimeout(() => { if (!done) { end(); reject(new Error('nessuna risposta (tempo scaduto)')); } }, 60000);
+        window[cb] = r => { end(); r && r.ok ? resolve(r) : reject(new Error((r && r.error) || 'errore sconosciuto')); };
+        s.onerror = () => { if (!done) { end(); reject(new Error('l\'app web non risponde: controlla URL /exec e accesso "Chiunque"')); } };
+        s.src = url + '?callback=' + cb + '&payload=' + encodeURIComponent(JSON.stringify(Object.assign({ token: cfg.token }, body)));
+        document.body.appendChild(s);
+    });
+}
+
+// ===================== COLONNE =====================
+function detectMap() {
+    const saved = loadJSON(MAP_KEY, {});
+    const m = {}, used = new Set();
+    FIELDS.forEach(f => {
+        if (saved[f.k] !== undefined && (saved[f.k] === '' || headers.includes(saved[f.k]))) { m[f.k] = saved[f.k]; if (saved[f.k]) used.add(saved[f.k]); return; }
+        for (const re of f.re) {
+            const h = headers.find(h => h && !used.has(h) && !GEST.includes(h) && re.test(h.trim()));
+            if (h) { m[f.k] = h; used.add(h); return; }
+        }
+        m[f.k] = '';
+    });
+    map = m;
+    hIdx = {}; headers.forEach((h, i) => { if (!(h in hIdx)) hIdx[h] = i; });
+}
+function val(r, k) { const h = map[k]; return h && hIdx[h] !== undefined ? String(r.v[hIdx[h]] ?? '').trim() : ''; }
+function gval(r, name) { return hIdx[name] !== undefined ? String(r.v[hIdx[name]] ?? '').trim() : ''; }
+// Stato effettivo della riga: se lo Stato è ancora NUOVO ma ORDINATO o CONS sono compilati (anche a mano nel foglio),
+// la riga vale come ordinata al fornitore o ricevuta/in consegna
+function rStato(r) {
+    let s = val(r, 'stato').toUpperCase() || 'NUOVO';
+    if (s === 'NUOVO' || s === 'IN LAVORAZIONE') {
+        if (val(r, 'cons')) s = 'IN CONSEGNA';
+        else if (val(r, 'ordinato')) s = 'ORDINATO';
+    }
+    return s;
+}
+
+function parseData(s) {
+    s = String(s || '').trim();
+    let m = s.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:[ ,T]+(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?)?/);
+    if (m) { let y = +m[3]; if (y < 100) y += 2000; return new Date(y, +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)); }
+    m = s.match(/(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0));
+    return null;
+}
+function fmtWhen(d) {
+    if (!d) return '';
+    const now = new Date(), t = new Date(d);
+    const sameDay = t.toDateString() === now.toDateString();
+    const hh = String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0');
+    if (sameDay) return 'oggi ' + hh;
+    const y = new Date(now); y.setDate(now.getDate() - 1);
+    if (t.toDateString() === y.toDateString()) return 'ieri ' + hh;
+    return t.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: t.getFullYear() === now.getFullYear() ? undefined : '2-digit' }) + ' ' + hh;
+}
+
+// ===================== ORDINI =====================
+function buildOrders() {
+    const g = {};
+    rows.forEach(r => {
+        const cli = val(r, 'cliente') || 'SENZA CLIENTE';
+        const dStr = val(r, 'data');
+        const d = parseData(dStr);
+        let key = val(r, 'id');
+        if (!key) key = cli + ' · ' + (d ? `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()} ${d.getHours()}:${d.getMinutes()}` : dStr);
+        key = cli + '§' + key;
+        if (!g[key]) g[key] = { key, id: val(r, 'id'), cliente: cli, dataStr: dStr, date: d, rows: [], telefono: '', noteCliente: '' };
+        const o = g[key];
+        o.rows.push(r);
+        if (!o.telefono) o.telefono = val(r, 'telefono');
+        if (!o.codCliente) o.codCliente = val(r, 'codCliente');
+        if (d && (!o.date || d < o.date)) o.date = d;
+    });
+    orders = Object.values(g).map(o => {
+        let pezzi = 0, tot = 0;
+        const st = {};
+        o.rows.forEach(r => {
+            const q = num(val(r, 'qta')) || (map.qta ? 0 : 1);
+            const t = map.totale ? num(val(r, 'totale')) : q * num(val(r, 'prezzo'));
+            const s = rStato(r);
+            st[s] = (st[s] || 0) + 1;
+            if (s !== 'ANNULLATO') { pezzi += q; tot += t; }
+        });
+        o.pezzi = Math.round(pezzi * 1000) / 1000; o.tot = tot; o.statiRighe = st;
+        o.stato = orderStato(st, o.rows.length);
+        o.hasNote = o.rows.some(r => val(r, 'note'));
+        o.prevendita = o.rows.some(r => /^S/i.test(val(r, 'prevendita')));
+        o.daOrdinare = o.rows.filter(r => !['ANNULLATO', 'CONSEGNATO'].includes(rStato(r)) && !val(r, 'ordinato') && !val(r, 'cons')).length;
+        o.daConsegnare = o.rows.filter(r => rStato(r) === 'IN CONSEGNA').length;
+        o.minRow = Math.min(...o.rows.map(r => r.n));
+        o.search = o.rows.map(r => r.v.join(' ')).join(' ').toLowerCase();
+        return o;
+    }).sort((a, b) => ((b.date ? b.date.getTime() : 0) - (a.date ? a.date.getTime() : 0)) || (b.minRow - a.minRow));
+}
+function orderStato(st, n) {
+    const c = k => st[k] || 0;
+    if (c('ANNULLATO') === n) return 'ANNULLATO';
+    if (c('NUOVO') === n) return 'NUOVO';
+    if (c('CONSEGNATO') + c('ANNULLATO') === n) return 'CONSEGNATO';
+    if (c('VARIAZIONE')) return 'VARIAZIONE';
+    if (c('IN CONSEGNA') + c('CONSEGNATO') + c('ANNULLATO') === n) return 'IN CONSEGNA';
+    if (c('ORDINATO') + c('IN CONSEGNA') + c('CONSEGNATO') + c('ANNULLATO') === n) return 'ORDINATO';
+    return 'IN LAVORAZIONE';
+}
+
+// ===================== CARICAMENTO =====================
+async function load(manual = false) {
+    if (loading) return;
+    loading = true;
+    const btn = document.getElementById('btnRefresh');
+    btn.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i>';
+    try {
+        const r = await api({ action: 'list' });
+        headers = r.headers; rows = r.rows;
+        detectMap();
+        buildOrders();
+        checkNew();
+        renderAll();
+        document.getElementById('lastSync').textContent = 'Aggiornato alle ' + new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+        console.error(e);
+        if (!orders.length) document.getElementById('olist').innerHTML = `<div class="alert alert-danger m-3">${esc(e.message)}.<br><button class="btn btn-sm btn-outline-dark mt-2" onclick="openSettings()"><i class="fas fa-cog me-1"></i> Impostazioni</button></div>`;
+        else if (manual) toast('Errore aggiornamento', esc(e.message), 'danger');
+    } finally {
+        loading = false;
+        btn.innerHTML = '<i class="fas fa-sync-alt"></i>';
+    }
+}
+function schedule() {
+    clearInterval(pollTimer);
+    pollTimer = setInterval(() => load(), pollSec() * 1000);
+    document.getElementById('pollSec').textContent = pollSec();
+}
+
+// ===================== NUOVI ORDINI (pop-up come la posta) =====================
+function checkNew() {
+    const fresh = orders.filter(o => !seen.has(o.key));
+    if (firstLoad) {
+        // prima apertura su questo dispositivo: nessun pop-up per l'archivio, solo per quelli che arriveranno
+        orders.forEach(o => seen.add(o.key));
+        firstLoad = false;
+    } else if (fresh.length) {
+        fresh.slice(0, 5).forEach(o => {
+            toast(`<i class="fas fa-envelope me-1"></i> Nuovo ordine da <strong>${esc(o.cliente)}</strong>`,
+                `${o.rows.length} righe · ${o.pezzi} pz · ${eur(o.tot)}<div class="text-muted small text-truncate">${esc(preview(o))}</div>
+                 <button class="btn btn-sm btn-primary mt-2" onclick="openOrder('${encodeURIComponent(o.key)}')"><i class="fas fa-folder-open me-1"></i> Apri ordine</button>`, 'primary', 0);
+            notifyDevice(o);
+        });
+        if (fresh.length > 5) toast('Nuovi ordini', `Altri ${fresh.length - 5} ordini ricevuti.`, 'primary');
+        if (cfg.sound !== false) beep();
+        fresh.forEach(o => seen.add(o.key));
+    }
+    saveJSON(SEEN_KEY, [...seen]);
+}
+function preview(o) {
+    return o.rows.slice(0, 4).map(r => [val(r, 'codice') || val(r, 'ean'), val(r, 'desc'), val(r, 'misura'), val(r, 'colore')].filter(Boolean).join(' ')).join(' · ');
+}
+function toast(title, body, color = 'secondary', delay = 8000) {
+    const id = 't' + Date.now() + Math.random().toString(36).slice(2);
+    document.getElementById('toasts').insertAdjacentHTML('beforeend', `
+        <div class="toast border-${color}" id="${id}" role="alert" data-bs-autohide="${delay > 0}" data-bs-delay="${delay}">
+            <div class="toast-header"><span class="me-auto">${title}</span><small>adesso</small><button class="btn-close" data-bs-dismiss="toast"></button></div>
+            <div class="toast-body">${body}</div></div>`);
+    const el = document.getElementById(id);
+    el.addEventListener('hidden.bs.toast', () => el.remove());
+    bootstrap.Toast.getOrCreateInstance(el).show();
+}
+function beep() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        [0, 0.18].forEach(t0 => {
+            const o = ctx.createOscillator(), g = ctx.createGain();
+            o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
+            g.gain.setValueAtTime(0.0001, ctx.currentTime + t0);
+            g.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + t0 + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t0 + 0.15);
+            o.start(ctx.currentTime + t0); o.stop(ctx.currentTime + t0 + 0.16);
+        });
+    } catch (e) {}
+}
+function notifyDevice(o) {
+    try {
+        if (!('Notification' in window) || Notification.permission !== 'granted') return;
+        const n = new Notification('Nuovo ordine: ' + o.cliente, { body: `${o.pezzi} pz · ${eur(o.tot)}\n${preview(o)}`, tag: o.key });
+        n.onclick = () => { window.focus(); openOrder(encodeURIComponent(o.key)); n.close(); };
+    } catch (e) {}
+}
+document.getElementById('btnNotif').addEventListener('click', async () => {
+    if (!('Notification' in window)) { alert('Questo browser non supporta le notifiche.'); return; }
+    const p = await Notification.requestPermission();
+    alert(p === 'granted' ? 'Notifiche attive: riceverai un avviso per ogni nuovo ordine finché questa pagina resta aperta (anche in un\'altra scheda).' : 'Notifiche non autorizzate dal browser.');
+    updateBell();
+});
+function updateBell() {
+    const b = document.getElementById('btnNotif');
+    const on = 'Notification' in window && Notification.permission === 'granted';
+    b.classList.toggle('btn-light', on); b.classList.toggle('btn-outline-light', !on);
+}
+
+// ===================== RENDER =====================
+function filtered(useFolder = true) {
+    const fc = document.getElementById('fCliente').value.trim().toLowerCase();
+    const fk = document.getElementById('fCodice').value.trim().toLowerCase();
+    const dal = document.getElementById('fDal').value, al = document.getElementById('fAl').value;
+    const d1 = dal ? new Date(dal + 'T00:00:00') : null, d2 = al ? new Date(al + 'T23:59:59') : null;
+    return orders.filter(o => {
+        if (useFolder) {
+            if (folder === 'DA_LEGGERE' && readSet.has(o.key)) return false;
+            if (folder === 'CON_NOTE' && !o.hasNote) return false;
+            if (folder === 'DA_ORDINARE' && !o.daOrdinare) return false;
+            if (folder === 'DA_CONSEGNARE' && !o.daConsegnare) return false;
+            if (folder === 'PREVENDITA' && !o.prevendita) return false;
+            if (STATI.includes(folder) && o.stato !== folder) return false;
+        }
+        if (fc && !o.cliente.toLowerCase().includes(fc)) return false;
+        if (fk && !fk.split(/\s+/).every(w => o.search.includes(w))) return false;
+        if (d1 && (!o.date || o.date < d1)) return false;
+        if (d2 && (!o.date || o.date > d2)) return false;
+        return true;
+    });
+}
+const FOLDERS = [
+    { k: 'TUTTI', label: 'Tutti', icon: 'fa-inbox' },
+    { k: 'DA_LEGGERE', label: 'Da leggere', icon: 'fa-envelope' },
+    { k: 'NUOVO', label: 'Nuovi', icon: 'fa-star' },
+    { k: 'DA_ORDINARE', label: 'Da ordinare al fornitore', icon: 'fa-cart-arrow-down' },
+    { k: 'ORDINATO', label: 'Ordinati al fornitore', icon: 'fa-industry' },
+    { k: 'DA_CONSEGNARE', label: 'Arrivati, da consegnare', icon: 'fa-box' },
+    { k: 'IN LAVORAZIONE', label: 'In lavorazione', icon: 'fa-hourglass-half' },
+    { k: 'VARIAZIONE', label: 'Con variazioni', icon: 'fa-pen' },
+    { k: 'CONSEGNATO', label: 'Consegnati', icon: 'fa-truck' },
+    { k: 'ANNULLATO', label: 'Annullati', icon: 'fa-ban' },
+    { k: 'PREVENDITA', label: 'Prevendita', icon: 'fa-clock' },
+    { k: 'CON_NOTE', label: 'Con note', icon: 'fa-sticky-note' }
+];
+function renderAll() { renderFolders(); renderList(); renderReader(); renderClienti(); }
+function renderFolders() {
+    const base = filtered(false);
+    const cnt = k => k === 'TUTTI' ? base.length : k === 'DA_LEGGERE' ? base.filter(o => !readSet.has(o.key)).length
+        : k === 'CON_NOTE' ? base.filter(o => o.hasNote).length : k === 'DA_ORDINARE' ? base.filter(o => o.daOrdinare).length
+        : k === 'DA_CONSEGNARE' ? base.filter(o => o.daConsegnare).length : k === 'PREVENDITA' ? base.filter(o => o.prevendita).length
+        : base.filter(o => o.stato === k).length;
+    document.getElementById('folders').innerHTML = FOLDERS.map(f => {
+        const c = cnt(f.k);
+        const strong = ['DA_LEGGERE', 'NUOVO', 'DA_ORDINARE', 'DA_CONSEGNARE'].includes(f.k) && c > 0;
+        return `<a class="nav-link ${folder === f.k ? 'active' : ''}" data-f="${f.k}"><i class="fas ${f.icon} fa-fw"></i> ${f.label}<span class="cnt ${strong ? 'badge bg-primary' : 'text-muted'}">${c || ''}</span></a>`;
+    }).join('');
+    document.getElementById('mobileFolders').innerHTML = FOLDERS.map(f => `<button class="btn btn-sm ${folder === f.k ? 'btn-primary' : 'btn-outline-secondary'}" data-f="${f.k}">${f.label} ${cnt(f.k) || ''}</button>`).join('');
+    const nNuovi = orders.filter(o => o.stato === 'NUOVO').length;
+    const tb = document.getElementById('titleBadge');
+    tb.textContent = nNuovi; tb.classList.toggle('d-none', !nNuovi);
+    document.title = (nNuovi ? `(${nNuovi}) ` : '') + 'Ordini Catalogo Ingrosso';
+}
+function renderList() {
+    const list = filtered();
+    document.getElementById('listInfo').textContent = `${list.length} ordini · ${list.reduce((a, o) => a + o.pezzi, 0)} pz · ${eur(list.reduce((a, o) => a + o.tot, 0))}`;
+    if (!list.length) { document.getElementById('olist').innerHTML = '<div class="text-center text-muted p-5">Nessun ordine</div>'; return; }
+    document.getElementById('olist').innerHTML = list.slice(0, 500).map(o => `
+        <div class="oitem ${readSet.has(o.key) ? '' : 'unread'} ${o.key === selKey ? 'sel' : ''}" data-k="${encodeURIComponent(o.key)}">
+            <div class="d-flex justify-content-between gap-2">
+                <span class="cli text-truncate">${esc(o.cliente)}</span>
+                <span class="when">${esc(o.date ? fmtWhen(o.date) : o.dataStr)}</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+                <span class="sum">${o.id ? esc(o.id) + ' · ' : ''}${o.rows.length} righe · ${o.pezzi} pz · <strong>${eur(o.tot)}</strong></span>
+                <span class="text-nowrap">${o.prevendita ? '<span class="badge bg-light text-dark border me-1" title="Prevendita">PREV</span>' : ''}${o.hasNote ? '<i class="fas fa-sticky-note text-warning me-1" title="Con note"></i>' : ''}<span class="badge st ${stCls(o.stato)}">${o.stato}</span></span>
+            </div>
+            <div class="prev">${esc(preview(o))}</div>
+        </div>`).join('') + (list.length > 500 ? '<div class="text-center small text-muted p-2">Mostrati i primi 500: usa i filtri</div>' : '');
+}
+function renderClienti() {
+    const cl = [...new Set(orders.map(o => o.cliente))].sort();
+    document.getElementById('dlClienti').innerHTML = cl.map(c => `<option value="${esc(c)}">`).join('');
+}
+
+function renderReader() {
+    const box = document.getElementById('reader');
+    const o = orders.find(x => x.key === selKey);
+    if (!o) { box.innerHTML = '<div class="reader-empty"><i class="fas fa-envelope-open-text fa-4x mb-3"></i><div>Seleziona un ordine</div></div>'; return; }
+    const shownCols = ['codice', 'ean', 'misura', 'colore', 'qta', 'prezzo', 'sconto', 'totale', 'prevendita', 'ordinato', 'cons'].filter(k => map[k]);
+    const noExtra = new Set(['stato', 'note', 'desc'].map(k => map[k]).filter(Boolean));
+    const mapped = new Set([...Object.values(map).filter(Boolean), ...GEST]);
+    const extra = headers.filter(h => h && !mapped.has(h) && !noExtra.has(h) && o.rows.some(r => String(r.v[hIdx[h]] ?? '').trim()));
+    const lab = k => ({ ordinato: 'Ord. fornitore', cons: 'Ricevuto' })[k] || FIELDS.find(f => f.k === k).label;
+    const numCols = ['qta', 'prezzo', 'sconto', 'totale'];
+    let html = `<div class="p-3 p-lg-4">
+        <div class="d-flex align-items-start gap-2 mb-2">
+            <button class="btn btn-sm btn-outline-secondary back-btn no-print" onclick="closeReader()"><i class="fas fa-arrow-left"></i></button>
+            <div class="me-auto">
+                <h4 class="mb-0">${esc(o.cliente)}</h4>
+                <div class="text-muted small">${o.codCliente ? 'Cod. ' + esc(o.codCliente) + ' · ' : ''}${o.id ? 'Ordine ' + esc(o.id) + ' · ' : ''}${esc(o.dataStr || '')}${o.telefono ? ' · <i class="fas fa-phone"></i> ' + esc(o.telefono) : ''}${o.prevendita ? ' · <span class="badge bg-light text-dark border">PREVENDITA</span>' : ''}</div>
+            </div>
+            <span class="badge st ${stCls(o.stato)} fs-6">${o.stato}</span>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2 my-3 no-print">
+            <button class="btn btn-sm btn-warning" onclick="setStato('IN LAVORAZIONE')"><i class="fas fa-hand-paper me-1"></i> Prendi in carico</button>
+            <button class="btn btn-sm btn-info text-white" onclick="askOrdinato()"><i class="fas fa-industry me-1"></i> Ordinato al fornitore</button>
+            <button class="btn btn-sm btn-primary" onclick="askCons()"><i class="fas fa-box me-1"></i> Ricevuto, in consegna</button>
+            <button class="btn btn-sm btn-success" onclick="setStato('CONSEGNATO')"><i class="fas fa-truck me-1"></i> Convalida consegna</button>
+            <button class="btn btn-sm btn-danger" onclick="setStato('ANNULLATO')"><i class="fas fa-ban me-1"></i> Annulla</button>
+            <button class="btn btn-sm" style="background:#fd7e14;color:#fff" onclick="askNota('VARIAZIONE')"><i class="fas fa-pen me-1"></i> Variazione</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="askNota('')"><i class="fas fa-sticky-note me-1"></i> Nota</button>
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown"><i class="fas fa-ellipsis-h"></i></button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="#" onclick="setStato('NUOVO');return false;"><i class="fas fa-undo me-1"></i> Rimetti come nuovo</a></li>
+                    <li><a class="dropdown-item" href="#" onclick="markUnread();return false;"><i class="fas fa-envelope me-1"></i> Segna come da leggere</a></li>
+                    ${o.telefono ? `<li><a class="dropdown-item" target="_blank" href="https://wa.me/${esc(waNum(o.telefono))}"><i class="fab fa-whatsapp me-1"></i> Scrivi al cliente</a></li>` : ''}
+                    <li><a class="dropdown-item" href="#" onclick="window.print();return false;"><i class="fas fa-print me-1"></i> Stampa ordine</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="small text-muted mb-1 no-print">Le azioni valgono per le righe selezionate (tutte se nessuna è selezionata).</div>
+        <div class="table-responsive"><table class="table table-sm table-hover lines">
+            <thead class="table-light"><tr><th class="no-print"><input type="checkbox" class="form-check-input" id="chkAll"></th>
+            <th>Articolo</th>${shownCols.map(k => `<th${numCols.includes(k) ? ' class="text-end"' : ''}>${esc(lab(k))}</th>`).join('')}
+            ${extra.map(h => `<th>${esc(h)}</th>`).join('')}<th>Stato</th></tr></thead><tbody>`;
+    o.rows.forEach(r => {
+        const s = rStato(r), nt = val(r, 'note');
+        html += `<tr class="${s === 'ANNULLATO' ? 'annullato' : ''}"><td class="no-print"><input type="checkbox" class="form-check-input chkRow" value="${r.n}"></td>
+            <td><strong>${esc(val(r, 'desc') || val(r, 'codice'))}</strong></td>
+            ${shownCols.map(k => { const v = val(r, k); const warn = k === 'ordinato' && !v && !['ANNULLATO', 'CONSEGNATO'].includes(s) && !val(r, 'cons');
+                return `<td${numCols.includes(k) ? ' class="text-end"' : ''}>${warn ? '<span class="badge bg-light text-danger border border-danger">da ordinare</span>' : esc(v)}</td>`; }).join('')}
+            ${extra.map(h => `<td>${esc(r.v[hIdx[h]])}</td>`).join('')}
+            <td><span class="badge st ${stCls(s)}">${esc(s)}</span></td></tr>`;
+        if (nt) html += `<tr><td class="no-print"></td><td colspan="${shownCols.length + extra.length + 2}"><div class="note-box">${esc(nt)}</div></td></tr>`;
+    });
+    html += `</tbody><tfoot><tr class="table-light"><th class="no-print"></th><th colspan="${Math.max(1, shownCols.length + extra.length)}" class="text-end">Totale (escluse righe annullate)</th><th class="text-end">${o.pezzi} pz · ${eur(o.tot)}</th><th></th></tr></tfoot></table></div>
+        <details class="small text-muted mt-2 no-print"><summary>Storico</summary>${o.rows.map(r => gval(r, 'STORICO_GESTIONE') ? `<div>Riga ${r.n}: ${esc(gval(r, 'STORICO_GESTIONE'))}</div>` : '').join('') || 'Nessuna operazione registrata.'}</details>
+    </div>`;
+    box.innerHTML = html;
+    document.getElementById('chkAll').addEventListener('change', e => document.querySelectorAll('.chkRow').forEach(c => c.checked = e.target.checked));
+}
+function waNum(t) { let n = String(t).replace(/\D/g, ''); if (n.length <= 10) n = '39' + n; return n; }
+
+function openOrder(encKey) {
+    selKey = decodeURIComponent(encKey);
+    readSet.add(selKey); saveJSON(READ_KEY, [...readSet]);
+    document.getElementById('app').classList.add('reading');
+    renderFolders(); renderList(); renderReader();
+}
+function closeReader() { document.getElementById('app').classList.remove('reading'); }
+function markUnread() { readSet.delete(selKey); saveJSON(READ_KEY, [...readSet]); renderFolders(); renderList(); }
+
+// ===================== AZIONI =====================
+function selectedRows(o) {
+    const sel = [...document.querySelectorAll('.chkRow:checked')].map(c => +c.value);
+    return sel.length ? sel : o.rows.map(r => r.n);
+}
+async function update(stato, nota, extra = {}) {
+    const o = orders.find(x => x.key === selKey); if (!o) return;
+    const nr = selectedRows(o);
+    const scope = nr.length === o.rows.length ? 'tutto l\'ordine' : nr.length + ' righe';
+    if (stato === 'ANNULLATO' && !confirm(`Annullare ${scope} di ${o.cliente}?`)) return;
+    if (stato === 'CONSEGNATO' && !confirm(`Convalidare la consegna di ${scope} di ${o.cliente}?`)) return;
+    try {
+        document.body.style.cursor = 'wait';
+        await api(Object.assign({ action: 'update', rows: nr, stato: stato || '', nota: nota || '', utente: cfg.user || '' }, extra));
+        // aggiornamento immediato a video, poi ricarico dal foglio
+        const ora = new Date().toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '');
+        o.rows.forEach(r => {
+            if (!nr.includes(r.n)) return;
+            const set = (k, v) => { const hd = map[k]; if (hd && hIdx[hd] !== undefined) r.v[hIdx[hd]] = v; };
+            if (stato) set('stato', stato);
+            if (extra.ordinato) set('ordinato', extra.ordinato);
+            if (extra.cons) set('cons', extra.cons);
+            if (nota) set('note', (val(r, 'note') ? val(r, 'note') + '\n' : '') + `[${ora}${cfg.user ? ' ' + cfg.user : ''}] ${nota}`);
+        });
+        buildOrders(); renderAll();
+        toast('<i class="fas fa-check text-success me-1"></i> Registrato', `${[stato, extra.ordinato, extra.cons ? 'ricevuto ' + extra.cons : ''].filter(Boolean).join(' · ') || 'Nota'} · ${esc(o.cliente)} (${scope})`, 'success', 3000);
+        setTimeout(() => load(), 1500);
+    } catch (e) {
+        alert('Operazione non riuscita: ' + e.message);
+    } finally { document.body.style.cursor = ''; }
+}
+
+// Ordine al fornitore: riferimento come "ORD_01_DEL_02/11/2026" (progressivo del giorno proposto in automatico)
+function oggiStr() { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`; }
+function refOrdiniOggi() {
+    const oggi = oggiStr(), refs = new Set();
+    rows.forEach(r => { const v = val(r, 'ordinato'); if (v.endsWith('_DEL_' + oggi)) refs.add(v); });
+    return [...refs].sort();
+}
+function askOrdinato() {
+    const o = orders.find(x => x.key === selKey); if (!o) return;
+    const esistenti = refOrdiniOggi();
+    let max = 0; esistenti.forEach(v => { const m = v.match(/^ORD_(\d+)_DEL_/); if (m) max = Math.max(max, +m[1]); });
+    const nuovo = `ORD_${String(max + 1).padStart(2, '0')}_DEL_${oggiStr()}`;
+    const n = selectedRows(o).length;
+    document.getElementById('mRefTitle').innerHTML = '<i class="fas fa-industry me-2"></i>Ordinato al fornitore';
+    document.getElementById('mRefInfo').textContent = `${o.cliente} · ${n === o.rows.length ? 'tutto l\'ordine' : n + ' righe selezionate'}. Scegli un ordine fornitore di oggi già aperto oppure usa il nuovo numero.`;
+    document.getElementById('mRefLabel').textContent = 'Riferimento ordine fornitore (colonna ORDINATO)';
+    const inp = document.getElementById('mRefVal'); inp.value = nuovo; inp.setAttribute('list', 'dlRef');
+    document.getElementById('dlRef').innerHTML = [nuovo, ...esistenti].map(v => `<option value="${esc(v)}">`).join('');
+    document.getElementById('mRefChips').innerHTML = esistenti.map(v => `<button type="button" class="btn btn-sm btn-outline-info me-1 mb-1" onclick="document.getElementById('mRefVal').value='${esc(v)}'">${esc(v)}</button>`).join('');
+    refMode = 'ordinato';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('mRef')).show();
+}
+function askCons() {
+    const o = orders.find(x => x.key === selKey); if (!o) return;
+    const n = selectedRows(o).length, d = new Date();
+    document.getElementById('mRefTitle').innerHTML = '<i class="fas fa-box me-2"></i>Ricevuto dal fornitore, in consegna';
+    document.getElementById('mRefInfo').textContent = `${o.cliente} · ${n === o.rows.length ? 'tutto l\'ordine' : n + ' righe selezionate'}.`;
+    document.getElementById('mRefLabel').textContent = 'Data di arrivo (colonna CONS)';
+    const inp = document.getElementById('mRefVal'); inp.value = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`; inp.removeAttribute('list');
+    document.getElementById('mRefChips').innerHTML = '';
+    refMode = 'cons';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('mRef')).show();
+}
+let refMode = '';
+document.getElementById('mRefOk').addEventListener('click', () => {
+    const v = document.getElementById('mRefVal').value.trim();
+    if (!v) { alert('Inserisci il valore.'); return; }
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('mRef')).hide();
+    if (refMode === 'ordinato') update('ORDINATO', '', { ordinato: v });
+    else update('IN CONSEGNA', '', { cons: v });
+});
+function setStato(s) { return update(s, ''); }
+let notaStato = '';
+function askNota(stato) {
+    const o = orders.find(x => x.key === selKey); if (!o) return;
+    notaStato = stato;
+    const n = selectedRows(o).length;
+    document.getElementById('mNotaTitle').textContent = stato ? 'Variazione ordine' : 'Nota';
+    document.getElementById('mNotaInfo').textContent = `${o.cliente} · ${n === o.rows.length ? 'tutto l\'ordine' : n + ' righe selezionate'}`;
+    document.getElementById('mNotaText').value = '';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('mNota')).show();
+    setTimeout(() => document.getElementById('mNotaText').focus(), 300);
+}
+document.getElementById('mNotaOk').addEventListener('click', () => {
+    const t = document.getElementById('mNotaText').value.trim();
+    if (!t) { alert('Scrivi il testo della nota.'); return; }
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('mNota')).hide();
+    update(notaStato, t);
+});
+
+// ===================== IMPOSTAZIONI =====================
+function openSettings() {
+    document.getElementById('sUrl').value = cfg.url || WEBAPP_URL;
+    document.getElementById('sToken').value = cfg.token || '';
+    document.getElementById('sUser').value = cfg.user || '';
+    document.getElementById('sPoll').value = pollSec();
+    document.getElementById('sSound').checked = cfg.sound !== false;
+    updateLink();
+    document.getElementById('mapFields').innerHTML = headers.length ? FIELDS.map(f => `
+        <div class="col-md-4"><label class="small fw-bold">${f.label}</label>
+        <select class="form-select form-select-sm map-sel" data-k="${f.k}"><option value="">— nessuna —</option>
+        ${headers.filter(h => h && !GEST.includes(h)).map(h => `<option ${map[f.k] === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></div>`).join('')
+        : '<div class="col-12 small text-muted">Le colonne compaiono dopo il primo collegamento riuscito.</div>';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('mSettings')).show();
+}
+function updateLink() {
+    const u = document.getElementById('sUrl').value.trim(), k = document.getElementById('sToken').value.trim();
+    document.getElementById('sLink').value = location.origin + location.pathname + '?k=' + encodeURIComponent(k) + '&u=' + encodeURIComponent(u);
+}
+['sUrl', 'sToken'].forEach(id => document.getElementById(id).addEventListener('input', updateLink));
+document.getElementById('btnSettings').addEventListener('click', openSettings);
+function readSettings() {
+    cfg.url = document.getElementById('sUrl').value.trim();
+    cfg.token = document.getElementById('sToken').value.trim();
+    cfg.user = document.getElementById('sUser').value.trim().toUpperCase();
+    cfg.poll = Math.max(20, parseInt(document.getElementById('sPoll').value) || 60);
+    cfg.sound = document.getElementById('sSound').checked;
+    saveJSON(CFG_KEY, cfg);
+}
+document.getElementById('sTest').addEventListener('click', async () => {
+    readSettings();
+    try { const r = await api({ action: 'ping' }); alert('✔ ' + r.info); }
+    catch (e) { alert('Collegamento non riuscito: ' + e.message); }
+});
+document.getElementById('sSave').addEventListener('click', () => {
+    readSettings();
+    const sels = document.querySelectorAll('.map-sel');
+    if (sels.length) {
+        const m = {}; sels.forEach(s => m[s.dataset.k] = s.value);
+        saveJSON(MAP_KEY, m);
+    }
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('mSettings')).hide();
+    schedule();
+    if (headers.length) { detectMap(); buildOrders(); renderAll(); }
+    load(true);
+});
+
+// ===================== EVENTI =====================
+document.getElementById('olist').addEventListener('click', e => { const it = e.target.closest('.oitem'); if (it) openOrder(it.dataset.k); });
+['folders', 'mobileFolders'].forEach(id => document.getElementById(id).addEventListener('click', e => {
+    const a = e.target.closest('[data-f]'); if (!a) return;
+    folder = a.dataset.f; renderFolders(); renderList();
+}));
+['fCliente', 'fCodice', 'fDal', 'fAl'].forEach(id => document.getElementById(id).addEventListener('input', () => { renderFolders(); renderList(); }));
+document.getElementById('fReset').addEventListener('click', () => { ['fCliente', 'fCodice', 'fDal', 'fAl'].forEach(id => document.getElementById(id).value = ''); renderFolders(); renderList(); });
+document.getElementById('btnRefresh').addEventListener('click', () => load(true));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+
+updateBell();
+schedule();
+if (!(cfg.url || WEBAPP_URL) || !cfg.token) {
+    document.getElementById('olist').innerHTML = '<div class="alert alert-info m-3">Prima configurazione: inserisci l\'URL dell\'app web e il codice di accesso.<br><button class="btn btn-sm btn-primary mt-2" onclick="openSettings()"><i class="fas fa-cog me-1"></i> Impostazioni</button></div>';
+} else load();
+</script>
+</body>
+</html>
