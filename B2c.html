@@ -81,6 +81,21 @@
   #per-te .riga-pt { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; }
   #per-te .card { flex: 0 0 150px; scroll-snap-align: start; }
   #per-te .taglia-pt { font-size: 11px; font-weight: 700; color: var(--ok); margin-top: 2px; }
+  #per-te h2 .mod-chi { border: none; background: none; color: var(--accent); font-weight: 700; font-size: 12.5px; text-decoration: underline; cursor: pointer; padding: 0 0 0 6px; }
+  .tua-taglia { font-size: 11.5px; font-weight: 800; color: var(--ok); margin-top: 3px; }
+  /* "Parlami di te" */
+  #v-chi { align-items: center; padding: 16px; } #v-chi .foglio { border-radius: 18px; max-width: 480px; max-height: 92vh; }
+  .chi-pass { display: flex; gap: 6px; margin: 2px 0 12px; } .chi-pass i { flex: 1; height: 4px; border-radius: 4px; background: var(--line); } .chi-pass i.on { background: var(--accent); }
+  .chi-dom { font-size: 21px; font-weight: 800; margin: 0 40px 4px 0; line-height: 1.2; }
+  .chi-sub { font-size: 13.5px; color: var(--mute); margin: 0 0 14px; }
+  .chi-ops { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chi-ops button { border: 1.5px solid var(--line); background: #fff; border-radius: 14px; padding: 12px 14px; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; color: var(--ink); min-height: 48px; }
+  .chi-ops.grandi button { flex: 1 1 100%; text-align: left; }
+  .chi-ops.misure button { min-width: 62px; padding: 10px 12px; font-size: 14px; }
+  .chi-ops button.on { background: #111; color: #fff; border-color: #111; }
+  .chi-gruppo { font-size: 12px; font-weight: 800; color: var(--mute); letter-spacing: .06em; margin: 14px 0 6px; text-transform: uppercase; }
+  .chi-wa { display: flex; gap: 10px; align-items: flex-start; margin-top: 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 12px; font-size: 14px; font-weight: 600; line-height: 1.35; cursor: pointer; }
+  .chi-wa input { width: 20px; height: 20px; margin: 0; flex: none; accent-color: #16a34a; }
   /* nuovi arrivi */
   #nuovi { display: none; max-width: 1200px; margin: 10px auto 0; padding: 0 12px; }
   #nuovi.show { display: block; }
@@ -300,6 +315,13 @@
     <div class="piede"><button class="btn" id="benv-ok" onclick="chiudiBenvenuto()">Vedi le offerte</button></div>
   </div>
 </div>
+<div class="velo" id="v-chi" onclick="if (event.target === this) saltaChi()">
+  <div class="foglio">
+    <button class="x" onclick="saltaChi()" aria-label="Chiudi">×</button>
+    <div class="scorri" style="padding:18px 18px 10px" id="chi-corpo"></div>
+    <div class="piede"><button class="btn sec" id="chi-indietro" onclick="passoChi(-1)">Salta</button><button class="btn" id="chi-avanti" onclick="passoChi(1)">Avanti</button></div>
+  </div>
+</div>
 <div class="velo" id="v-pay" onclick="if (event.target === this) chiudiPagamenti()">
   <div class="foglio">
     <button class="x" onclick="chiudiPagamenti()" aria-label="Chiudi">×</button>
@@ -461,17 +483,21 @@
     if (d.config) CONFIG = Object.assign(CONFIG, d.config);
     raggruppa();
     risolviNegozio();
-    $('info').innerHTML = '🛍️ Ritiro in negozio gratuito · 🚚 Spedizione ' + eur(CONFIG.spedizione) + ' con pagamento anticipato<button class="link-pay" onclick="apriPagamenti()">💳 Come pagare</button>';
+    $('info').innerHTML = `🛍️ Ritiro in negozio gratuito · 🚚 Spedizione ${eur(CONFIG.spedizione)} con pagamento anticipato<button class="link-pay" onclick="apriPagamenti()">💳 Come pagare</button><button class="link-pay" onclick="apriChi()">👤 ${CHI && CHI.generi ? 'Il mio profilo' : 'Parlami di te'}</button>`;
     ripulisciCarrello();
     disegnaChips(); filtra(); aggiornaBarra();
     $('stato').style.display = 'none';
     avviaConto();
     apriCondiviso(fresco);
-    if (!BENV_FATTO && !ADMIN && !P_PARAM && (CONFIG.puntiRitiro || []).length) { BENV_FATTO = true; apriBenvenuto(); }
+    if (!BENV_FATTO && !ADMIN && !P_PARAM) {
+      BENV_FATTO = true;
+      if ((CONFIG.puntiRitiro || []).length) { BENV_AUTO = true; apriBenvenuto(); }
+      else if (serveChi()) apriChi();
+    }
   }
 
   // ===== BENVENUTO: negozio del link + offerte degli altri punti vendita =====
-  let BENV_FATTO = false;
+  let BENV_FATTO = false, BENV_AUTO = false;
   const COLORI_NEG = ['#111111', '#e11d2e', '#2563eb', '#b8860b', '#16a34a', '#7c3aed'];
   function apriBenvenuto() {
     const l = CONFIG.puntiRitiro || [];
@@ -490,7 +516,11 @@
     $('v-benv').classList.add('show');
     traccia('benvenuto', NEG || '');
   }
-  function chiudiBenvenuto() { $('v-benv').classList.remove('show'); }
+  function chiudiBenvenuto() {
+    if (!$('v-benv').classList.contains('show')) return;
+    $('v-benv').classList.remove('show');
+    if (BENV_AUTO) { BENV_AUTO = false; if (serveChi()) setTimeout(apriChi, 250); }   // negozio confermato: ora "Parlami di te"
+  }
   $('benv-neg').addEventListener('click', e => {
     const b = e.target.closest('[data-neg]'); if (!b) return;
     if (b.classList.contains('qui')) { chiudiBenvenuto(); return; }
@@ -620,7 +650,10 @@
   const norm2 = m => String(m).trim().toUpperCase();
   function punteggio(g) {
     let sc = 0; g.tags.forEach(t => { sc += PROF.t[t] || 0; });
-    if (!sc) return { sc: 0, taglia: '' };
+    const pc = puntiChi(g);
+    sc += pc.sc;
+    if (sc <= 0) return { sc: 0, taglia: '' };
+    if (pc.taglia) return { sc, taglia: pc.taglia };
     let taglia = '', bm = 0;
     g.varianti.forEach(v => {
       if (!v.disponibile || !v.misura) return;
@@ -631,6 +664,184 @@
     if (PROF.v[g.key]) sc *= 0.5;   // già visto: scende nei suggerimenti
     return { sc, taglia };
   }
+  // ===== "PARLAMI DI TE": profilo scelto dal cliente (resta solo su questo telefono) =====
+  const CHI_KEY = 'b2c_chi_v1';
+  let CHI = null;
+  try { CHI = JSON.parse(lsGet(CHI_KEY) || 'null'); } catch (e) { CHI = null; }
+  const CHI_PER = [{ k: 'me', t: '🙋 Per me' }, { k: 'figlio', t: '👶 Per mio figlio / mia figlia' }, { k: 'regalo', t: '🎁 Per un regalo' }];
+  const CHI_GEN = [{ k: 'donna', t: '👩 Donna' }, { k: 'uomo', t: '👨 Uomo' }, { k: 'bambino', t: '🧒 Bambino/a' }, { k: 'tutto', t: '✨ Un po\' di tutto' }];
+  const CHI_STILI = [
+    { k: 'casual', t: '👕 Casual', re: /casual|jeans|denim|felp|t-?shirt|maglie|maglia|pantalon/ },
+    { k: 'sport', t: '🏀 Sportivo', re: /sport|hangar|tuta|running|palestra|fitness|basket|calcio/ },
+    { k: 'elegante', t: '🤵 Elegante / Cerimonia', re: /cerimon|elegan|abito|battesim|comunion|complet|camicia|giacca/ },
+    { k: 'intimo', t: '🩲 Intimo e notte', re: /intim|pigiam|slip|reggiseno|boxer|calze|calzin|notte|lingerie/ }
+  ];
+  const CHI_STD = {
+    donna: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '40', '42', '44', '46', '48', '50'],
+    uomo: ['S', 'M', 'L', 'XL', 'XXL', '3XL', '46', '48', '50', '52', '54', '56'],
+    bambino: ['3 MESI', '6 MESI', '9 MESI', '12 MESI', '18 MESI', '2 ANNI', '3 ANNI', '4 ANNI', '5 ANNI', '6 ANNI', '8 ANNI', '10 ANNI', '12 ANNI', '14 ANNI', '16 ANNI']
+  };
+  let CHI_B = null, CHI_P = 0;   // bozza in compilazione e passo
+  const CHI_PASSI = ['per', 'cosa', 'misure', 'stile'];
+  const GIORNI_RICHIESTA = 7;    // chi salta, se lo rivede dopo una settimana
+  function serveChi() {
+    if (ADMIN || P_PARAM) return false;
+    if (!CHI) return true;
+    if (CHI.generi) return false;
+    return CHI.saltato && Date.now() - CHI.saltato > GIORNI_RICHIESTA * 864e5;
+  }
+  // a chi è rivolto un prodotto, da tipo, categoria e nome
+  function genereDi(g) {
+    const t = norm([g.tipo, g.categoria, g.nome].join(' '));
+    const o = new Set();
+    if (/donna|woman|femmin|lady|signora/.test(t)) o.add('donna');
+    if (/uomo|\bman\b|maschil|signore/.test(t)) o.add('uomo');
+    if (/bambin|bimb|neonat|bebe|junior|ragazz|kids|baby|battesim|comunion|infant/.test(t)) o.add('bambino');
+    if (/unisex/.test(t)) { o.add('donna'); o.add('uomo'); }
+    return o;
+  }
+  const chiaveMis = m => String(m == null ? '' : m).toUpperCase().replace(/\s+/g, '').replace(/^TG\.?|^TAGLIA/, '').replace(/ANNI?$/, 'A').replace(/MESI?$/, 'MS');
+  function ordineMis(m) {
+    const k = String(m).toUpperCase().trim(), n = parseFloat(k.replace(',', '.'));
+    const lettere = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', 'XXXL', '4XL', '5XL', '6XL'];
+    if (/MES/.test(k) && !isNaN(n)) return [0, n];
+    if (/ANN/.test(k) && !isNaN(n)) return [1, n];
+    const i = lettere.indexOf(k.replace(/\s+/g, ''));
+    if (i >= 0) return [2, i];
+    if (!isNaN(n) && /^\d/.test(k)) return [3, n];
+    return [4, 0, k];
+  }
+  const cmpMis = (a, b) => { const x = ordineMis(a), y = ordineMis(b); return x[0] - y[0] || x[1] - y[1] || String(x[2] || '').localeCompare(String(y[2] || '')); };
+  // misure da proporre: quelle davvero presenti nel catalogo per quel genere, più quelle standard
+  function misurePer(gen) {
+    const visti = new Map();
+    GRUPPI.forEach(g => {
+      if (gen !== 'tutto') { const gg = genereDi(g); if (gg.size && !gg.has(gen)) return; if (!gg.size) return; }
+      g.varianti.forEach(v => { if (v.disponibile && v.misura) { const k = chiaveMis(v.misura); if (k && !visti.has(k)) visti.set(k, String(v.misura).trim().toUpperCase()); } });
+    });
+    (CHI_STD[gen] || []).forEach(m => { const k = chiaveMis(m); if (!visti.has(k)) visti.set(k, m); });
+    return [...visti.values()].sort(cmpMis).slice(0, 48);
+  }
+  function tuaTaglia(g) {
+    if (!CHI || !CHI.misure || !CHI.misure.length) return '';
+    const mie = new Set(CHI.misure.map(chiaveMis));
+    const v = g.varianti.find(v => v.disponibile && v.misura && mie.has(chiaveMis(v.misura)));
+    return v ? String(v.misura).trim() : '';
+  }
+  // etichetta in griglia solo se il capo è per il genere scelto (niente "tua taglia" su un capo da uomo per chi cerca donna)
+  const tagliaGriglia = g => (!g.esaurito && puntiChi(g).sc >= 0) ? tuaTaglia(g) : '';
+  function puntiChi(g) {
+    if (!CHI || !CHI.generi) return { sc: 0, taglia: '' };
+    let sc = 0;
+    const gg = genereDi(g), tutti = CHI.generi.indexOf('tutto') >= 0;
+    if (!tutti && gg.size) {
+      if (!CHI.generi.some(x => gg.has(x))) return { sc: -1000, taglia: '' };   // non è per lui/lei: fuori dai suggerimenti
+      sc += 4;
+    }
+    const taglia = tuaTaglia(g);
+    if (taglia) sc += 6;
+    (CHI.stili || []).forEach(k => { const st = CHI_STILI.find(x => x.k === k); if (st && st.re.test(g.testo)) sc += 2; });
+    return { sc, taglia };
+  }
+  function riassuntoChi() {
+    if (!CHI || !CHI.generi) return '';
+    const gen = CHI.generi.map(k => (CHI_GEN.find(x => x.k === k) || {}).t || k).map(t => t.replace(/^\S+\s/, '')).join(', ');
+    const mis = (CHI.misure || []).slice(0, 4).join(', ') + ((CHI.misure || []).length > 4 ? '…' : '');
+    return gen + (mis ? ' · ' + mis : '');
+  }
+
+  function apriChi() {
+    CHI_B = CHI && CHI.generi ? JSON.parse(JSON.stringify(CHI)) : { per: '', generi: [], misure: [], stili: [], wa: false };
+    CHI_P = 0;
+    disegnaChi();
+    $('v-chi').classList.add('show');
+    traccia('profilo-apri', NEG || '');
+  }
+  function saltaChi() {
+    if (!$('v-chi').classList.contains('show')) return;
+    $('v-chi').classList.remove('show');
+    if (!CHI || !CHI.generi) { CHI = { saltato: Date.now() }; lsSet(CHI_KEY, JSON.stringify(CHI)); traccia('profilo-saltato', ''); }
+  }
+  function opz(lista, scelti, attr) {
+    return lista.map(o => `<button type="button" data-${attr}="${esc(o.k)}" class="${scelti.indexOf(o.k) >= 0 ? 'on' : ''}">${esc(o.t)}</button>`).join('');
+  }
+  function disegnaChi() {
+    const B = CHI_B, passo = CHI_PASSI[CHI_P];
+    let h = '<div class="chi-pass">' + CHI_PASSI.map((x, i) => `<i class="${i <= CHI_P ? 'on' : ''}"></i>`).join('') + '</div>';
+    if (passo === 'per') {
+      h += '<p class="chi-dom">👋 Parlami di te</p><p class="chi-sub">Tre tocchi e ti mostriamo prima le offerte giuste, nelle taglie che cerchi. Per chi stai cercando?</p>';
+      h += '<div class="chi-ops grandi">' + opz(CHI_PER, [B.per], 'per') + '</div>';
+    } else if (passo === 'cosa') {
+      h += '<p class="chi-dom">Cosa ti interessa?</p><p class="chi-sub">Puoi sceglierne più di uno.</p>';
+      h += '<div class="chi-ops grandi">' + opz(CHI_GEN, B.generi, 'gen') + '</div>';
+    } else if (passo === 'misure') {
+      h += '<p class="chi-dom">Quali misure ' + (B.per === 'me' ? 'porti' : 'cerchi') + '?</p><p class="chi-sub">Scegli tutte quelle che ti servono: ti mostriamo prima i capi disponibili in queste taglie.</p>';
+      const gruppi = B.generi.indexOf('tutto') >= 0 || !B.generi.length ? ['donna', 'uomo', 'bambino'] : B.generi;
+      const nomi = { donna: 'Donna', uomo: 'Uomo', bambino: 'Bambino/a · età' };
+      gruppi.forEach(gen => {
+        const l = misurePer(gen);
+        if (!l.length) return;
+        if (gruppi.length > 1) h += `<div class="chi-gruppo">${nomi[gen]}</div>`;
+        h += '<div class="chi-ops misure">' + l.map(m => `<button type="button" data-mis="${esc(m)}" class="${B.misure.indexOf(m) >= 0 ? 'on' : ''}">${esc(m)}</button>`).join('') + '</div>';
+      });
+    } else {
+      h += '<p class="chi-dom">Che stile preferisci?</p><p class="chi-sub">Facoltativo: scegline uno o più, oppure tocca "Fatto".</p>';
+      h += '<div class="chi-ops grandi">' + opz(CHI_STILI, B.stili, 'stile') + '</div>';
+      h += `<label class="chi-wa"><input type="checkbox" id="chi-wa" ${B.wa ? 'checked' : ''}><span>🔔 Avvisami su WhatsApp quando arrivano novità nella mia taglia<br><small style="font-weight:500;color:var(--mute)">Si apre WhatsApp con un messaggio già pronto: basta inviarlo.</small></span></label>`;
+    }
+    $('chi-corpo').innerHTML = h;
+    $('chi-indietro').textContent = CHI_P ? '← Indietro' : 'Salta';
+    $('chi-avanti').textContent = CHI_P === CHI_PASSI.length - 1 ? 'Fatto ✓' : 'Avanti';
+    $('chi-avanti').disabled = (passo === 'per' && !B.per) || (passo === 'cosa' && !B.generi.length);
+    $('chi-avanti').style.opacity = $('chi-avanti').disabled ? '.45' : '';
+  }
+  $('chi-corpo').addEventListener('click', e => {
+    const b = e.target.closest('button'), B = CHI_B; if (!b || !B) return;
+    const tog = (l, k) => { const i = l.indexOf(k); if (i >= 0) l.splice(i, 1); else l.push(k); };
+    if (b.dataset.per) {
+      B.per = b.dataset.per;
+      if (B.per === 'figlio' && !B.generi.length) B.generi = ['bambino'];
+      disegnaChi(); setTimeout(() => passoChi(1), 180); return;   // risposta singola: si va avanti da soli
+    }
+    if (b.dataset.gen) {
+      const k = b.dataset.gen;
+      if (k === 'tutto') B.generi = B.generi.indexOf('tutto') >= 0 ? [] : ['tutto'];
+      else { B.generi = B.generi.filter(x => x !== 'tutto'); tog(B.generi, k); }
+    }
+    if (b.dataset.mis) tog(B.misure, b.dataset.mis);
+    if (b.dataset.stile) tog(B.stili, b.dataset.stile);
+    disegnaChi();
+  });
+  function passoChi(d) {
+    if (d < 0 && CHI_P === 0) { saltaChi(); return; }
+    if (d > 0 && $('chi-avanti').disabled) return;
+    const w = $('chi-wa'); if (w) CHI_B.wa = w.checked;
+    if (d > 0 && CHI_P === CHI_PASSI.length - 1) { salvaChi(); return; }
+    CHI_P = Math.max(0, Math.min(CHI_PASSI.length - 1, CHI_P + d));
+    disegnaChi();
+    $('chi-corpo').scrollTop = 0;
+  }
+  function salvaChi() {
+    const B = CHI_B;
+    CHI = { per: B.per, generi: B.generi, misure: B.misure, stili: B.stili, wa: !!B.wa, data: Date.now() };
+    lsSet(CHI_KEY, JSON.stringify(CHI));
+    $('v-chi').classList.remove('show');
+    // nelle statistiche arriva solo il riassunto anonimo, legato al codice visitatore
+    traccia('profilo', [CHI.per, CHI.generi.join('+'), CHI.misure.join('+'), CHI.stili.join('+')].join(' | ').slice(0, 180));
+    if (CHI.wa) {
+      const testo = '🔔 Ciao! Vorrei ricevere su WhatsApp le novità e le offerte' + (NEG ? ' di ' + NEG : '') + '.\n' +
+        'Cerco: ' + riassuntoChi() + ((CHI.stili || []).length ? '\nStile: ' + CHI.stili.map(k => (CHI_STILI.find(x => x.k === k) || {}).t || k).map(t => t.replace(/^\S+\s/, '')).join(', ') : '');
+      window.open('https://wa.me/' + numeroWhatsApp(NEG) + '?text=' + encodeURIComponent(testo), '_blank');
+    }
+    applicaProfiloVista();
+    avviso('✨ Fatto! Ora ti mostriamo prima le offerte nelle tue taglie', 4000);
+  }
+  function applicaProfiloVista() {
+    $('info').querySelectorAll('.link-pay').forEach(b => { if (/profilo|Parlami/.test(b.textContent)) b.textContent = '👤 Il mio profilo'; });
+    filtra();
+    const pt = $('per-te'); if (pt.classList.contains('show')) pt.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   function disegnaNuovi() {
     const box = $('nuovi');
     const libero = CAT === 'Tutte' && !TAG && !$('cerca').value.trim();
@@ -653,7 +864,7 @@
     const lista = GRUPPI.filter(g => !g.esaurito && !nelCarrello(g)).map(g => Object.assign({ g }, punteggio(g)))
       .filter(x => x.sc > 0).sort((a, b) => b.sc - a.sc).slice(0, 8);
     if (!lista.length) { box.classList.remove('show'); return; }
-    box.innerHTML = '<h2>✨ Scelti per te</h2><div class="riga-pt">' + lista.map(({ g, taglia }) => {
+    box.innerHTML = '<h2>✨ Scelti per te' + (CHI && CHI.generi ? ' <small style="font-weight:600;color:var(--mute)">· ' + esc(riassuntoChi()) + '</small><button class="mod-chi" onclick="apriChi()">Modifica</button>' : '') + '</h2><div class="riga-pt">' + lista.map(({ g, taglia }) => {
       const s = scontoAttivo(g);
       return `<div class="card" data-k="${esc(g.key)}" data-pt="1"><div class="foto"><img loading="lazy" decoding="async" src="${esc(g.imgs[0] || '')}" alt="${esc(g.nome)}" onerror="this.onerror=null;this.style.visibility='hidden'">
         ${s ? `<span class="badge-sconto">-${Number.isInteger(s) ? s : s.toFixed(1)}%</span>` : ''}</div>
@@ -722,6 +933,7 @@
         <div class="corpo"><h3>${esc(g.nome)}</h3>
           <div class="meta">${esc(g.brand)}</div>
           ${inNeg(g) ? '<span class="neg-bdg">🏪 Disponibile qui</span>' : ''}
+          ${tagliaGriglia(g) ? `<div class="tua-taglia">✓ C'è la tua taglia (${esc(tagliaGriglia(g))})</div>` : ''}
           ${g.notaPulita ? `<div class="nota-extra">${esc(g.notaPulita)}</div>` : ''}
           <div class="prezzo">${prezzoHtml(g)}</div>
           ${s && g.fino ? `<div class="fino">Offerta fino al ${dataIt(g.fino)}</div>` : ''}
@@ -1536,7 +1748,7 @@
     $('v-pay').classList.add('show');
   }
   function chiudiPagamenti() { $('v-pay').classList.remove('show'); }
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { chiudiPagamenti(); chiudiBenvenuto(); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { chiudiPagamenti(); chiudiBenvenuto(); saltaChi(); } });
 
   // ===== AVVIO =====
   try { CART = JSON.parse(lsGet(CARRELLO_KEY) || '{}') || {}; } catch (e) { CART = {}; }
