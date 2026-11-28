@@ -264,6 +264,12 @@ function detectMap() {
     hIdx = {}; headers.forEach((h, i) => { if (!(h in hIdx)) hIdx[h] = i; });
 }
 function val(r, k) { const h = map[k]; return h && hIdx[h] !== undefined ? String(r.v[hIdx[h]] ?? '').trim() : ''; }
+// Riga in prevendita = da ordinare al fornitore. Colonna PREVENDITA (di solito la N) = SI.
+// Se l'intestazione non è riconosciuta si usa direttamente la colonna N.
+function isPrev(r) {
+    const v = map.prevendita ? val(r, 'prevendita') : String(r.v[13] ?? '').trim();
+    return /^(S[IÌ]?|ORDINABILE)$/i.test(v);
+}
 function gval(r, name) { return hIdx[name] !== undefined ? String(r.v[hIdx[name]] ?? '').trim() : ''; }
 // Stato effettivo della riga: se lo Stato è ancora NUOVO ma ORDINATO o CONS sono compilati (anche a mano nel foglio),
 // la riga vale come ordinata al fornitore o ricevuta/in consegna
@@ -325,8 +331,10 @@ function buildOrders() {
         o.pezzi = Math.round(pezzi * 1000) / 1000; o.tot = tot; o.statiRighe = st;
         o.stato = orderStato(st, o.rows.length);
         o.hasNote = o.rows.some(r => val(r, 'note'));
-        o.prevendita = o.rows.some(r => /^S/i.test(val(r, 'prevendita')));
-        o.daOrdinare = o.rows.filter(r => !['ANNULLATO', 'CONSEGNATO'].includes(rStato(r)) && !val(r, 'ordinato') && !val(r, 'cons')).length;
+        o.prevendita = o.rows.some(isPrev);
+        o.righePrev = o.rows.filter(isPrev).length;
+        // da ordinare al fornitore: SOLO le righe in prevendita, non ancora ordinate né ricevute
+        o.daOrdinare = o.rows.filter(r => isPrev(r) && !['ANNULLATO', 'CONSEGNATO'].includes(rStato(r)) && !val(r, 'ordinato') && !val(r, 'cons')).length;
         o.daConsegnare = o.rows.filter(r => rStato(r) === 'IN CONSEGNA').length;
         o.daDocumentare = o.rows.filter(r => rStato(r) === 'CONSEGNATO' && !val(r, 'docpos')).length;
         o.docPos = [...new Set(o.rows.map(r => val(r, 'docpos')).filter(Boolean))];
@@ -533,7 +541,8 @@ function renderReader() {
             <button class="btn btn-sm btn-outline-secondary back-btn no-print" onclick="closeReader()"><i class="fas fa-arrow-left"></i></button>
             <div class="me-auto">
                 <h4 class="mb-0">${esc(o.cliente)}</h4>
-                <div class="text-muted small">${o.codCliente ? 'Cod. ' + esc(o.codCliente) + ' · ' : ''}${o.id ? 'Ordine ' + esc(o.id) + ' · ' : ''}${esc(o.dataStr || '')}${o.telefono ? ' · <i class="fas fa-phone"></i> ' + esc(o.telefono) : ''}${o.prevendita ? ' · <span class="badge bg-light text-dark border">PREVENDITA</span>' : ''}</div>
+                <div class="text-muted small">${o.codCliente ? 'Cod. ' + esc(o.codCliente) + ' · ' : ''}${o.id ? 'Ordine ' + esc(o.id) + ' · ' : ''}${esc(o.dataStr || '')}${o.telefono ? ' · <i class="fas fa-phone"></i> ' + esc(o.telefono) : ''}${o.prevendita ? ` · <span class="badge bg-warning text-dark">PREVENDITA ${o.righePrev}/${o.rows.length} righe</span>` : ''}</div>
+                ${o.daOrdinare ? `<div class="small mt-1 text-danger"><i class="fas fa-cart-arrow-down me-1"></i>${o.daOrdinare} righe in prevendita da ordinare al fornitore</div>` : ''}
                 ${o.docPos.length ? `<div class="small mt-1"><i class="fas fa-file-invoice text-success me-1"></i>Documento POS: ${o.docPos.map(esc).join(' · ')}</div>` : ''}
                 ${o.daDocumentare ? `<div class="small mt-1 text-success"><i class="fas fa-file-export me-1"></i>${o.daDocumentare} righe consegnate in attesa di import nel POS Mobile (pulsante "Ordini dal catalogo")</div>` : ''}
             </div>
@@ -567,7 +576,10 @@ function renderReader() {
         const s = rStato(r), nt = val(r, 'note');
         html += `<tr class="${s === 'ANNULLATO' ? 'annullato' : ''}"><td class="no-print"><input type="checkbox" class="form-check-input chkRow" value="${r.n}"></td>
             <td><strong>${esc(val(r, 'desc') || val(r, 'codice'))}</strong></td>
-            ${shownCols.map(k => { const v = val(r, k); const warn = k === 'ordinato' && !v && !['ANNULLATO', 'CONSEGNATO'].includes(s) && !val(r, 'cons');
+            ${shownCols.map(k => { const v = val(r, k); const prev = isPrev(r);
+                const warn = k === 'ordinato' && prev && !v && !['ANNULLATO', 'CONSEGNATO'].includes(s) && !val(r, 'cons');
+                if (k === 'ordinato' && !prev && !v) return `<td><span class="text-muted small" title="Non in prevendita: si consegna dal magazzino">magazzino</span></td>`;
+                if (k === 'prevendita') return `<td>${prev ? '<span class="badge bg-warning text-dark">SI</span>' : '<span class="text-muted small">no</span>'}</td>`;
                 const warnPos = k === 'docpos' && !v && s === 'CONSEGNATO';
                 return `<td${numCols.includes(k) ? ' class="text-end"' : ''}>${warn ? '<span class="badge bg-light text-danger border border-danger">da ordinare</span>' : warnPos ? '<span class="badge bg-light text-success border border-success">da importare</span>' : esc(v)}</td>`; }).join('')}
             ${extra.map(h => `<td>${esc(r.v[hIdx[h]])}</td>`).join('')}
@@ -596,9 +608,9 @@ function selectedRows(o) {
     const sel = [...document.querySelectorAll('.chkRow:checked')].map(c => +c.value);
     return sel.length ? sel : o.rows.map(r => r.n);
 }
-async function update(stato, nota, extra = {}) {
+async function update(stato, nota, extra = {}, righeForzate = null) {
     const o = orders.find(x => x.key === selKey); if (!o) return;
-    const nr = selectedRows(o);
+    const nr = righeForzate || selectedRows(o);
     const scope = nr.length === o.rows.length ? 'tutto l\'ordine' : nr.length + ' righe';
     const giaDoc = o.rows.filter(r => nr.includes(r.n) && val(r, 'docpos'));
     if (giaDoc.length && stato && stato !== 'CONSEGNATO' && !confirm(`Attenzione: ${giaDoc.length} righe hanno già il documento di consegna nel POS (${[...new Set(giaDoc.map(r => val(r, 'docpos')))].join(', ')}).\nCambiando lo stato qui il documento nel POS NON viene modificato: andrà corretto a mano. Continuare?`)) return;
@@ -633,14 +645,21 @@ function refOrdiniOggi() {
     rows.forEach(r => { const v = val(r, 'ordinato'); if (v.endsWith('_DEL_' + oggi)) refs.add(v); });
     return [...refs].sort();
 }
+// Righe selezionate (o tutte) che sono in prevendita: le uniche da ordinare/ricevere dal fornitore
+function righePrevSel(o) {
+    const sel = new Set(selectedRows(o));
+    return o.rows.filter(r => sel.has(r.n) && isPrev(r) && rStato(r) !== 'ANNULLATO').map(r => r.n);
+}
 function askOrdinato() {
     const o = orders.find(x => x.key === selKey); if (!o) return;
+    prevRows = righePrevSel(o);
+    if (!prevRows.length) { alert('Nessuna riga in prevendita tra quelle selezionate: gli altri articoli si consegnano dal magazzino e non vanno ordinati al fornitore.'); return; }
     const esistenti = refOrdiniOggi();
     let max = 0; esistenti.forEach(v => { const m = v.match(/^ORD_(\d+)_DEL_/); if (m) max = Math.max(max, +m[1]); });
     const nuovo = `ORD_${String(max + 1).padStart(2, '0')}_DEL_${oggiStr()}`;
-    const n = selectedRows(o).length;
+    const n = prevRows.length;
     document.getElementById('mRefTitle').innerHTML = '<i class="fas fa-industry me-2"></i>Ordinato al fornitore';
-    document.getElementById('mRefInfo').textContent = `${o.cliente} · ${n === o.rows.length ? 'tutto l\'ordine' : n + ' righe selezionate'}. Scegli un ordine fornitore di oggi già aperto oppure usa il nuovo numero.`;
+    document.getElementById('mRefInfo').textContent = `${o.cliente} · ${n} ${n === 1 ? 'riga' : 'righe'} in prevendita (le altre restano da magazzino). Scegli un ordine fornitore di oggi già aperto oppure usa il nuovo numero.`;
     document.getElementById('mRefLabel').textContent = 'Riferimento ordine fornitore (colonna ORDINATO)';
     const inp = document.getElementById('mRefVal'); inp.value = nuovo; inp.setAttribute('list', 'dlRef');
     document.getElementById('dlRef').innerHTML = [nuovo, ...esistenti].map(v => `<option value="${esc(v)}">`).join('');
@@ -650,22 +669,24 @@ function askOrdinato() {
 }
 function askCons() {
     const o = orders.find(x => x.key === selKey); if (!o) return;
-    const n = selectedRows(o).length, d = new Date();
+    prevRows = righePrevSel(o);
+    if (!prevRows.length) { alert('Nessuna riga in prevendita tra quelle selezionate: solo gli articoli in prevendita arrivano dal fornitore.'); return; }
+    const n = prevRows.length, d = new Date();
     document.getElementById('mRefTitle').innerHTML = '<i class="fas fa-box me-2"></i>Ricevuto dal fornitore, in consegna';
-    document.getElementById('mRefInfo').textContent = `${o.cliente} · ${n === o.rows.length ? 'tutto l\'ordine' : n + ' righe selezionate'}.`;
+    document.getElementById('mRefInfo').textContent = `${o.cliente} · ${n} ${n === 1 ? 'riga' : 'righe'} in prevendita.`;
     document.getElementById('mRefLabel').textContent = 'Data di arrivo (colonna CONS)';
     const inp = document.getElementById('mRefVal'); inp.value = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`; inp.removeAttribute('list');
     document.getElementById('mRefChips').innerHTML = '';
     refMode = 'cons';
     bootstrap.Modal.getOrCreateInstance(document.getElementById('mRef')).show();
 }
-let refMode = '';
+let refMode = '', prevRows = [];
 document.getElementById('mRefOk').addEventListener('click', () => {
     const v = document.getElementById('mRefVal').value.trim();
     if (!v) { alert('Inserisci il valore.'); return; }
     bootstrap.Modal.getOrCreateInstance(document.getElementById('mRef')).hide();
-    if (refMode === 'ordinato') update('ORDINATO', '', { ordinato: v });
-    else update('IN CONSEGNA', '', { cons: v });
+    if (refMode === 'ordinato') update('ORDINATO', '', { ordinato: v }, prevRows);
+    else update('IN CONSEGNA', '', { cons: v }, prevRows);
 });
 function setStato(s) { return update(s, ''); }
 let notaStato = '';
