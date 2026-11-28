@@ -147,10 +147,29 @@
 
         <!-- OFFERTE -->
         <div class="tab-pane fade" id="tOfferte">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                 <div class="text-muted small">Ogni offerta stabilisce a quali clienti può andare. Il sistema calcola da solo chi è idoneo.</div>
                 <button class="btn btn-primary fw-bold" onclick="apriOfferta()"><i class="fas fa-plus me-1"></i>Nuova offerta</button>
             </div>
+            <div class="card"><div class="card-body py-2">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-4"><div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input id="ofCerca" class="form-control" placeholder="Cerca offerta: titolo, descrizione, brand..." autocomplete="off" oninput="renderOfferte()" onkeydown="if(event.key==='Escape'){this.value='';renderOfferte();}">
+                    </div></div>
+                    <div class="col-md-2"><select id="ofStato" class="form-select form-select-sm" onchange="renderOfferte()">
+                        <option value="">Tutti gli stati</option><option value="ATTIVA">Attive in corso</option><option value="SCADUTA">Scadute</option><option value="DISATTIVA">Disattivate</option><option value="NONDIS">Attive + scadute</option>
+                    </select></div>
+                    <div class="col-md-2"><select id="ofTipo" class="form-select form-select-sm" onchange="renderOfferte()"><option value="">Tutti i tipi</option></select></div>
+                    <div class="col-md-2"><select id="ofOrdine" class="form-select form-select-sm" onchange="renderOfferte()" title="Ordina">
+                        <option value="recenti">Più recenti</option><option value="scadenza">Scadenza più vicina</option><option value="idonei">Più clienti idonei</option><option value="titolo">Titolo A → Z</option>
+                    </select></div>
+                    <div class="col-md-2 d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-secondary w-100" onclick="azzeraFiltriOfferte()"><i class="fas fa-filter-circle-xmark me-1"></i>Azzera</button>
+                    </div>
+                </div>
+                <div class="small text-muted mt-1" id="ofConta"></div>
+            </div></div>
             <div class="row g-3" id="offerteRow"></div>
         </div>
 
@@ -159,8 +178,11 @@
             <div class="card"><div class="card-body">
                 <div class="row g-2 align-items-end">
                     <div class="col-md-6">
-                        <label class="form-label small fw-bold text-secondary">Offerta da inviare</label>
-                        <select id="cmpOfferta" class="form-select" onchange="renderCampagna()"></select>
+                        <label class="form-label small fw-bold text-secondary">Offerta da inviare <span class="fw-normal text-muted" id="cmpOffConta"></span></label>
+                        <div class="input-group">
+                            <input id="cmpOffCerca" class="form-control" style="max-width:42%" placeholder="🔍 Cerca offerta..." autocomplete="off" oninput="preparaCampagna(null, true)" onkeydown="if(event.key==='Escape'){this.value='';preparaCampagna(null, true);}">
+                            <select id="cmpOfferta" class="form-select" onchange="renderCampagna()"></select>
+                        </div>
                     </div>
                     <div class="col-md-6 small text-muted" id="cmpInfo"></div>
                 </div>
@@ -172,16 +194,29 @@
                     <button class="btn btn-sm btn-outline-secondary" onclick="selTutti(false)">Nessuno</button>
                     <button class="btn btn-sm btn-success" onclick="registraSelezionati()"><i class="fas fa-check me-1"></i>Registra selezionati come inviati</button>
                     <button class="btn btn-sm btn-outline-primary" onclick="esportaCampagna()"><i class="fas fa-download me-1"></i>CSV selezionati</button>
+                    <button class="btn btn-sm btn-primary ms-md-auto" onclick="nuovoClienteCampagna()"><i class="fas fa-user-plus me-1"></i>Nuovo cliente</button>
                 </div>
-                <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
-                    <div class="input-group input-group-sm" style="max-width:420px">
-                        <span class="input-group-text"><i class="fas fa-user-plus"></i></span>
-                        <input id="cmpAggiungi" class="form-control" list="dlCmpClienti" placeholder="Aggiungi un cliente non in lista (cerca per nome)…" onkeydown="if(event.key==='Enter'){aggiungiDaRicerca();}">
-                        <button class="btn btn-outline-primary" onclick="aggiungiDaRicerca()">Aggiungi</button>
+                <div class="row g-2 align-items-center mt-1">
+                    <div class="col-lg-3 col-md-6"><div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input id="cmpCerca" class="form-control" placeholder="Cerca o aggiungi: nome, città, telefono..." autocomplete="off" oninput="applicaFiltroCampagna()" onkeydown="tastoCercaCampagna(event)">
+                        <button class="btn btn-outline-secondary" type="button" title="Svuota" onclick="$('cmpCerca').value='';applicaFiltroCampagna();$('cmpCerca').focus();"><i class="fas fa-times"></i></button>
+                    </div></div>
+                    <div class="col-lg-2 col-md-3 col-6"><select id="cmpFSeg" class="form-select form-select-sm" onchange="applicaFiltroCampagna()"><option value="">Tutti i segmenti</option></select></div>
+                    <div class="col-lg-2 col-md-3 col-6"><select id="cmpFCls" class="form-select form-select-sm" onchange="applicaFiltroCampagna()"><option value="">Tutti i pagamenti</option></select></div>
+                    <div class="col-lg-2 col-md-4 col-6"><select id="cmpFBrand" class="form-select form-select-sm" onchange="applicaFiltroCampagna()" title="Clienti che acquistano il brand"><option value="">Tutti i brand</option></select></div>
+                    <div class="col-lg-1 col-md-2 col-6"><select id="cmpFFascia" class="form-select form-select-sm" onchange="applicaFiltroCampagna()" title="Rischio"><option value="">Rischio</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+                    <div class="col-lg-2 col-md-6 d-flex gap-1">
+                        <select id="cmpFStato" class="form-select form-select-sm" onchange="applicaFiltroCampagna()">
+                            <option value="">Tutte le righe</option><option value="SEL">Selezionati</option><option value="NONSEL">Non selezionati</option>
+                            <option value="DAINVIARE">Non ancora inviati</option><option value="INVIATI">Inviati ora</option>
+                            <option value="MANUALI">Aggiunti a mano</option><option value="AVVISI">Con avvisi</option><option value="PULITI">Senza avvisi</option>
+                            <option value="CATALOGO">Con link catalogo</option><option value="NOTEL">Senza telefono</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-secondary" title="Azzera filtri" onclick="azzeraFiltriCampagna()"><i class="fas fa-filter-circle-xmark"></i></button>
                     </div>
-                    <datalist id="dlCmpClienti"></datalist>
-                    <button class="btn btn-sm btn-primary" onclick="nuovoClienteCampagna()"><i class="fas fa-user-plus me-1"></i>Nuovo cliente</button>
                 </div>
+                <div id="cmpSugg" class="mt-2"></div>
                 <div id="cmpLista" class="mt-2"></div>
                 <details class="mt-3"><summary class="small text-muted" id="cmpEsclusiTit"></summary><div id="cmpEsclusi" class="small mt-2"></div></details>
             </div></div>
@@ -2732,6 +2767,11 @@ function preparaFiltri() {
     const sBr = $('fBrand'), vBr = sBr.value;
     sBr.innerHTML = '<option value="">Tutti i brand</option>' + (DATA._brand || []).map(b => `<option value="${esc(b.brand)}">${esc(b.brand)}</option>`).join('');
     sBr.value = vBr;
+    // stessi elenchi per i filtri della Campagna
+    [['cmpFSeg', sSeg], ['cmpFCls', sCls], ['cmpFBrand', sBr]].forEach(([id, src]) => {
+        const s = $(id), v = s.value;
+        s.innerHTML = src.innerHTML; s.value = v;
+    });
 }
 
 function filtraSegmento(s) {
@@ -2970,10 +3010,47 @@ function descriviRegole(o) {
         <span class="badge ${o.pagRich === 'CONTANTI' ? 'bg-success' : 'bg-secondary'}">${o.pagRich === 'CONTANTI' ? 'Pagamento contanti' : 'Condizioni abituali'}</span>`;
 }
 
+// ---------- Ricerca testuale (tutte le parole, senza accenti) ----------
+const normTxt = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const paroleRicerca = q => normTxt(q).split(/\s+/).filter(Boolean);
+const contieneParole = (q, testo) => { const p = paroleRicerca(q); if (!p.length) return true; const h = normTxt(testo); return p.every(x => h.indexOf(x) >= 0); };
+const testoOfferta = o => [o.titolo, o.descrizione, o.tipo, (o.brand || []).join(' '), o.id].join(' ');
+const statoOfferta = o => !o.attiva ? 'DISATTIVA' : offertaScaduta(o) ? 'SCADUTA' : 'ATTIVA';
+
+function azzeraFiltriOfferte() {
+    $('ofCerca').value = ''; $('ofStato').value = ''; $('ofTipo').value = ''; $('ofOrdine').value = 'recenti';
+    renderOfferte();
+}
+
 function renderOfferte() {
-    const l = DATA.offerte.slice().sort((a, b) => (b.attiva - a.attiva) || String(b.dal).localeCompare(String(a.dal)));
-    $('offerteRow').innerHTML = l.map(o => {
-        const idonei = DATA.clienti.filter(c => valuta(o, c).idoneo).length;
+    if (!DATA) return;
+    const q = $('ofCerca').value, st = $('ofStato').value, ord = $('ofOrdine').value;
+    // tipi: quelli previsti più quelli presenti nelle offerte salvate
+    const tipi = [...new Set(Object.keys(TIPI).concat(DATA.offerte.map(o => o.tipo).filter(Boolean)))];
+    const sTipo = $('ofTipo'), tp0 = sTipo.value;
+    if (sTipo.options.length - 1 !== tipi.length) { sTipo.innerHTML = '<option value="">Tutti i tipi</option>' + tipi.map(t => `<option>${esc(t)}</option>`).join(''); sTipo.value = tp0; }
+    const tp = sTipo.value;
+    ls.set('oi_of_filtri', JSON.stringify({ q: q, st: st, tp: tp, ord: ord }));
+    const rango = { ATTIVA: 0, SCADUTA: 1, DISATTIVA: 2 };
+    let l = DATA.offerte.filter(o => (!st || (st === 'NONDIS' ? o.attiva : statoOfferta(o) === st)) && (!tp || o.tipo === tp) && contieneParole(q, testoOfferta(o)))
+        .map(o => ({ o: o, idonei: DATA.clienti.filter(c => valuta(o, c).idoneo).length }));
+    const perStato = (a, b) => rango[statoOfferta(a.o)] - rango[statoOfferta(b.o)];
+    if (ord === 'scadenza') l.sort((a, b) => perStato(a, b) || ((a.o.al ? 0 : 1) - (b.o.al ? 0 : 1)) || String(a.o.al).localeCompare(String(b.o.al)));
+    else if (ord === 'idonei') l.sort((a, b) => perStato(a, b) || b.idonei - a.idonei);
+    else if (ord === 'titolo') l.sort((a, b) => String(a.o.titolo).localeCompare(String(b.o.titolo), 'it'));
+    else l.sort((a, b) => perStato(a, b) || String(b.o.dal).localeCompare(String(a.o.dal)));
+    const n = { ATTIVA: 0, SCADUTA: 0, DISATTIVA: 0 };
+    DATA.offerte.forEach(o => n[statoOfferta(o)]++);
+    const filtrato = q.trim() || st || tp;
+    $('ofConta').innerHTML = `${filtrato ? `<b>${l.length}</b> trovate su ${DATA.offerte.length} · ` : `${DATA.offerte.length} offerte · `}${n.ATTIVA} attive in corso, ${n.SCADUTA} scadute, ${n.DISATTIVA} disattivate`;
+    if (!l.length) {
+        $('offerteRow').innerHTML = DATA.offerte.length
+            ? `<div class="col-12 text-muted">Nessuna offerta corrisponde ai filtri. <a href="#" onclick="azzeraFiltriOfferte();return false;">Azzera i filtri</a></div>`
+            : '<div class="col-12 text-muted">Nessuna offerta. Creane una con "Nuova offerta".</div>';
+        return;
+    }
+    $('offerteRow').innerHTML = l.map(x => {
+        const o = x.o, idonei = x.idonei;
         const stato = !o.attiva ? '<span class="badge bg-secondary">Disattivata</span>' : offertaScaduta(o) ? '<span class="badge bg-dark">Scaduta</span>' : '<span class="badge bg-success">Attiva</span>';
         return `<div class="col-md-6 col-xl-4"><div class="card offer-card h-100 ${o.attiva && !offertaScaduta(o) ? '' : 'opacity-75'}"><div class="card-body d-flex flex-column">
             <div class="d-flex justify-content-between align-items-start mb-1"><h6 class="fw-bold mb-0">${esc(o.titolo)}</h6>${stato}</div>
@@ -3153,14 +3230,95 @@ async function cambiaStato(id, attiva) {
 }
 
 // ---------- Campagna ----------
-function preparaCampagna(selezione) {
+// soloSeCambia: dalla ricerca dell'offerta, rigenero la lista clienti solo se cambia l'offerta scelta
+function preparaCampagna(selezione, soloSeCambia) {
     const s = $('cmpOfferta');
     const prima = selezione || s.value;
-    const l = DATA.offerte.filter(o => o.attiva);
-    s.innerHTML = l.length ? l.map(o => `<option value="${esc(o.id)}">${esc(o.titolo)}${offertaScaduta(o) ? ' (scaduta)' : ''}</option>`).join('') : '<option value="">Nessuna offerta attiva</option>';
+    if (selezione) $('cmpOffCerca').value = '';      // arrivo da "Invia": l'offerta deve essere visibile
+    const q = $('cmpOffCerca').value;
+    const tutte = DATA.offerte.filter(o => o.attiva)
+        .sort((a, b) => (offertaScaduta(a) - offertaScaduta(b)) || String(b.dal).localeCompare(String(a.dal)));
+    const l = tutte.filter(o => contieneParole(q, testoOfferta(o)));
+    s.innerHTML = l.length ? l.map(o => `<option value="${esc(o.id)}">${esc(o.titolo)}${offertaScaduta(o) ? ' (scaduta)' : ''}</option>`).join('')
+        : `<option value="">${tutte.length ? 'Nessuna offerta trovata' : 'Nessuna offerta attiva'}</option>`;
     if (prima && l.some(o => o.id === prima)) s.value = prima;
-    renderCampagna();
+    $('cmpOffConta').textContent = q.trim() ? `(${l.length} di ${tutte.length})` : (tutte.length ? `(${tutte.length} attive)` : '');
+    if (!soloSeCambia || s.value !== prima) renderCampagna();
 }
+
+// ---------- Filtro dei clienti nella Campagna ----------
+// Filtra le righe già pronte (nasconde/mostra), così i messaggi modificati a mano non si perdono.
+let CMP_BASE = '';
+const testoCliente = c => normTxt([c.nome, c.citta, c.referente, c.tel, c.email, c.codice, c.piva, (c.nomiCollegati || []).join(' ')].join(' '));
+
+function applicaFiltroCampagna() {
+    const righe = Array.from(document.querySelectorAll('.cmp-riga'));
+    const p = paroleRicerca($('cmpCerca').value);
+    const seg = $('cmpFSeg').value, cls = $('cmpFCls').value, fa = $('cmpFFascia').value, br = $('cmpFBrand').value, st = $('cmpFStato').value;
+    righe.forEach(r => {
+        const d = r.dataset, inviato = r.classList.contains('row-inviato'), sel = r.querySelector('.cmp-sel').checked;
+        const okStato = !st || ({
+            SEL: sel, NONSEL: !sel, DAINVIARE: !inviato, INVIATI: inviato, MANUALI: d.manuale === '1',
+            AVVISI: +d.avvisi > 0, PULITI: +d.avvisi === 0, CATALOGO: d.cat === '1', NOTEL: d.tel === '0'
+        })[st];
+        const ok = p.every(x => d.testo.indexOf(x) >= 0) && (!seg || d.seg === seg) && (!cls || d.cls === cls) && (!fa || d.fascia === fa) &&
+            (!br || ('|' + d.brand + '|').indexOf('|' + br + '|') >= 0) && okStato;
+        r.classList.toggle('d-none', !ok);
+    });
+    aggiornaContaCampagna();
+    suggerimentiCampagna();
+}
+
+function aggiornaContaCampagna() {
+    const righe = Array.from(document.querySelectorAll('.cmp-riga'));
+    const vis = righe.filter(r => !r.classList.contains('d-none'));
+    const sel = vis.filter(r => r.querySelector('.cmp-sel').checked).length;
+    const nascostiSel = righe.filter(r => r.classList.contains('d-none') && r.querySelector('.cmp-sel').checked).length;
+    $('cmpConta').innerHTML = esc(CMP_BASE) + (vis.length !== righe.length ? ` · <span class="text-primary">mostrati ${vis.length}</span>` : '') +
+        (righe.length ? ` · <span class="text-success">${sel} selezionati</span>` : '') +
+        (nascostiSel ? ` <small class="text-muted fw-normal">(+${nascostiSel} selezionati nascosti dal filtro)</small>` : '');
+}
+
+// Clienti che non sono nella lista ma corrispondono alla ricerca: si aggiungono con un clic
+let CMP_SUGG = [];
+function suggerimentiCampagna() {
+    const box = $('cmpSugg'), q = $('cmpCerca').value.trim();
+    const o = offertaCampagna();
+    CMP_SUGG = [];
+    if (!o || q.length < 2) { box.innerHTML = ''; return; }
+    const inLista = new Set(Array.from(document.querySelectorAll('.cmp-riga')).map(r => r.getAttribute('data-cod')));
+    const p = paroleRicerca(q);
+    CMP_SUGG = DATA.clienti.filter(c => !inLista.has(c.codice) && p.every(x => testoCliente(c).indexOf(x) >= 0))
+        .sort((a, b) => (b.attivo - a.attivo) || b.acq12 - a.acq12).slice(0, 8);
+    const visibili = document.querySelectorAll('.cmp-riga:not(.d-none)').length;
+    const esiste = DATA.clienti.some(c => normNomeJS(c.nome) === normNomeJS(q));
+    box.innerHTML = `<div class="p-2 bg-light border rounded small">
+        ${CMP_SUGG.length ? `<div class="text-muted mb-1"><i class="fas fa-user-plus me-1"></i>Non in lista per questa offerta${visibili ? '' : ' (premi Invio per aggiungere il primo)'}:</div>
+            ${CMP_SUGG.map((c, i) => { const m = valuta(o, c).motivi[0];
+                return `<button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1 text-start" onclick="aggiungiAllaCampagna(CMP_SUGG[${i}].codice)">
+                    <i class="fas fa-plus me-1"></i><b>${esc(c.nome)}</b> <small class="text-muted">${esc(c.citta || '')}${m ? ' · ' + esc(m) : ''}</small></button>`; }).join('')}`
+          : `<span class="text-muted">${visibili ? 'Nessun altro cliente con questo nome fuori dalla lista.' : 'Nessun cliente trovato con questo nome.'}</span>`}
+        ${esiste ? '' : `<button type="button" class="btn btn-sm btn-primary mb-1 ms-1" onclick="nuovoClienteCampagna($('cmpCerca').value.trim())"><i class="fas fa-user-plus me-1"></i>Crea nuovo cliente «${esc(q)}»</button>`}
+    </div>`;
+}
+
+function tastoCercaCampagna(e) {
+    if (e.key === 'Escape') { $('cmpCerca').value = ''; applicaFiltroCampagna(); return; }
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const vis = Array.from(document.querySelectorAll('.cmp-riga:not(.d-none)'));
+    if (vis.length === 1) { const d = vis[0].querySelector('details'); if (d) d.open = true; vis[0].scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    if (!vis.length && CMP_SUGG.length) { aggiungiAllaCampagna(CMP_SUGG[0].codice); return; }
+    const q = $('cmpCerca').value.trim();
+    if (!vis.length && q && confirm(`"${q}" non è tra i clienti. Vuoi crearlo come nuovo cliente?`)) nuovoClienteCampagna(q);
+}
+
+function azzeraFiltriCampagna() {
+    ['cmpCerca', 'cmpFSeg', 'cmpFCls', 'cmpFBrand', 'cmpFFascia', 'cmpFStato'].forEach(id => { $(id).value = ''; });
+    applicaFiltroCampagna();
+}
+
+document.addEventListener('change', e => { if (e.target.classList && e.target.classList.contains('cmp-sel')) aggiornaContaCampagna(); });
 
 function vaiACampagna(id) {
     const m = bootstrap.Modal.getInstance($('mCliente'));
@@ -3171,7 +3329,7 @@ function vaiACampagna(id) {
 
 function renderCampagna() {
     const o = DATA && DATA.offerte.find(x => x.id === $('cmpOfferta').value);
-    if (!o) { $('cmpLista').innerHTML = '<div class="text-muted">Crea o attiva un\'offerta per iniziare.</div>'; $('cmpInfo').innerHTML = ''; $('cmpConta').textContent = ''; $('cmpEsclusiTit').textContent = ''; $('cmpEsclusi').innerHTML = ''; return; }
+    if (!o) { $('cmpLista').innerHTML = '<div class="text-muted">Crea o attiva un\'offerta per iniziare.</div>'; $('cmpInfo').innerHTML = ''; $('cmpConta').textContent = ''; CMP_BASE = ''; $('cmpSugg').innerHTML = ''; $('cmpEsclusiTit').textContent = ''; $('cmpEsclusi').innerHTML = ''; return; }
     $('cmpInfo').innerHTML = `<div class="d-flex flex-wrap gap-3 align-items-start">
         <canvas id="cmpPromo" width="1080" height="1080" class="border rounded shadow-sm flex-shrink-0" style="width:170px;height:170px"></canvas>
         <div class="flex-grow-1" style="min-width:200px">
@@ -3208,23 +3366,24 @@ function renderCampagna() {
     const idonei = val.filter(x => x.v.idoneo).sort((a, b) => b.c.potenziale - a.c.potenziale);
     const manuali = val.filter(x => !x.v.idoneo && extra.indexOf(x.c.codice) >= 0).sort((a, b) => extra.indexOf(a.c.codice) - extra.indexOf(b.c.codice));   // ultimi aggiunti in cima
     const esclusi = val.filter(x => !x.v.idoneo && extra.indexOf(x.c.codice) < 0);
-    $('cmpConta').textContent = `${idonei.length} destinatari idonei` + (manuali.length ? ` + ${manuali.length} aggiunti a mano` : '');
+    CMP_BASE = `${idonei.length} destinatari idonei` + (manuali.length ? ` + ${manuali.length} aggiunti a mano` : '');
     $('cmpLista').innerHTML = (manuali.map(x => rigaCampagnaHtml(o, x, true)).join('') + idonei.map(x => rigaCampagnaHtml(o, x, false)).join(''))
         || '<div class="text-muted py-3">Nessun cliente soddisfa le regole di questa offerta: puoi aggiungerne a mano qui sopra o dall\'elenco degli esclusi.</div>';
     $('cmpEsclusiTit').textContent = `Clienti esclusi (${esclusi.length}) e motivo — puoi aggiungerli alla campagna`;
     $('cmpEsclusi').innerHTML = esclusi.map(x => `<div class="d-flex align-items-center gap-2 py-1 border-bottom">
         <button class="btn btn-sm btn-outline-primary py-0" onclick="aggiungiAllaCampagna('${esc(x.c.codice)}')"><i class="fas fa-plus me-1"></i>Aggiungi</button>
         <span><b>${esc(x.c.nome)}</b>: ${x.v.motivi.map(esc).join(', ')}</span></div>`).join('');
-    // nomi per la ricerca "Aggiungi un cliente"
-    $('dlCmpClienti').innerHTML = DATA.clienti.filter(c => !val.find(x => x.c === c && x.v.idoneo) && extra.indexOf(c.codice) < 0)
-        .map(c => `<option value="${esc(c.nome)}">`).join('');
+    applicaFiltroCampagna();   // i filtri scelti restano attivi anche quando la lista si rigenera
 }
 
 function rigaCampagnaHtml(o, x, manuale) {
     const c = x.c;
     const sel = manuale || !x.v.avvisi.some(a => a.startsWith('offerta già') || a.startsWith('contattato') || a === 'nessun contatto');
     const msg = componiMessaggio(o, c);
-    return `<div class="border rounded p-2 mb-2 cmp-riga${manuale ? ' border-primary' : ''}" data-cod="${esc(c.codice)}">
+    const conCat = CAT.clienti[String(c.codice || '').trim().toUpperCase()] ? 1 : 0;
+    return `<div class="border rounded p-2 mb-2 cmp-riga${manuale ? ' border-primary' : ''}" data-cod="${esc(c.codice)}"
+            data-testo="${esc(testoCliente(c))}" data-seg="${esc(c.segmento)}" data-cls="${esc(c.classe)}" data-fascia="${esc(c.fascia)}"
+            data-brand="${esc((c._attivi || []).join('|'))}" data-manuale="${manuale ? 1 : 0}" data-avvisi="${x.v.avvisi.length}" data-cat="${conCat}" data-tel="${c.tel ? 1 : 0}">
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <input type="checkbox" class="form-check-input cmp-sel m-0" ${sel ? 'checked' : ''}>
                 <a href="#" class="fw-bold text-decoration-none" onclick="apriCliente('${esc(c.codice)}');return false;">${esc(c.nome)}</a>
@@ -3261,29 +3420,18 @@ function aggiungiAllaCampagna(cod) {
     const l = clientiAggiunti(id);
     if (l.indexOf(cod) < 0) l.unshift(cod);
     salvaAggiunti(id, l);
+    $('cmpCerca').value = '';       // pronto per cercare il prossimo
     renderCampagna();
     const c = cliente(cod);
+    const r0 = rigaCampagna(cod);
+    if (r0) { r0.classList.remove('d-none'); aggiornaContaCampagna(); }   // il nuovo arrivato si vede anche se gli altri filtri lo escluderebbero
     toast(`<b>${esc(c ? c.nome : cod)}</b> aggiunto alla campagna.`);
-    setTimeout(() => { const r = rigaCampagna(cod); if (r) r.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
+    setTimeout(() => { const r = rigaCampagna(cod); if (r) r.scrollIntoView({ behavior: 'smooth', block: 'center' }); $('cmpCerca').focus(); }, 100);
 }
 function togliDallaCampagna(cod) {
     const id = $('cmpOfferta').value; if (!id) return;
     salvaAggiunti(id, clientiAggiunti(id).filter(x => x !== cod));
     renderCampagna();
-}
-function aggiungiDaRicerca() {
-    const q = ($('cmpAggiungi').value || '').trim();
-    if (!q) return;
-    const n = normNomeJS(q);
-    const c = DATA.clienti.find(x => x.nome === q) || DATA.clienti.find(x => normNomeJS(x.nome) === n)
-        || DATA.clienti.find(x => normNomeJS(x.nome).indexOf(n) >= 0 || String(x.codice).toUpperCase() === q.toUpperCase());
-    if (!c) {
-        if (confirm(`"${q}" non è tra i clienti. Vuoi crearlo come nuovo cliente?`)) nuovoClienteCampagna(q);
-        return;
-    }
-    $('cmpAggiungi').value = '';
-    if (rigaCampagna(c.codice)) { toast(`<b>${esc(c.nome)}</b> è già nella lista.`); rigaCampagna(c.codice).scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-    aggiungiAllaCampagna(c.codice);
 }
 
 // Nuovo cliente dalla Campagna: dopo il salvataggio viene aggiunto alla campagna e riceve il codice del catalogo
@@ -3309,7 +3457,9 @@ async function sincronizzaClientiCatalogo(mostra) {
 
 function rigaCampagna(cod) { return Array.from(document.querySelectorAll('.cmp-riga')).find(r => r.getAttribute('data-cod') === cod); }
 
-function selTutti(v) { document.querySelectorAll('.cmp-sel').forEach(x => { x.checked = v; }); }
+// "Seleziona tutti / Nessuno" agiscono solo sui clienti visibili con il filtro attuale
+function selTutti(v) { document.querySelectorAll('.cmp-riga:not(.d-none) .cmp-sel').forEach(x => { x.checked = v; }); aggiornaContaCampagna(); }
+const righeSelezionateVisibili = () => Array.from(document.querySelectorAll('.cmp-riga:not(.d-none)')).filter(r => r.querySelector('.cmp-sel').checked);
 
 async function registra(codici, canale) {
     const o = DATA.offerte.find(x => x.id === $('cmpOfferta').value);
@@ -3325,6 +3475,7 @@ async function registra(codici, canale) {
     });
     DATA.registro = invii.map(i => Object.assign({ data: ora, esito: 'INVIATO', riga: null }, i)).concat(DATA.registro);
     renderRegistro();
+    if ($('cmpFStato').value) applicaFiltroCampagna(); else aggiornaContaCampagna();
 }
 
 async function invia(cod, canale) {
@@ -3339,9 +3490,10 @@ async function invia(cod, canale) {
 }
 
 async function registraSelezionati() {
-    const codici = Array.from(document.querySelectorAll('.cmp-riga')).filter(r => r.querySelector('.cmp-sel').checked).map(r => r.getAttribute('data-cod'));
-    if (!codici.length) { toast('Nessun cliente selezionato.', 'warning'); return; }
-    if (!confirm(`Registrare ${codici.length} invii nel foglio REGISTRO_INVII?`)) return;
+    const codici = righeSelezionateVisibili().map(r => r.getAttribute('data-cod'));
+    if (!codici.length) { toast('Nessun cliente selezionato tra quelli visibili.', 'warning'); return; }
+    const nasc = document.querySelectorAll('.cmp-riga.d-none .cmp-sel:checked').length;
+    if (!confirm(`Registrare ${codici.length} invii nel foglio REGISTRO_INVII?` + (nasc ? `\n(${nasc} clienti selezionati ma nascosti dal filtro non verranno registrati)` : ''))) return;
     try { await registra(codici, 'Manuale'); toast(`${codici.length} invii registrati.`); }
     catch (e) { toast(esc(e.message), 'danger'); }
 }
@@ -3349,8 +3501,7 @@ async function registraSelezionati() {
 function esportaCampagna() {
     const o = DATA.offerte.find(x => x.id === $('cmpOfferta').value);
     const r = [['Codice', 'Ragione Sociale', 'Referente', 'Telefono WhatsApp', 'Email', 'Segmento', 'Messaggio']];
-    document.querySelectorAll('.cmp-riga').forEach(el => {
-        if (!el.querySelector('.cmp-sel').checked) return;
+    righeSelezionateVisibili().forEach(el => {
         const c = cliente(el.getAttribute('data-cod'));
         r.push([c.codice, c.nome, c.referente, telWa(c.tel), c.email, SEG[c.segmento].lbl, el.querySelector('.cmp-msg').value]);
     });
@@ -3537,6 +3688,12 @@ function leggiLinkCollega() {
         $(id).addEventListener('input', disegnaPromoForm);
         $(id).addEventListener('change', disegnaPromoForm);
     });
+    // Filtri della pagina Offerte: ripresi dall'ultima volta
+    $('ofTipo').innerHTML = '<option value="">Tutti i tipi</option>' + Object.keys(TIPI).map(t => `<option>${esc(t)}</option>`).join('');
+    try {
+        const f = JSON.parse(ls.get('oi_of_filtri') || 'null');
+        if (f) { $('ofCerca').value = f.q || ''; $('ofStato').value = f.st || ''; $('ofTipo').value = f.tp || ''; $('ofOrdine').value = f.ord || 'recenti'; }
+    } catch (e) {}
     try { localStorage.removeItem('oi_cache'); } catch (e) {}   // la memoria locale ora usa IndexedDB
     $('tabSettBtn').addEventListener('shown.bs.tab', () => caricaSettimana());   // la scheda Settimana legge i dati quando viene aperta
     leggiCacheLocale().then(d => {
