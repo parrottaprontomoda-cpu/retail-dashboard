@@ -198,6 +198,7 @@ const FIELDS = [
     { k: 'ordinato', label: 'ORDINATO (ordine fornitore)', re: [/^ORDINATO$/i] },
     { k: 'cons', label: 'CONS (ricevuto, in consegna)', re: [/^CONS/i] },
     { k: 'note', label: 'NOTE', re: [/^NOTE$/i] },
+    { k: 'docpos', label: 'DOC_POS (documento creato nel POS)', re: [/^DOC[ ._]*POS$/i] },
     { k: 'telefono', label: 'Telefono', re: [/TEL|CELL|WHATSAPP/i] }
 ];
 
@@ -327,6 +328,8 @@ function buildOrders() {
         o.prevendita = o.rows.some(r => /^S/i.test(val(r, 'prevendita')));
         o.daOrdinare = o.rows.filter(r => !['ANNULLATO', 'CONSEGNATO'].includes(rStato(r)) && !val(r, 'ordinato') && !val(r, 'cons')).length;
         o.daConsegnare = o.rows.filter(r => rStato(r) === 'IN CONSEGNA').length;
+        o.daDocumentare = o.rows.filter(r => rStato(r) === 'CONSEGNATO' && !val(r, 'docpos')).length;
+        o.docPos = [...new Set(o.rows.map(r => val(r, 'docpos')).filter(Boolean))];
         o.minRow = Math.min(...o.rows.map(r => r.n));
         o.search = o.rows.map(r => r.v.join(' ')).join(' ').toLowerCase();
         return o;
@@ -449,6 +452,7 @@ function filtered(useFolder = true) {
             if (folder === 'CON_NOTE' && !o.hasNote) return false;
             if (folder === 'DA_ORDINARE' && !o.daOrdinare) return false;
             if (folder === 'DA_CONSEGNARE' && !o.daConsegnare) return false;
+            if (folder === 'DA_DOCUMENTARE' && !o.daDocumentare) return false;
             if (folder === 'PREVENDITA' && !o.prevendita) return false;
             if (STATI.includes(folder) && o.stato !== folder) return false;
         }
@@ -469,6 +473,7 @@ const FOLDERS = [
     { k: 'IN LAVORAZIONE', label: 'In lavorazione', icon: 'fa-hourglass-half' },
     { k: 'VARIAZIONE', label: 'Con variazioni', icon: 'fa-pen' },
     { k: 'CONSEGNATO', label: 'Consegnati', icon: 'fa-truck' },
+    { k: 'DA_DOCUMENTARE', label: 'Da documentare nel POS', icon: 'fa-file-export' },
     { k: 'ANNULLATO', label: 'Annullati', icon: 'fa-ban' },
     { k: 'PREVENDITA', label: 'Prevendita', icon: 'fa-clock' },
     { k: 'CON_NOTE', label: 'Con note', icon: 'fa-sticky-note' }
@@ -478,11 +483,11 @@ function renderFolders() {
     const base = filtered(false);
     const cnt = k => k === 'TUTTI' ? base.length : k === 'DA_LEGGERE' ? base.filter(o => !readSet.has(o.key)).length
         : k === 'CON_NOTE' ? base.filter(o => o.hasNote).length : k === 'DA_ORDINARE' ? base.filter(o => o.daOrdinare).length
-        : k === 'DA_CONSEGNARE' ? base.filter(o => o.daConsegnare).length : k === 'PREVENDITA' ? base.filter(o => o.prevendita).length
+        : k === 'DA_CONSEGNARE' ? base.filter(o => o.daConsegnare).length : k === 'DA_DOCUMENTARE' ? base.filter(o => o.daDocumentare).length : k === 'PREVENDITA' ? base.filter(o => o.prevendita).length
         : base.filter(o => o.stato === k).length;
     document.getElementById('folders').innerHTML = FOLDERS.map(f => {
         const c = cnt(f.k);
-        const strong = ['DA_LEGGERE', 'NUOVO', 'DA_ORDINARE', 'DA_CONSEGNARE'].includes(f.k) && c > 0;
+        const strong = ['DA_LEGGERE', 'NUOVO', 'DA_ORDINARE', 'DA_CONSEGNARE', 'DA_DOCUMENTARE'].includes(f.k) && c > 0;
         return `<a class="nav-link ${folder === f.k ? 'active' : ''}" data-f="${f.k}"><i class="fas ${f.icon} fa-fw"></i> ${f.label}<span class="cnt ${strong ? 'badge bg-primary' : 'text-muted'}">${c || ''}</span></a>`;
     }).join('');
     document.getElementById('mobileFolders').innerHTML = FOLDERS.map(f => `<button class="btn btn-sm ${folder === f.k ? 'btn-primary' : 'btn-outline-secondary'}" data-f="${f.k}">${f.label} ${cnt(f.k) || ''}</button>`).join('');
@@ -503,7 +508,7 @@ function renderList() {
             </div>
             <div class="d-flex justify-content-between align-items-center">
                 <span class="sum">${o.id ? esc(o.id) + ' · ' : ''}${o.rows.length} righe · ${o.pezzi} pz · <strong>${eur(o.tot)}</strong></span>
-                <span class="text-nowrap">${o.prevendita ? '<span class="badge bg-light text-dark border me-1" title="Prevendita">PREV</span>' : ''}${o.hasNote ? '<i class="fas fa-sticky-note text-warning me-1" title="Con note"></i>' : ''}<span class="badge st ${stCls(o.stato)}">${o.stato}</span></span>
+                <span class="text-nowrap">${o.prevendita ? '<span class="badge bg-light text-dark border me-1" title="Prevendita">PREV</span>' : ''}${o.hasNote ? '<i class="fas fa-sticky-note text-warning me-1" title="Con note"></i>' : ''}${o.daDocumentare ? '<span class="badge bg-light text-success border border-success me-1" title="Consegnato, da importare nel POS">POS</span>' : ''}<span class="badge st ${stCls(o.stato)}">${o.stato}</span></span>
             </div>
             <div class="prev">${esc(preview(o))}</div>
         </div>`).join('') + (list.length > 500 ? '<div class="text-center small text-muted p-2">Mostrati i primi 500: usa i filtri</div>' : '');
@@ -517,11 +522,11 @@ function renderReader() {
     const box = document.getElementById('reader');
     const o = orders.find(x => x.key === selKey);
     if (!o) { box.innerHTML = '<div class="reader-empty"><i class="fas fa-envelope-open-text fa-4x mb-3"></i><div>Seleziona un ordine</div></div>'; return; }
-    const shownCols = ['codice', 'ean', 'misura', 'colore', 'qta', 'prezzo', 'sconto', 'totale', 'prevendita', 'ordinato', 'cons'].filter(k => map[k]);
+    const shownCols = ['codice', 'ean', 'misura', 'colore', 'qta', 'prezzo', 'sconto', 'totale', 'prevendita', 'ordinato', 'cons', 'docpos'].filter(k => map[k]);
     const noExtra = new Set(['stato', 'note', 'desc'].map(k => map[k]).filter(Boolean));
     const mapped = new Set([...Object.values(map).filter(Boolean), ...GEST]);
     const extra = headers.filter(h => h && !mapped.has(h) && !noExtra.has(h) && o.rows.some(r => String(r.v[hIdx[h]] ?? '').trim()));
-    const lab = k => ({ ordinato: 'Ord. fornitore', cons: 'Ricevuto' })[k] || FIELDS.find(f => f.k === k).label;
+    const lab = k => ({ ordinato: 'Ord. fornitore', cons: 'Ricevuto', docpos: 'Doc. POS' })[k] || FIELDS.find(f => f.k === k).label;
     const numCols = ['qta', 'prezzo', 'sconto', 'totale'];
     let html = `<div class="p-3 p-lg-4">
         <div class="d-flex align-items-start gap-2 mb-2">
@@ -529,6 +534,8 @@ function renderReader() {
             <div class="me-auto">
                 <h4 class="mb-0">${esc(o.cliente)}</h4>
                 <div class="text-muted small">${o.codCliente ? 'Cod. ' + esc(o.codCliente) + ' · ' : ''}${o.id ? 'Ordine ' + esc(o.id) + ' · ' : ''}${esc(o.dataStr || '')}${o.telefono ? ' · <i class="fas fa-phone"></i> ' + esc(o.telefono) : ''}${o.prevendita ? ' · <span class="badge bg-light text-dark border">PREVENDITA</span>' : ''}</div>
+                ${o.docPos.length ? `<div class="small mt-1"><i class="fas fa-file-invoice text-success me-1"></i>Documento POS: ${o.docPos.map(esc).join(' · ')}</div>` : ''}
+                ${o.daDocumentare ? `<div class="small mt-1 text-success"><i class="fas fa-file-export me-1"></i>${o.daDocumentare} righe consegnate in attesa di import nel POS Mobile (pulsante "Ordini dal catalogo")</div>` : ''}
             </div>
             <span class="badge st ${stCls(o.stato)} fs-6">${o.stato}</span>
         </div>
@@ -561,7 +568,8 @@ function renderReader() {
         html += `<tr class="${s === 'ANNULLATO' ? 'annullato' : ''}"><td class="no-print"><input type="checkbox" class="form-check-input chkRow" value="${r.n}"></td>
             <td><strong>${esc(val(r, 'desc') || val(r, 'codice'))}</strong></td>
             ${shownCols.map(k => { const v = val(r, k); const warn = k === 'ordinato' && !v && !['ANNULLATO', 'CONSEGNATO'].includes(s) && !val(r, 'cons');
-                return `<td${numCols.includes(k) ? ' class="text-end"' : ''}>${warn ? '<span class="badge bg-light text-danger border border-danger">da ordinare</span>' : esc(v)}</td>`; }).join('')}
+                const warnPos = k === 'docpos' && !v && s === 'CONSEGNATO';
+                return `<td${numCols.includes(k) ? ' class="text-end"' : ''}>${warn ? '<span class="badge bg-light text-danger border border-danger">da ordinare</span>' : warnPos ? '<span class="badge bg-light text-success border border-success">da importare</span>' : esc(v)}</td>`; }).join('')}
             ${extra.map(h => `<td>${esc(r.v[hIdx[h]])}</td>`).join('')}
             <td><span class="badge st ${stCls(s)}">${esc(s)}</span></td></tr>`;
         if (nt) html += `<tr><td class="no-print"></td><td colspan="${shownCols.length + extra.length + 2}"><div class="note-box">${esc(nt)}</div></td></tr>`;
@@ -592,6 +600,8 @@ async function update(stato, nota, extra = {}) {
     const o = orders.find(x => x.key === selKey); if (!o) return;
     const nr = selectedRows(o);
     const scope = nr.length === o.rows.length ? 'tutto l\'ordine' : nr.length + ' righe';
+    const giaDoc = o.rows.filter(r => nr.includes(r.n) && val(r, 'docpos'));
+    if (giaDoc.length && stato && stato !== 'CONSEGNATO' && !confirm(`Attenzione: ${giaDoc.length} righe hanno già il documento di consegna nel POS (${[...new Set(giaDoc.map(r => val(r, 'docpos')))].join(', ')}).\nCambiando lo stato qui il documento nel POS NON viene modificato: andrà corretto a mano. Continuare?`)) return;
     if (stato === 'ANNULLATO' && !confirm(`Annullare ${scope} di ${o.cliente}?`)) return;
     if (stato === 'CONSEGNATO' && !confirm(`Convalidare la consegna di ${scope} di ${o.cliente}?`)) return;
     try {
@@ -608,7 +618,8 @@ async function update(stato, nota, extra = {}) {
             if (nota) set('note', (val(r, 'note') ? val(r, 'note') + '\n' : '') + `[${ora}${cfg.user ? ' ' + cfg.user : ''}] ${nota}`);
         });
         buildOrders(); renderAll();
-        toast('<i class="fas fa-check text-success me-1"></i> Registrato', `${[stato, extra.ordinato, extra.cons ? 'ricevuto ' + extra.cons : ''].filter(Boolean).join(' · ') || 'Nota'} · ${esc(o.cliente)} (${scope})`, 'success', 3000);
+        toast('<i class="fas fa-check text-success me-1"></i> Registrato', `${[stato, extra.ordinato, extra.cons ? 'ricevuto ' + extra.cons : ''].filter(Boolean).join(' · ') || 'Nota'} · ${esc(o.cliente)} (${scope})`
+            + (stato === 'CONSEGNATO' ? '<div class="small mt-1"><i class="fas fa-file-export me-1"></i>Pronto per l\'import nel POS Mobile: "Ordini dal catalogo".</div>' : ''), 'success', stato === 'CONSEGNATO' ? 6000 : 3000);
         setTimeout(() => load(), 1500);
     } catch (e) {
         alert('Operazione non riuscita: ' + e.message);
