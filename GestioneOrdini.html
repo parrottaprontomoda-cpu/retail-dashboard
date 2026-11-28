@@ -42,6 +42,11 @@
     .lines tr.annullato td { text-decoration: line-through; color: #999; }
     .note-box { white-space: pre-wrap; font-size: .75rem; color: #6c4a00; background: #fff8e1; border-left: 3px solid #fd7e14; padding: 3px 6px; margin-top: 3px; }
     .toast-container { z-index: 2000; }
+    #mArrivi .table td, #mArrivi .table th { font-size: .82rem; vertical-align: middle; }
+    #mArrivi .arr-qty { width: 80px; text-align: center; font-weight: 700; }
+    #mArrivi tr.diff td { background: #fff3cd; }
+    #mArrivi tr.flash td { background: #d1e7dd !important; transition: background .2s; }
+    .p-full { color: #198754; font-weight: 600; } .p-part { color: #fd7e14; font-weight: 600; } .p-wait { color: #adb5bd; }
     .toast { min-width: 320px; }
     .back-btn { display: none; }
     @media (max-width: 991px) {
@@ -68,6 +73,7 @@
     <span class="navbar-brand mb-0 h1"><i class="fas fa-inbox me-2"></i>Ordini Catalogo <span id="titleBadge" class="badge bg-danger ms-1 d-none"></span></span>
     <div class="d-flex align-items-center gap-2">
         <span class="text-white-50 small d-none d-md-inline" id="lastSync"></span>
+        <button class="btn btn-sm btn-warning fw-bold" id="btnArrivi" title="Merce arrivata dal fornitore: assegna ai clienti"><i class="fas fa-truck-loading"></i><span class="d-none d-md-inline ms-1">Arrivo merce</span></button>
         <button class="btn btn-sm btn-outline-light" id="btnRefresh" title="Aggiorna"><i class="fas fa-sync-alt"></i></button>
         <button class="btn btn-sm btn-outline-light" id="btnNotif" title="Attiva notifiche sul dispositivo"><i class="fas fa-bell"></i></button>
         <button class="btn btn-sm btn-outline-light" id="btnSettings" title="Impostazioni"><i class="fas fa-cog"></i></button>
@@ -163,6 +169,36 @@
             <input class="form-control" id="mRefVal"><datalist id="dlRef"></datalist>
         </div>
         <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button><button class="btn btn-primary" id="mRefOk"><i class="fas fa-check me-1"></i> Registra</button></div>
+    </div></div>
+</div>
+
+<!-- Arrivo merce dal fornitore -->
+<div class="modal fade" id="mArrivi" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-fullscreen-lg-down"><div class="modal-content">
+        <div class="modal-header bg-warning"><h5 class="modal-title fw-bold"><i class="fas fa-truck-loading me-2"></i>Arrivo merce dal fornitore</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="row g-2 align-items-end mb-2">
+                <div class="col-md-5"><label class="small fw-bold">Ordine fornitore (colonna ORDINATO)</label><select class="form-select form-select-sm" id="aRef"></select></div>
+                <div class="col-md-2"><label class="small fw-bold">Data arrivo (CONS)</label><input class="form-control form-control-sm" id="aData"></div>
+                <div class="col-md-5"><div class="form-check"><input class="form-check-input" type="checkbox" id="aIncl"><label class="form-check-label small" for="aIncl">Includi le righe in prevendita non ancora segnate come ordinate</label></div></div>
+            </div>
+            <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text"><i class="fas fa-barcode"></i></span>
+                <input class="form-control" id="aScan" placeholder="Spara l'EAN di ogni pezzo arrivato (+1 a ogni lettura) oppure scrivi le quantità nella tabella" autocomplete="off">
+                <button class="btn btn-outline-secondary" id="aZero" title="Metti a 0 tutte le quantità per contare con lo scanner">Azzera quantità</button>
+                <button class="btn btn-outline-secondary" id="aFill" title="Arrivato tutto quello che è in attesa">Tutto arrivato</button>
+            </div>
+            <div class="small text-muted mb-1">Sono elencati gli articoli in <b>prevendita</b> in attesa di arrivo. In "Arrivati" metti i pezzi effettivamente ricevuti.</div>
+            <div class="table-responsive" style="max-height:36vh"><table class="table table-sm table-hover mb-2">
+                <thead class="table-light" style="position:sticky;top:0"><tr><th>Articolo</th><th>Misura / Colore</th><th>EAN</th><th class="text-end">In attesa</th><th class="text-end">Clienti</th><th class="text-center">Arrivati</th></tr></thead>
+                <tbody id="aLines"></tbody></table></div>
+            <button class="btn btn-primary w-100 mb-2" id="aCalc"><i class="fas fa-random me-1"></i> Calcola assegnazione ai clienti (in ordine di data)</button>
+            <div id="aPlan"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline-dark" id="aPrint" disabled><i class="fas fa-print me-1"></i> Stampa distinta smistamento</button>
+            <button class="btn btn-success fw-bold" id="aOk" disabled><i class="fas fa-check me-1"></i> Conferma: metti in consegna</button>
+        </div>
     </div></div>
 </div>
 
@@ -706,6 +742,189 @@ document.getElementById('mNotaOk').addEventListener('click', () => {
     bootstrap.Modal.getOrCreateInstance(document.getElementById('mNota')).hide();
     update(notaStato, t);
 });
+
+// ===================== ARRIVO MERCE DAL FORNITORE =====================
+// Righe in prevendita senza CONS → raggruppate per EAN (o codice+misura+colore).
+// I pezzi arrivati vanno ai clienti in ordine di data d'ordine (FIFO):
+// una riga riceve la merce solo se tutte quelle più vecchie dello stesso articolo sono già coperte.
+let ARR = { qty: {}, lines: [], plan: null };
+const arrQta = r => num(val(r, 'qta')) || 1;
+const arrTime = r => { const d = parseData(val(r, 'data')); return d ? d.getTime() : 8.64e15; };
+function arrKey(r) {
+    const e = val(r, 'ean').replace(/'/g, '').trim().toLowerCase();
+    return e ? 'E:' + e : 'C:' + [val(r, 'codice'), val(r, 'misura'), val(r, 'colore')].join('|').toLowerCase();
+}
+function arrAttesa(incl, ref) {
+    return rows.filter(r => isPrev(r) && !val(r, 'cons') && !['ANNULLATO', 'CONSEGNATO'].includes(rStato(r))
+        && (incl || val(r, 'ordinato')) && (!ref || val(r, 'ordinato') === ref));
+}
+function openArrivi() {
+    if (!rows.length) { alert('Ordini non ancora caricati.'); return; }
+    const refs = {};
+    arrAttesa(true, '').forEach(r => { const k = val(r, 'ordinato') || ''; refs[k] = (refs[k] || 0) + 1; });
+    const opts = Object.keys(refs).filter(Boolean).sort((a, b) => b.localeCompare(a));
+    document.getElementById('aRef').innerHTML = `<option value="">Tutti gli ordini fornitore (${opts.reduce((t, k) => t + refs[k], 0)} righe)</option>` +
+        opts.map(k => `<option value="${esc(k)}">${esc(k)} (${refs[k]} righe)</option>`).join('');
+    const d = new Date();
+    document.getElementById('aData').value = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+    document.getElementById('aIncl').checked = false;
+    ARR = { qty: {}, lines: [], plan: null };
+    arrBuild(true);
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('mArrivi')).show();
+    setTimeout(() => document.getElementById('aScan').focus(), 400);
+}
+function arrBuild(fill) {
+    const g = {};
+    arrAttesa(document.getElementById('aIncl').checked, document.getElementById('aRef').value).forEach(r => {
+        const k = arrKey(r);
+        if (!g[k]) g[k] = { key: k, ean: val(r, 'ean').replace(/'/g, ''), codice: val(r, 'codice'), desc: val(r, 'desc') || val(r, 'codice'),
+                            misura: val(r, 'misura'), colore: val(r, 'colore'), attesa: 0, righe: [], clienti: new Set() };
+        g[k].attesa += arrQta(r); g[k].righe.push(r); g[k].clienti.add(val(r, 'cliente'));
+    });
+    ARR.lines = Object.values(g).sort((a, b) => (a.desc + a.misura + a.colore).localeCompare(b.desc + b.misura + b.colore, 'it', { numeric: true }));
+    ARR.lines.forEach(L => { if (fill || ARR.qty[L.key] === undefined) ARR.qty[L.key] = L.attesa; });
+    arrResetPlan(); arrRenderLines();
+}
+function arrRenderLines(flashKey) {
+    const tb = document.getElementById('aLines');
+    if (!ARR.lines.length) { tb.innerHTML = '<tr><td colspan="6" class="text-center text-muted p-3">Nessun articolo in prevendita in attesa di arrivo.</td></tr>'; return; }
+    tb.innerHTML = ARR.lines.map((L, i) => {
+        const q = ARR.qty[L.key] || 0;
+        return `<tr class="${q !== L.attesa ? 'diff' : ''} ${L.key === flashKey ? 'flash' : ''}" id="aL${i}">
+            <td><strong>${esc(L.desc)}</strong>${L.codice ? '<div class="small text-muted">' + esc(L.codice) + '</div>' : ''}</td>
+            <td>${esc(L.misura)} / ${esc(L.colore)}</td><td class="small">${esc(L.ean)}</td>
+            <td class="text-end fw-bold">${L.attesa}</td><td class="text-end">${L.clienti.size}</td>
+            <td class="text-center"><input type="number" min="0" class="form-control form-control-sm arr-qty mx-auto" data-k="${esc(L.key)}" value="${q}"></td></tr>`;
+    }).join('');
+    if (flashKey) { const i = ARR.lines.findIndex(L => L.key === flashKey); const el = document.getElementById('aL' + i); if (el) el.scrollIntoView({ block: 'nearest' }); }
+}
+function arrResetPlan() {
+    ARR.plan = null;
+    document.getElementById('aPlan').innerHTML = '';
+    document.getElementById('aOk').disabled = true; document.getElementById('aPrint').disabled = true;
+}
+function arrCalcola() {
+    const plan = [];
+    ARR.lines.forEach(L => {
+        let resto = Math.max(0, Number(ARR.qty[L.key]) || 0), bloccato = false;
+        L.righe.slice().sort((a, b) => (arrTime(a) - arrTime(b)) || (a.n - b.n)).forEach(r => {
+            const q = arrQta(r);
+            const p = { r, L, cliente: val(r, 'cliente'), dataStr: val(r, 'data'), t: arrTime(r), qta: q, ass: 0, tipo: 'wait', usa: false };
+            if (!bloccato && resto >= q) { p.ass = q; p.tipo = 'full'; p.usa = true; resto -= q; }
+            else if (!bloccato && resto > 0) { p.ass = resto; p.tipo = 'partial'; resto = 0; bloccato = true; }
+            else bloccato = true;
+            plan.push(p);
+        });
+        L.eccesso = resto;
+    });
+    ARR.plan = plan.sort((a, b) => (a.t - b.t) || (a.r.n - b.r.n));
+    arrRenderPlan();
+}
+function arrRenderPlan() {
+    const P = ARR.plan, box = document.getElementById('aPlan');
+    const full = P.filter(p => p.tipo === 'full'), part = P.filter(p => p.tipo === 'partial'), wait = P.filter(p => p.tipo === 'wait');
+    const cli = new Set(full.map(p => p.cliente));
+    const ecc = ARR.lines.filter(L => L.eccesso > 0);
+    const lbl = { full: 'completa', partial: 'parziale', wait: 'in attesa' };
+    box.innerHTML = `<div class="alert alert-light border small mb-2">
+            <b class="text-success">${full.length} righe complete</b> per ${cli.size} clienti ·
+            <b class="text-warning">${part.length} parziali</b> (assegnale solo se il cliente accetta la consegna parziale) ·
+            <span class="text-muted">${wait.length} restano in attesa</span>
+            ${ecc.length ? `<div class="mt-1 text-primary"><i class="fas fa-warehouse me-1"></i>Pezzi in più rispetto agli ordini (restano a magazzino): ${ecc.map(L => esc(L.desc + ' ' + L.misura + '/' + L.colore) + ' <b>' + L.eccesso + '</b>').join(' · ')}</div>` : ''}
+        </div>
+        <div class="table-responsive" style="max-height:34vh"><table class="table table-sm mb-0">
+        <thead class="table-light" style="position:sticky;top:0"><tr><th>#</th><th>Data ordine</th><th>Cliente</th><th>Articolo</th><th>Var</th><th class="text-end">Richiesti</th><th class="text-end">Assegnati</th><th>Esito</th></tr></thead><tbody>
+        ${P.map((p, i) => `<tr><td class="text-muted">${i + 1}</td><td class="small">${esc(p.dataStr)}</td><td><strong>${esc(p.cliente)}</strong></td>
+            <td>${esc(p.L.desc)}</td><td class="small">${esc(p.L.misura)}/${esc(p.L.colore)}</td>
+            <td class="text-end">${p.qta}</td><td class="text-end fw-bold">${p.ass || ''}</td>
+            <td>${p.tipo === 'partial'
+                ? `<label class="p-part"><input type="checkbox" class="form-check-input me-1 a-part" data-i="${i}" ${p.usa ? 'checked' : ''}>parziale ${p.ass}/${p.qta}</label>`
+                : `<span class="p-${p.tipo === 'full' ? 'full' : 'wait'}">${lbl[p.tipo]}</span>`}</td></tr>`).join('')}
+        </tbody></table></div>`;
+    box.querySelectorAll('.a-part').forEach(c => c.addEventListener('change', e => { ARR.plan[+e.target.dataset.i].usa = e.target.checked; arrButtons(); }));
+    arrButtons();
+}
+function arrButtons() {
+    const n = ARR.plan ? ARR.plan.filter(p => p.usa).length : 0;
+    document.getElementById('aOk').disabled = !n; document.getElementById('aPrint').disabled = !n;
+    document.getElementById('aOk').innerHTML = `<i class="fas fa-check me-1"></i> Conferma: metti in consegna (${n} righe)`;
+}
+async function arrConferma() {
+    const P = ARR.plan.filter(p => p.usa);
+    const cons = document.getElementById('aData').value.trim();
+    if (!cons) { alert('Inserisci la data di arrivo.'); return; }
+    const full = P.filter(p => p.tipo === 'full'), part = P.filter(p => p.tipo === 'partial');
+    if (!confirm(`Mettere in consegna ${P.length} righe per ${new Set(P.map(p => p.cliente)).size} clienti (CONS = ${cons})?` + (part.length ? `\n${part.length} righe sono PARZIALI: avranno una nota con i pezzi mancanti.` : ''))) return;
+    const btn = document.getElementById('aOk'); btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Registrazione...';
+    const ora = new Date().toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', '');
+    const setL = (r, k, v) => { const hd = map[k]; if (hd && hIdx[hd] !== undefined) r.v[hIdx[hd]] = v; };
+    try {
+        if (full.length) {
+            await api({ action: 'update', rows: full.map(p => p.r.n), stato: 'IN CONSEGNA', nota: '', utente: cfg.user || '', cons });
+            full.forEach(p => { setL(p.r, 'stato', 'IN CONSEGNA'); setL(p.r, 'cons', cons); });
+        }
+        for (const p of part) {
+            const nota = `ARRIVO PARZIALE: ${p.ass} su ${p.qta} pz (mancano ${p.qta - p.ass})`;
+            await api({ action: 'update', rows: [p.r.n], stato: 'IN CONSEGNA', nota, utente: cfg.user || '', cons });
+            setL(p.r, 'stato', 'IN CONSEGNA'); setL(p.r, 'cons', cons);
+            setL(p.r, 'note', (val(p.r, 'note') ? val(p.r, 'note') + '\n' : '') + `[${ora}${cfg.user ? ' ' + cfg.user : ''}] ${nota}`);
+        }
+        buildOrders(); renderAll();
+        toast('<i class="fas fa-check text-success me-1"></i> Merce assegnata', `${P.length} righe in consegna · cartella "Arrivati, da consegnare"`, 'success', 6000);
+        if (confirm('Registrato. Vuoi stampare la distinta di smistamento per cliente?')) arrStampa(P);
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('mArrivi')).hide();
+        setTimeout(() => load(), 1500);
+    } catch (e) {
+        alert('Registrazione interrotta: ' + e.message + '\nRicarica la pagina e riapri "Arrivo merce": le righe già registrate non compariranno più.');
+        btn.disabled = false; arrButtons();
+    }
+}
+function arrStampa(P) {
+    P = P || ARR.plan.filter(p => p.usa);
+    const g = {};
+    P.forEach(p => { (g[p.cliente] = g[p.cliente] || { t: p.t, righe: [] }).righe.push(p); g[p.cliente].t = Math.min(g[p.cliente].t, p.t); });
+    const ref = document.getElementById('aRef').value || 'tutti gli ordini fornitore';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Smistamento ${esc(document.getElementById('aData').value)}</title>
+        <style>body{font-family:Arial,sans-serif;font-size:12px;margin:12mm}h1{font-size:18px;margin:0 0 4px}h2{font-size:15px;margin:14px 0 4px;border-bottom:2px solid #000}
+        table{width:100%;border-collapse:collapse}td,th{border-bottom:1px dotted #999;padding:3px;text-align:left}.n{text-align:right}.box{width:16px;height:16px;border:1.5px solid #000;display:inline-block}
+        .cli{page-break-inside:avoid}.part{font-weight:bold}</style></head><body>
+        <h1>Distinta smistamento merce arrivata</h1><div>Arrivo del ${esc(document.getElementById('aData').value)} · ${esc(ref)} · ${Object.keys(g).length} clienti · ${P.reduce((t, p) => t + p.ass, 0)} pz</div>
+        ${Object.entries(g).sort((a, b) => a[1].t - b[1].t).map(([c, x]) => `<div class="cli"><h2>${esc(c)}</h2><table><tr><th></th><th>Articolo</th><th>Misura/Colore</th><th>EAN</th><th class="n">Pz</th></tr>
+        ${x.righe.map(p => `<tr><td><span class="box"></span></td><td>${esc(p.L.desc)}</td><td>${esc(p.L.misura)} / ${esc(p.L.colore)}</td><td>${esc(p.L.ean)}</td><td class="n ${p.tipo === 'partial' ? 'part' : ''}">${p.ass}${p.tipo === 'partial' ? ' di ' + p.qta : ''}</td></tr>`).join('')}
+        </table></div>`).join('')}
+        <script>window.onload=()=>window.print()<\/script></body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { alert('Il browser ha bloccato la finestra di stampa: consenti i popup per questa pagina.'); return; }
+    w.document.write(html); w.document.close();
+}
+document.getElementById('btnArrivi').addEventListener('click', openArrivi);
+['aRef', 'aIncl'].forEach(id => document.getElementById(id).addEventListener('change', () => arrBuild(true)));
+document.getElementById('aLines').addEventListener('change', e => {
+    if (!e.target.classList.contains('arr-qty')) return;
+    ARR.qty[e.target.dataset.k] = Math.max(0, parseInt(e.target.value) || 0);
+    arrResetPlan(); arrRenderLines();
+});
+document.getElementById('aZero').addEventListener('click', () => { ARR.lines.forEach(L => ARR.qty[L.key] = 0); arrResetPlan(); arrRenderLines(); document.getElementById('aScan').focus(); });
+document.getElementById('aFill').addEventListener('click', () => { ARR.lines.forEach(L => ARR.qty[L.key] = L.attesa); arrResetPlan(); arrRenderLines(); });
+document.getElementById('aScan').addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const v = e.target.value.trim().replace(/'/g, '').toLowerCase(); e.target.value = '';
+    if (!v) return;
+    let L = ARR.lines.find(x => x.ean && x.ean.toLowerCase() === v);
+    if (!L) {
+        const perCod = ARR.lines.filter(x => x.codice && x.codice.toLowerCase() === v);
+        if (perCod.length === 1) L = perCod[0];
+        else if (perCod.length > 1) { alert('Il codice ' + v + ' ha più varianti: spara l\'EAN della singola misura/colore oppure scrivi la quantità nella tabella.'); return; }
+    }
+    if (!L) { beep(); alert('EAN/codice ' + v + ' non è in attesa per nessun cliente (con i filtri scelti): il pezzo va a magazzino.'); return; }
+    ARR.qty[L.key] = (ARR.qty[L.key] || 0) + 1;
+    arrResetPlan(); arrRenderLines(L.key);
+    if (ARR.qty[L.key] > L.attesa) toast('Pezzo in più', esc(L.desc + ' ' + L.misura + '/' + L.colore) + `: ${ARR.qty[L.key]} arrivati, ${L.attesa} ordinati dai clienti`, 'warning', 3000);
+});
+document.getElementById('aCalc').addEventListener('click', arrCalcola);
+document.getElementById('aOk').addEventListener('click', arrConferma);
+document.getElementById('aPrint').addEventListener('click', () => arrStampa());
 
 // ===================== IMPOSTAZIONI =====================
 function openSettings() {
